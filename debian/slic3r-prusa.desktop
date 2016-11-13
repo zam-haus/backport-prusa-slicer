@@ -1,9 +1,9 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Slic3r
+Name=Slic3r Prusa Edition
 Icon=slic3r-prusa
 Exec=slic3r-prusa
 Keywords=perl;slice;3D;printer;convert;gcode;stl;obj;amf;
 StartupNotify=false
-StartupWMClass=Slic3r.pl
+StartupWMClass=slic3r-prusa
