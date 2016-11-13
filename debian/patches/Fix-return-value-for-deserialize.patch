@@ -1,0 +1,63 @@
+Description: Fixed return value for deserialize() implementations
+ This fixes a FTBFS with GCC 6.
+Origin: upstream, https://github.com/alexrj/Slic3r/commit/6e5938c8330b5bdb6b85c3ca8dc188605ee56b98
+Bug-Debian: https://bugs.debian.org/811700
+Author: Alessandro Ranellucci <aar@cpan.org>
+Last-Update: 2016-03-13
+--- a/xs/src/libslic3r/Config.cpp
++++ b/xs/src/libslic3r/Config.cpp
+@@ -23,7 +23,10 @@
+         
+         // not the most efficient way, but easier than casting pointers to subclasses
+         bool res = my_opt->deserialize( other.option(*it)->serialize() );
+-        if (!res) CONFESS("Unexpected failure when deserializing serialized value");
++        if (!res) {
++            std::string error = "Unexpected failure when deserializing serialized value for " + *it;
++            CONFESS(error.c_str());
++        }
+     }
+ }
+ 
+--- a/xs/src/libslic3r/Config.hpp
++++ b/xs/src/libslic3r/Config.hpp
+@@ -65,7 +65,8 @@
+     
+     bool deserialize(std::string str) {
+         std::istringstream iss(str);
+-        return iss >> this->value;
++        iss >> this->value;
++        return !iss.fail();
+     };
+ };
+ 
+@@ -124,7 +125,8 @@
+     
+     bool deserialize(std::string str) {
+         std::istringstream iss(str);
+-        return iss >> this->value;
++        iss >> this->value;
++        return !iss.fail();
+     };
+ };
+ 
+@@ -249,7 +251,8 @@
+     bool deserialize(std::string str) {
+         // don't try to parse the trailing % since it's optional
+         std::istringstream iss(str);
+-        return iss >> this->value;
++        iss >> this->value;
++        return !iss.fail();
+     };
+ };
+ 
+@@ -279,7 +282,8 @@
+     bool deserialize(std::string str) {
+         this->percent = str.find_first_of("%") != std::string::npos;
+         std::istringstream iss(str);
+-        return iss >> this->value;
++        iss >> this->value;
++        return !iss.fail();
+     };
+ };
+ 
+

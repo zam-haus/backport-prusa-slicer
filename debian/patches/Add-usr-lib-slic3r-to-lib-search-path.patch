@@ -1,0 +1,21 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Mon, 31 Oct 2016 00:44:44 +0800
+Subject: Add /usr/lib/slic3r to lib search path
+
+---
+ slic3r.pl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/slic3r.pl b/slic3r.pl
+index 0fbd3bb..6d63f30 100755
+--- a/slic3r.pl
++++ b/slic3r.pl
+@@ -5,7 +5,7 @@ use warnings;
+ 
+ BEGIN {
+     use FindBin;
+-    use lib "$FindBin::Bin/lib";
++    use lib "$FindBin::Bin/lib", "/usr/lib/slic3r/";
+ }
+ 
+ use File::Basename qw(basename);

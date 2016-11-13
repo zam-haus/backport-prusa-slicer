@@ -1,0 +1,3 @@
+Move-Slic3r-data-to-usr-share-slic3r.patch
+Downgrade-Encode-Locale-requirement.patch
+Add-usr-lib-slic3r-to-lib-search-path.patch
