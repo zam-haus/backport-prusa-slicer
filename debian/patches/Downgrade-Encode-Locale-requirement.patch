@@ -7,10 +7,10 @@ Subject: Downgrade Encode::Locale requirement
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/lib/Slic3r.pm b/lib/Slic3r.pm
-index 2c8cda4..d9a20ca 100644
+index 05fead3..ea1f512 100644
 --- a/lib/Slic3r.pm
 +++ b/lib/Slic3r.pm
-@@ -67,7 +67,7 @@ use Slic3r::Print::SupportMaterial;
+@@ -82,7 +82,7 @@ use Slic3r::Print::SupportMaterial;
  use Slic3r::Surface;
  our $build = eval "use Slic3r::Build; 1";
  use Thread::Semaphore;

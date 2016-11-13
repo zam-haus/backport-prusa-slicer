@@ -7,13 +7,13 @@ Subject: Move Slic3r data to /usr/share/slic3r
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/lib/Slic3r.pm b/lib/Slic3r.pm
-index aa9aea2..2c8cda4 100644
+index a4e1d07..05fead3 100644
 --- a/lib/Slic3r.pm
 +++ b/lib/Slic3r.pm
-@@ -30,7 +30,7 @@ warn "Running Slic3r under Perl 5.16 is not supported nor recommended\n"
-     if $^V == v5.16;
+@@ -47,7 +47,7 @@ warn "Running Slic3r under Perl 5.16 is neither supported nor recommended\n"
  
  use FindBin;
+ # Path to the images.
 -our $var = sub { decode_path($FindBin::Bin) . "/var/" . $_[0] };
 +our $var = sub { "/usr/share/slic3r/" . $_[0]; };
  

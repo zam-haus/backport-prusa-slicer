@@ -7,7 +7,7 @@ Subject: Add /usr/lib/slic3r to lib search path
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/slic3r.pl b/slic3r.pl
-index 0fbd3bb..6d63f30 100755
+index f6fe4bb..5c1e629 100755
 --- a/slic3r.pl
 +++ b/slic3r.pl
 @@ -5,7 +5,7 @@ use warnings;
