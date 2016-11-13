@@ -1,9 +1,8 @@
-Source: slic3r
+Source: slic3r-prusa
 Section: perl
 Priority: optional
 Maintainer: Debian 3-D Printing Packages <3dprinter-general@lists.alioth.debian.org>
-Uploaders: Nicolas Dandrimont <olasd@debian.org>,
-           Chow Loong Jin <hyperair@debian.org>
+Uploaders: Chow Loong Jin <hyperair@debian.org>
 Build-Depends: debhelper (>= 9.20120312),
                help2man,
                libboost-all-dev,
@@ -29,11 +28,11 @@ Build-Depends: debhelper (>= 9.20120312),
                xvfb,
                xauth
 Standards-Version: 3.9.8
-Homepage: http://slic3r.org/
-Vcs-Git: https://anonscm.debian.org/git/3dprinter/packages/slic3r.git
-Vcs-Browser: https://anonscm.debian.org/git/3dprinter/packages/slic3r.git
+Homepage: http://github.com/prusa3d/slic3r
+Vcs-Git: https://anonscm.debian.org/git/3dprinter/packages/slic3r-prusa.git
+Vcs-Browser: https://anonscm.debian.org/git/3dprinter/packages/slic3r-prusa.git
 
-Package: slic3r
+Package: slic3r-prusa
 Architecture: any
 Depends: libboost-geometry-utils-perl,
          libencode-locale-perl,
