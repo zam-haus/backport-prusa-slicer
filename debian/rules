@@ -35,7 +35,7 @@ override_dh_auto_install:
 
 	# Install Slic3r in PATH
 	mkdir -p $(CURDIR)/debian/slic3r-prusa/usr/bin
-	cp slic3r-prusa.pl $(CURDIR)/debian/slic3r-prusa/usr/bin/slic3r-prusa
+	cp slic3r.pl $(CURDIR)/debian/slic3r-prusa/usr/bin/slic3r-prusa
 
 	# Install Slic3r resources in /usr/share/slic3r-prusa
 	mkdir -p $(CURDIR)/debian/slic3r-prusa/usr/share
