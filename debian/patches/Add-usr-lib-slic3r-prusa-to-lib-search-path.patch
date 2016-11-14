@@ -1,13 +1,13 @@
 From: Chow Loong Jin <hyperair@debian.org>
 Date: Mon, 31 Oct 2016 00:44:44 +0800
-Subject: Add /usr/lib/slic3r to lib search path
+Subject: Add /usr/lib/slic3r-prusa to lib search path
 
 ---
  slic3r.pl | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/slic3r.pl b/slic3r.pl
-index f6fe4bb..5c1e629 100755
+index f6fe4bb..f8457b8 100755
 --- a/slic3r.pl
 +++ b/slic3r.pl
 @@ -5,7 +5,7 @@ use warnings;
@@ -15,7 +15,7 @@ index f6fe4bb..5c1e629 100755
  BEGIN {
      use FindBin;
 -    use lib "$FindBin::Bin/lib";
-+    use lib "$FindBin::Bin/lib", "/usr/lib/slic3r/";
++    use lib "$FindBin::Bin/lib", "/usr/lib/slic3r-prusa/";
  }
  
  use File::Basename qw(basename);
