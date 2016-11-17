@@ -1,0 +1,39 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Thu, 17 Nov 2016 23:16:26 +0800
+Subject: Use system GLEW
+
+---
+ xs/Build.PL | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/xs/Build.PL b/xs/Build.PL
+index 9accef3..9788062 100644
+--- a/xs/Build.PL
++++ b/xs/Build.PL
+@@ -14,7 +14,7 @@ my $mswin = $^O eq 'MSWin32';
+ # HAS_BOOL         : stops Perl/lib/CORE/handy.h from doing "#  define bool char" for MSVC
+ # NOGDI            : prevents inclusion of wingdi.h which defines functions Polygon() and Polyline() in global namespace
+ # BOOST_ASIO_DISABLE_KQUEUE : prevents a Boost ASIO bug on OS X: https://svn.boost.org/trac/boost/ticket/5339
+-my @cflags = qw(-D_GLIBCXX_USE_C99 -DHAS_BOOL -DNOGDI -DSLIC3RXS -DBOOST_ASIO_DISABLE_KQUEUE -DGLEW_STATIC);
++my @cflags = qw(-D_GLIBCXX_USE_C99 -DHAS_BOOL -DNOGDI -DSLIC3RXS -DBOOST_ASIO_DISABLE_KQUEUE);
+ my @ldflags = ();
+ if ($^O eq 'darwin') {
+     push @ldflags, qw(-framework IOKit -framework CoreFoundation);
+@@ -26,7 +26,7 @@ if ($mswin) {
+ }
+ 
+ my @early_includes = ();
+-my @INC  = qw(-Isrc/libslic3r -Isrc/glew/include);
++my @INC  = qw(-Isrc/libslic3r);
+ my @LIBS = $cpp_guess->is_msvc ? qw(-LIBPATH:src/libslic3r) : qw(-Lsrc/libslic3r);
+ 
+ if ($ENV{SLIC3R_GUI}) 
+@@ -180,7 +180,7 @@ if ($ENV{SLIC3R_GUI}) {
+             push @LIBS, qw(-lopengl32);
+         }
+     } else {
+-        push @LIBS, qw(-lGL -lGLU);
++        push @LIBS, qw(-lGL -lGLU -lGLEW);
+     }
+ }
+ 
