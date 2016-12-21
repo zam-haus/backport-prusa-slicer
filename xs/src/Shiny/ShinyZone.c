@@ -22,11 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#ifdef SLIC3R_PROFILE
+
 #include "ShinyZone.h"
 
 #include <memory.h>
-
-#if SHINY_IS_COMPILED == TRUE
 
 /*---------------------------------------------------------------------------*/
 
@@ -198,4 +198,4 @@ void ShinyZone_enumerateZones(const ShinyZone* a_zone, void (*a_func)(const Shin
 	if (a_zone->next) ShinyZone_enumerateZones(a_zone->next, a_func);
 }
 
-#endif
+#endif /* SLIC3R_PROFILE */

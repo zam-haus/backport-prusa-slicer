@@ -22,14 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#ifdef SLIC3R_PROFILE
+
 #include "ShinyNodePool.h"
 #include "ShinyTools.h"
 
 #include <memory.h>
-// #include <malloc.h>
-
-#if SHINY_IS_COMPILED == TRUE
-
+#include <malloc.h>
 
 /*---------------------------------------------------------------------------*/
 
@@ -75,4 +74,4 @@ void ShinyNodePool_destroy(ShinyNodePool *self) {
 	free(self);
 }
 
-#endif
+#endif /* SLIC3R_PROFILE */
