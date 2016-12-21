@@ -1,3 +1,9 @@
+slic3r-prusa (1.31.6-1) unstable; urgency=medium
+
+  * [c435c86] Imported Upstream version 1.31.6
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 21 Dec 2016 23:17:00 +0800
+
 slic3r-prusa (1.31.4-1) unstable; urgency=medium
 
   * Initial Debianization (Closes: #844222)
