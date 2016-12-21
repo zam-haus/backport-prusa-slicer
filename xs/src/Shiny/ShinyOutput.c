@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#ifdef SLIC3R_PROFILE
+
 #include "ShinyOutput.h"
 
 #include <stdio.h>
@@ -35,15 +37,12 @@ THE SOFTWARE.
 #	define TRAILING		1
 #endif
 
-#if SHINY_IS_COMPILED == TRUE
-
-
 /*---------------------------------------------------------------------------*/
 
 #define OUTPUT_WIDTH_CALL	6
 #define OUTPUT_WIDTH_TIME	6
 #define OUTPUT_WIDTH_PERC	4
-#define OUTPUT_WIDTH_SUM	79
+#define OUTPUT_WIDTH_SUM	120 
 
 #define OUTPUT_WIDTH_DATA	(1+OUTPUT_WIDTH_CALL + 1 + 2*(OUTPUT_WIDTH_TIME+4+OUTPUT_WIDTH_PERC+1) + 1)
 #define OUTPUT_WIDTH_NAME	(OUTPUT_WIDTH_SUM - OUTPUT_WIDTH_DATA)
@@ -187,4 +186,4 @@ void ShinyPrintZones(char* output, const ShinyZone *a_root) {
 	}
 }
 
-#endif
+#endif /* SLIC3R_PROFILE */

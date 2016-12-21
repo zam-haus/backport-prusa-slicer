@@ -22,14 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#ifdef SLIC3R_PROFILE
+
 #include "ShinyNodeState.h"
 #include "ShinyNode.h"
 #include "ShinyZone.h"
 
-// #include <malloc.h>
-
-
-#if SHINY_IS_COMPILED == TRUE
+#include <malloc.h>
 
 /*---------------------------------------------------------------------------*/
 
@@ -106,4 +105,4 @@ ShinyNode* ShinyNodeState_finishAndGetNextClean(ShinyNodeState *self) {
 	return node->nextSibling;
 }
 
-#endif
+#endif /* SLIC3R_PROFILE */

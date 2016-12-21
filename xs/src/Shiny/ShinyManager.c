@@ -22,15 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#ifdef SLIC3R_PROFILE
+
 #include "ShinyManager.h"
 
-// #include <malloc.h>
+#include <malloc.h>
 #include <memory.h>
 #include <string.h>
 #include <stdio.h>
-
-#if SHINY_IS_COMPILED == TRUE
-
 
 /*---------------------------------------------------------------------------*/
 
@@ -443,4 +442,4 @@ void ShinyManager_outputToStream(ShinyManager *self, FILE *a_stream) {
 #endif
 }
 
-#endif /* if SHINY_IS_COMPILED == TRUE */
+#endif /* SLIC3R_PROFILE */

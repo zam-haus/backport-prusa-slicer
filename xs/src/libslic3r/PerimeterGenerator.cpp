@@ -120,17 +120,21 @@ PerimeterGenerator::process()
                     // from the line width of the infill?
                     coord_t distance = (i == 1) ? ext_pspacing2 : pspacing;
                     
-
-                    //FIXME Vojtech: Why there is a special case for the thin walls?
-                    // Gap fill is active all the time anyway and this is not the outer perimeter.
-//                    if (this->config->thin_walls) {
-                    if (false) {
+                    if (this->config->thin_walls) {
+                        // This path will ensure, that the perimeters do not overfill, as in 
+                        // prusa3d/Slic3r GH #32, but with the cost of rounding the perimeters
+                        // excessively, creating gaps, which then need to be filled in by the not very 
+                        // reliable gap fill algorithm.
+                        // Also the offset2(perimeter, -x, x) may sometimes lead to a perimeter, which is larger than
+                        // the original.
                         offsets = offset2(
                             last,
                             -(distance + min_spacing/2 - 1),
                             +(min_spacing/2 - 1)
                         );
                     } else {
+                        // If "detect thin walls" is not enabled, this paths will be entered, which 
+                        // leads to overflows, as in prusa3d/Slic3r GH #32
                         offsets = offset(
                             last,
                             -distance
@@ -242,15 +246,6 @@ PerimeterGenerator::process()
             if (!entities.empty())
                 this->loops->append(entities);
         } // for each loop of an island
-        
-        {
-            //FIXME how about the gaps?
-            // Calculate the region of surface->expolygon covered by the perimeters and their gap fills.
-            // The perimeters will later be used to calculate the object skin.
-            ExPolygons expp = diff_ex((Polygons)surface->expolygon, last, true);
-            for (ExPolygons::const_iterator ex = expp.begin(); ex != expp.end(); ++ex)
-                this->perimeter_surfaces->surfaces.push_back(Surface(stPerimeter, *ex));
-        }
 
         // fill gaps
         if (!gaps.empty()) {
@@ -318,15 +313,15 @@ PerimeterGenerator::process()
             
             // collapse too narrow infill areas
             coord_t min_perimeter_infill_spacing = ispacing * (1 - INSET_OVERLAP_TOLERANCE);
-            expp = offset2_ex(
-                pp,
-                -inset -min_perimeter_infill_spacing/2,
-                +min_perimeter_infill_spacing/2
-            );
             
             // append infill areas to fill_surfaces
-            for (ExPolygons::const_iterator ex = expp.begin(); ex != expp.end(); ++ex)
-                this->fill_surfaces->surfaces.push_back(Surface(stInternal, *ex));  // use a bogus surface type
+            surfaces_append(
+                this->fill_surfaces->surfaces, 
+                offset2_ex(
+                    pp,
+                    -inset -min_perimeter_infill_spacing/2,
+                    +min_perimeter_infill_spacing/2),
+                stInternal);
         }
     } // for each island
 }
