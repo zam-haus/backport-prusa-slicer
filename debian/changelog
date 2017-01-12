@@ -1,3 +1,9 @@
+slic3r-prusa (1.33.2-1) experimental; urgency=medium
+
+  * [f895ab7] Imported Upstream version 1.33.2
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 13 Jan 2017 02:20:05 +0800
+
 slic3r-prusa (1.31.6-1) unstable; urgency=medium
 
   * [c435c86] Imported Upstream version 1.31.6
