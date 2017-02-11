@@ -114,6 +114,13 @@ public:
     DynamicPrintConfig config;
     // Variation of a layer thickness for spans of Z coordinates.
     t_layer_height_ranges layer_height_ranges;
+    // Profile of increasing z to a layer height, to be linearly interpolated when calculating the layers.
+    // The pairs of <z, layer_height> are packed into a 1D array to simplify handling by the Perl XS.
+    std::vector<coordf_t> layer_height_profile;
+    // layer_height_profile is initialized when the layer editing mode is entered.
+    // Only if the user really modified the layer height, layer_height_profile_valid is set
+    // and used subsequently by the PrintObject.
+    bool                  layer_height_profile_valid;
 
     /* This vector accumulates the total translation applied to the object by the
         center_around_origin() method. Callers might want to apply the same translation

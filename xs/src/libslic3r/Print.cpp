@@ -8,43 +8,6 @@
 
 namespace Slic3r {
 
-template <class StepClass>
-bool
-PrintState<StepClass>::is_started(StepClass step) const
-{
-    return this->started.find(step) != this->started.end();
-}
-
-template <class StepClass>
-bool
-PrintState<StepClass>::is_done(StepClass step) const
-{
-    return this->done.find(step) != this->done.end();
-}
-
-template <class StepClass>
-void
-PrintState<StepClass>::set_started(StepClass step)
-{
-    this->started.insert(step);
-}
-
-template <class StepClass>
-void
-PrintState<StepClass>::set_done(StepClass step)
-{
-    this->done.insert(step);
-}
-
-template <class StepClass>
-bool
-PrintState<StepClass>::invalidate(StepClass step)
-{
-    bool invalidated = this->started.erase(step) > 0;
-    this->done.erase(step);
-    return invalidated;
-}
-
 template class PrintState<PrintStep>;
 template class PrintState<PrintObjectStep>;
 
@@ -323,12 +286,25 @@ std::set<size_t>
 Print::support_material_extruders() const
 {
     std::set<size_t> extruders;
-    
+    bool support_uses_current_extruder = false;
+
     FOREACH_OBJECT(this, object) {
         if ((*object)->has_support_material()) {
-            extruders.insert((*object)->config.support_material_extruder - 1);
-            extruders.insert((*object)->config.support_material_interface_extruder - 1);
+            if ((*object)->config.support_material_extruder == 0)
+                support_uses_current_extruder = true;
+            else
+                extruders.insert((*object)->config.support_material_extruder - 1);
+            if ((*object)->config.support_material_interface_extruder == 0)
+                support_uses_current_extruder = true;
+            else
+                extruders.insert((*object)->config.support_material_interface_extruder - 1);
         }
+    }
+
+    if (support_uses_current_extruder) {
+        // Add all object extruders to the support extruders as it is not know which one will be used to print supports.
+        std::set<size_t> object_extruders = this->object_extruders();
+        extruders.insert(object_extruders.begin(), object_extruders.end());
     }
     
     return extruders;
@@ -395,7 +371,7 @@ Print::add_model_object(ModelObject* model_object, int idx)
             this->objects[idx] = o = new PrintObject(this, model_object, bb);
         } else {
             o = new PrintObject(this, model_object, bb);
-            objects.push_back(o);
+            this->objects.push_back(o);
     
             // invalidate steps
             this->invalidate_step(psSkirt);
@@ -552,8 +528,26 @@ Print::apply_config(DynamicPrintConfig config)
         this->clear_objects();
         for (ModelObjectPtrs::iterator it = model_objects.begin(); it != model_objects.end(); ++it) {
             this->add_model_object(*it);
+            // Update layer_height_profile from the main thread as it may pull the data from the associated ModelObject.
+            this->objects.back()->update_layer_height_profile();
         }
         invalidated = true;
+    } else {
+        // Check validity of the layer height profiles.
+        FOREACH_OBJECT(this, o) {
+            if (! (*o)->layer_height_profile_valid) {
+                // The layer_height_profile is not valid for some reason (updated by the user or invalidated due to some option change).
+                // Start slicing of this object from scratch.
+                (*o)->invalidate_all_steps();
+                // Following line sets the layer_height_profile_valid flag.
+                (*o)->update_layer_height_profile();
+                invalidated = true;
+            } else if (! step_done(posSlice)) {
+                // Update layer_height_profile from the main thread as it may pull the data from the associated ModelObject.
+                // Only update if the slicing was not finished yet.
+                (*o)->update_layer_height_profile();
+            }
+        }
     }
     
     return invalidated;
@@ -653,6 +647,17 @@ Print::validate() const
         
         FOREACH_OBJECT(this, i_object) {
             PrintObject* object = *i_object;
+
+            if ((object->config.support_material_extruder == -1 || object->config.support_material_interface_extruder == -1) &&
+                (object->config.raft_layers > 0 || object->config.support_material.value)) {
+                // The object has some form of support and either support_material_extruder or support_material_interface_extruder
+                // will be printed with the current tool without a forced tool change. Play safe, assert that all object nozzles
+                // are of the same diameter.
+                if (nozzle_diameters.size() > 1)
+                    return "Printing with multiple extruders of differing nozzle diameters. "
+                           "If support is to be printed with the current extruder (support_material_extruder == 0 or support_material_interface_extruder == 0), ", 
+                           "all nozzles have to be of the same diameter.";
+            }
             
             // validate first_layer_height
             double first_layer_height = object->config.get_abs_value("first_layer_height");
@@ -662,7 +667,9 @@ Print::validate() const
                 size_t first_layer_extruder = object->config.raft_layers == 1
                     ? object->config.support_material_interface_extruder-1
                     : object->config.support_material_extruder-1;
-                first_layer_min_nozzle_diameter = this->config.nozzle_diameter.get_at(first_layer_extruder);
+                first_layer_min_nozzle_diameter = (first_layer_extruder == size_t(-1)) ? 
+                    min_nozzle_diameter : 
+                    this->config.nozzle_diameter.get_at(first_layer_extruder);
             } else {
                 // if we don't have raft layers, any nozzle diameter is potentially used in first layer
                 first_layer_min_nozzle_diameter = min_nozzle_diameter;

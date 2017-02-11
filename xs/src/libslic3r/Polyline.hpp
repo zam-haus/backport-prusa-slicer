@@ -15,7 +15,40 @@ typedef std::vector<Polyline> Polylines;
 typedef std::vector<ThickPolyline> ThickPolylines;
 
 class Polyline : public MultiPoint {
-    public:
+public:
+    Polyline() {};
+    Polyline(const Polyline &other) : MultiPoint(other.points) {}
+    Polyline(Polyline &&other) : MultiPoint(std::move(other.points)) {}
+    Polyline& operator=(const Polyline &other) { points = other.points; return *this; }
+    Polyline& operator=(Polyline &&other) { points = std::move(other.points); return *this; }
+    
+    void append(const Point &point) { this->points.push_back(point); }
+    void append(const Points &src) { this->append(src.begin(), src.end()); }
+    void append(const Points::const_iterator &begin, const Points::const_iterator &end) { this->points.insert(this->points.end(), begin, end); }
+    void append(Points &&src)
+    {
+        if (this->points.empty()) {
+            this->points = std::move(src);
+        } else {
+            this->points.insert(this->points.end(), src.begin(), src.end());
+            src.clear();
+        }
+    }
+    void append(const Polyline &src) 
+    { 
+        points.insert(points.end(), src.points.begin(), src.points.end());
+    }
+
+    void append(Polyline &&src) 
+    {
+        if (this->points.empty()) {
+            this->points = std::move(src.points);
+        } else {
+            this->points.insert(this->points.end(), src.points.begin(), src.points.end());
+            src.points.clear();
+        }
+    }
+
     operator Polylines() const;
     operator Line() const;
     Point last_point() const;
@@ -35,6 +68,13 @@ class Polyline : public MultiPoint {
 
 extern BoundingBox get_extents(const Polyline &polyline);
 extern BoundingBox get_extents(const Polylines &polylines);
+
+inline double total_length(const Polylines &polylines) {
+    double total = 0;
+    for (Polylines::const_iterator it = polylines.begin(); it != polylines.end(); ++it)
+        total += it->length();
+    return total;
+}
 
 inline Lines to_lines(const Polyline &poly) 
 {
@@ -62,6 +102,23 @@ inline Lines to_lines(const Polylines &polys)
     }
     return lines;
 }
+
+inline void polylines_append(Polylines &dst, const Polylines &src) 
+{ 
+    dst.insert(dst.end(), src.begin(), src.end());
+}
+
+inline void polylines_append(Polylines &dst, Polylines &&src) 
+{
+    if (dst.empty()) {
+        dst = std::move(src);
+    } else {
+        std::move(std::begin(src), std::end(src), std::back_inserter(dst));
+        src.clear();
+    }
+}
+
+bool remove_degenerate(Polylines &polylines);
 
 class ThickPolyline : public Polyline {
     public:

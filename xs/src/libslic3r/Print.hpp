@@ -33,14 +33,18 @@ enum PrintObjectStep {
 template <class StepType>
 class PrintState
 {
-    public:
+public:
     std::set<StepType> started, done;
     
-    bool is_started(StepType step) const;
-    bool is_done(StepType step) const;
-    void set_started(StepType step);
-    void set_done(StepType step);
-    bool invalidate(StepType step);
+    bool is_started(StepType step) const { return this->started.find(step) != this->started.end(); }
+    bool is_done(StepType step) const { return this->done.find(step) != this->done.end(); }
+    void set_started(StepType step) { this->started.insert(step); }
+    void set_done(StepType step) { this->done.insert(step); }
+    bool invalidate(StepType step) {
+        bool invalidated = this->started.erase(step) > 0;
+        this->done.erase(step);
+        return invalidated;
+    }
 };
 
 // A PrintRegion object represents a group of volumes to print
@@ -81,7 +85,13 @@ public:
 
     // Profile of increasing z to a layer height, to be linearly interpolated when calculating the layers.
     // The pairs of <z, layer_height> are packed into a 1D array to simplify handling by the Perl XS.
+    // layer_height_profile must not be set by the background thread.
     std::vector<coordf_t> layer_height_profile;
+    // There is a layer_height_profile at both PrintObject and ModelObject. The layer_height_profile at the ModelObject
+    // is used for interactive editing and for loading / storing into a project file (AMF file as of today).
+    // This flag indicates that the layer_height_profile at the UI has been updated, therefore the backend needs to get it.
+    // This flag is necessary as we cannot safely clear the layer_height_profile if the background calculation is running.
+    bool                  layer_height_profile_valid;
     
     // this is set to true when LayerRegion->slices is split in top/internal/bottom
     // so that next call to make_perimeters() performs a union() before computing loops
@@ -141,9 +151,15 @@ public:
     bool invalidate_step(PrintObjectStep step);
     bool invalidate_all_steps();
 
+    // To be used over the layer_height_profile of both the PrintObject and ModelObject
+    // to initialize the height profile with the height ranges.
+    bool update_layer_height_profile(std::vector<coordf_t> &layer_height_profile) const;
+
     // Process layer_height_ranges, the raft layers and first layer thickness into layer_height_profile.
     // The layer_height_profile may be later modified interactively by the user to refine layers at sloping surfaces.
-    void update_layer_height_profile();
+    bool update_layer_height_profile();
+
+    void reset_layer_height_profile();
 
     // Collect the slicing parameters, to be used by variable layer thickness algorithm,
     // by the interactive layer height editor and by the printing process itself.
@@ -188,7 +204,7 @@ class Print
     PrintRegionPtrs regions;
     PlaceholderParser placeholder_parser;
     // TODO: status_cb
-    double total_used_filament, total_extruded_volume;
+    double total_used_filament, total_extruded_volume, total_cost, total_weight;
     std::map<size_t,float> filament_stats;
     PrintState<PrintStep> state;
 

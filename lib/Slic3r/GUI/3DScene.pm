@@ -19,7 +19,7 @@ package Slic3r::GUI::3DScene::Base;
 use strict;
 use warnings;
 
-use Wx qw(:timer);
+use Wx qw(:timer :bitmap);
 use Wx::Event qw(EVT_PAINT EVT_SIZE EVT_ERASE_BACKGROUND EVT_IDLE EVT_MOUSEWHEEL EVT_MOUSE_EVENTS EVT_TIMER);
 # must load OpenGL *before* Wx::GLCanvas
 use OpenGL qw(:glconstants :glfunctions :glufunctions :gluconstants);
@@ -43,6 +43,7 @@ __PACKAGE__->mk_accessors( qw(_quat _dirty init
                               on_double_click
                               on_right_click
                               on_move
+                              on_model_update
                               volumes
                               _sphi _stheta
                               cutting_plane_z
@@ -94,6 +95,9 @@ use constant MANIPULATION_LAYER_HEIGHT  => 2;
 
 use constant GIMBALL_LOCK_THETA_MAX => 170;
 
+use constant VARIABLE_LAYER_THICKNESS_BAR_WIDTH => 70;
+use constant VARIABLE_LAYER_THICKNESS_RESET_BUTTON_HEIGHT => 22;
+
 # make OpenGL::Array thread-safe
 {
     no warnings 'redefine';
@@ -141,8 +145,10 @@ sub new {
     $self->_camera_distance(0.);
 
     # Size of a layer height texture, used by a shader to color map the object print layers.
-    $self->{layer_preview_z_texture_width} = 512;
-    $self->{layer_preview_z_texture_height} = 512;
+    $self->layer_editing_enabled(0);
+    # 512x512 bitmaps are supported everywhere, but that may not be sufficent for super large print volumes.
+    $self->{layer_preview_z_texture_width} = 1024;
+    $self->{layer_preview_z_texture_height} = 1024;
     $self->{layer_height_edit_band_width} = 2.;
     $self->{layer_height_edit_strength} = 0.005;
     $self->{layer_height_edit_last_object_id} = -1;
@@ -169,9 +175,9 @@ sub new {
     $self->{layer_height_edit_timer} = Wx::Timer->new($self, $self->{layer_height_edit_timer_id});
     EVT_TIMER($self, $self->{layer_height_edit_timer_id}, sub {
         my ($self, $event) = @_;
-        return if ! $self->_layer_height_edited;
+        return if $self->_layer_height_edited != 1;
         return if $self->{layer_height_edit_last_object_id} == -1;
-        $self->_variable_layer_thickness_action(undef, 1);
+        $self->_variable_layer_thickness_action(undef);
     });
     
     return $self;
@@ -195,23 +201,58 @@ sub _first_selected_object_id {
 }
 
 # Returns an array with (left, top, right, bottom) of the variable layer thickness bar on the screen.
-sub _variable_layer_thickness_bar_rect {
+sub _variable_layer_thickness_bar_rect_screen {
     my ($self) = @_;
     my ($cw, $ch) = $self->GetSizeWH;
-    my $bar_width = 70;
-    return ($cw - $bar_width, 0, $cw, $ch);
+    return ($cw - VARIABLE_LAYER_THICKNESS_BAR_WIDTH, 0, $cw, $ch - VARIABLE_LAYER_THICKNESS_RESET_BUTTON_HEIGHT);
+}
+
+sub _variable_layer_thickness_bar_rect_viewport {
+    my ($self) = @_;
+    my ($cw, $ch) = $self->GetSizeWH;
+    return ((0.5*$cw-VARIABLE_LAYER_THICKNESS_BAR_WIDTH)/$self->_zoom, (-0.5*$ch+VARIABLE_LAYER_THICKNESS_RESET_BUTTON_HEIGHT)/$self->_zoom, $cw/(2*$self->_zoom), $ch/(2*$self->_zoom));
+}
+
+# Returns an array with (left, top, right, bottom) of the variable layer thickness bar on the screen.
+sub _variable_layer_thickness_reset_rect_screen {
+    my ($self) = @_;
+    my ($cw, $ch) = $self->GetSizeWH;
+    return ($cw - VARIABLE_LAYER_THICKNESS_BAR_WIDTH, $ch - VARIABLE_LAYER_THICKNESS_RESET_BUTTON_HEIGHT, $cw, $ch);
+}
+
+sub _variable_layer_thickness_reset_rect_viewport {
+    my ($self) = @_;
+    my ($cw, $ch) = $self->GetSizeWH;
+    return ((0.5*$cw-VARIABLE_LAYER_THICKNESS_BAR_WIDTH)/$self->_zoom, -$ch/(2*$self->_zoom), $cw/(2*$self->_zoom), (-0.5*$ch+VARIABLE_LAYER_THICKNESS_RESET_BUTTON_HEIGHT)/$self->_zoom);
 }
 
 sub _variable_layer_thickness_bar_rect_mouse_inside {
    my ($self, $mouse_evt) = @_;
-   my ($bar_left, $bar_top, $bar_right, $bar_bottom) = $self->_variable_layer_thickness_bar_rect;
+   my ($bar_left, $bar_top, $bar_right, $bar_bottom) = $self->_variable_layer_thickness_bar_rect_screen;
+   return $mouse_evt->GetX >= $bar_left && $mouse_evt->GetX <= $bar_right && $mouse_evt->GetY >= $bar_top && $mouse_evt->GetY <= $bar_bottom;
+}
+
+sub _variable_layer_thickness_reset_rect_mouse_inside {
+   my ($self, $mouse_evt) = @_;
+   my ($bar_left, $bar_top, $bar_right, $bar_bottom) = $self->_variable_layer_thickness_reset_rect_screen;
    return $mouse_evt->GetX >= $bar_left && $mouse_evt->GetX <= $bar_right && $mouse_evt->GetY >= $bar_top && $mouse_evt->GetY <= $bar_bottom;
 }
 
 sub _variable_layer_thickness_bar_mouse_cursor_z {
    my ($self, $object_idx, $mouse_evt) = @_;
-   my ($bar_left, $bar_top, $bar_right, $bar_bottom) = $self->_variable_layer_thickness_bar_rect;
+   my ($bar_left, $bar_top, $bar_right, $bar_bottom) = $self->_variable_layer_thickness_bar_rect_screen;
    return unscale($self->{print}->get_object($object_idx)->size->z) * ($bar_bottom - $mouse_evt->GetY - 1.) / ($bar_bottom - $bar_top);
+}
+
+sub _variable_layer_thickness_bar_mouse_cursor_z_relative {
+   my ($self) = @_;
+   my $mouse_pos = $self->ScreenToClientPoint(Wx::GetMousePosition());
+   my ($bar_left, $bar_top, $bar_right, $bar_bottom) = $self->_variable_layer_thickness_bar_rect_screen;
+   return ($mouse_pos->x >= $bar_left && $mouse_pos->x <= $bar_right && $mouse_pos->y >= $bar_top && $mouse_pos->y <= $bar_bottom) ?
+        # Inside the bar.
+        ($bar_bottom - $mouse_pos->y - 1.) / ($bar_bottom - $bar_top - 1) :
+        # Outside the bar.
+        -1000.;
 }
 
 sub _variable_layer_thickness_action {
@@ -222,6 +263,8 @@ sub _variable_layer_thickness_action {
         $self->{layer_height_edit_last_action} = $mouse_event->ShiftDown ? ($mouse_event->RightIsDown ? 3 : 2) : ($mouse_event->RightIsDown ? 0 : 1);
     }
     if ($self->{layer_height_edit_last_object_id} != -1) {
+        # Mark the volume as modified, so Print will pick its layer height profile? Where to mark it?
+        # Start a timer to refresh the print? schedule_background_process() ?
         $self->{print}->get_object($self->{layer_height_edit_last_object_id})->adjust_layer_height_profile(
             $self->{layer_height_edit_last_z},
             $self->{layer_height_edit_strength},
@@ -260,7 +303,12 @@ sub mouse_event {
             # A volume is selected and the mouse is hovering over a layer thickness bar.
             # Start editing the layer height.
             $self->_layer_height_edited(1);
-            $self->_variable_layer_thickness_action($e, 1);
+            $self->_variable_layer_thickness_action($e);
+        } elsif ($object_idx_selected != -1 && $self->_variable_layer_thickness_reset_rect_mouse_inside($e)) {
+            $self->{print}->get_object($self->{layer_height_edit_last_object_id})->reset_layer_height_profile;
+            # Index 2 means no editing, just wait for mouse up event.
+            $self->_layer_height_edited(2);
+            $self->Refresh;
         } else {
             # Select volume in this 3D canvas.
             # Don't deselect a volume if layer editing is enabled. We want the object to stay selected
@@ -323,7 +371,7 @@ sub mouse_event {
         $self->Refresh;
     } elsif ($e->Dragging) {
         if ($self->_layer_height_edited && $object_idx_selected != -1) {
-            $self->_variable_layer_thickness_action($e, 0);
+            $self->_variable_layer_thickness_action($e) if ($self->_layer_height_edited == 1);
         } elsif ($e->LeftIsDown) {
             # if dragging over blank area with left button, rotate
             if (defined $self->_drag_start_pos) {
@@ -363,7 +411,12 @@ sub mouse_event {
             $self->_drag_start_xy($pos);
         }
     } elsif ($e->LeftUp || $e->MiddleUp || $e->RightUp) {
-        if ($self->on_move && defined($self->_drag_volume_idx) && $self->_dragged) {
+        if ($self->_layer_height_edited) {
+            $self->_layer_height_edited(undef);
+            $self->{layer_height_edit_timer}->Stop;
+            $self->on_model_update->()
+                if ($object_idx_selected != -1 && $self->on_model_update);
+        } elsif ($self->on_move && defined($self->_drag_volume_idx) && $self->_dragged) {
             # get all volumes belonging to the same group, if any
             my @volume_idxs;
             my $group_id = $self->volumes->[$self->_drag_volume_idx]->drag_group_id;
@@ -379,8 +432,6 @@ sub mouse_event {
         $self->_drag_start_pos(undef);
         $self->_drag_start_xy(undef);
         $self->_dragged(undef);
-        $self->_layer_height_edited(undef);
-        $self->{layer_height_edit_timer}->Stop;
     } elsif ($e->Moving) {
         $self->_mouse_pos($pos);
         # Only refresh if picking is enabled, in that case the objects may get highlighted if the mouse cursor
@@ -430,7 +481,7 @@ sub mouse_wheel_event {
         0,
     ) if 0;
     $self->on_viewport_changed->() if $self->on_viewport_changed;
-    $self->_dirty(1);
+    $self->Resize($self->GetSizeWH) if $self->IsShownOnScreen;
     $self->Refresh;
 }
 
@@ -462,7 +513,7 @@ sub select_view {
     if (ref($direction)) {
         $dirvec = $direction;
     } else {
-        if ($direction eq 'default') {
+        if ($direction eq 'iso') {
             $dirvec = VIEW_DEFAULT;
         } elsif ($direction eq 'left') {
             $dirvec = VIEW_LEFT;
@@ -842,20 +893,15 @@ sub InitGL {
     return unless $self->GetContext;
     $self->init(1);
 
-    my $shader;
-    $shader = $self->{shader} = new Slic3r::GUI::GLShader
-        if (defined($ENV{'SLIC3R_EXPERIMENTAL'}) && $ENV{'SLIC3R_EXPERIMENTAL'} == 1);
-    if ($self->{shader}) {
-        my $info = $shader->Load($self->_fragment_shader, $self->_vertex_shader);
-        print $info if $info;
-
-        ($self->{layer_preview_z_texture_id}) = glGenTextures_p(1);
-        glBindTexture(GL_TEXTURE_2D, $self->{layer_preview_z_texture_id});
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
+    my $shader = $self->{shader} = new Slic3r::GUI::GLShader;
+    my $info = $shader->Load($self->_fragment_shader, $self->_vertex_shader);
+#    print $info if $info;
+    ($self->{layer_preview_z_texture_id}) = glGenTextures_p(1);
+    glBindTexture(GL_TEXTURE_2D, $self->{layer_preview_z_texture_id});
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     glClearColor(0, 0, 0, 1);
     glColor3f(1, 0, 0);
@@ -1021,7 +1067,7 @@ sub Render {
         glEnableClientState(GL_VERTEX_ARRAY);
         glColor4f(0.8, 0.6, 0.5, 0.4);
         glNormal3d(0,0,1);
-        glVertexPointer_p(3, $self->bed_triangles);
+        glVertexPointer_c(3, GL_FLOAT, 0, $self->bed_triangles->ptr());
         glDrawArrays(GL_TRIANGLES, 0, $self->bed_triangles->elements / 3);
         glDisableClientState(GL_VERTEX_ARRAY);
         
@@ -1033,7 +1079,7 @@ sub Render {
         glLineWidth(3);
         glColor4f(0.2, 0.2, 0.2, 0.4);
         glEnableClientState(GL_VERTEX_ARRAY);
-        glVertexPointer_p(3, $self->bed_grid_lines);
+        glVertexPointer_c(3, GL_FLOAT, 0, $self->bed_grid_lines->ptr());
         glDrawArrays(GL_LINES, 0, $self->bed_grid_lines->elements / 3);
         glDisableClientState(GL_VERTEX_ARRAY);
         
@@ -1114,21 +1160,22 @@ sub draw_volumes {
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_NORMAL_ARRAY);
     
-    # The viewport and camera are set to complete view and glOrtho(-$x/2, $x/2, -$y/2, $y/2, -$depth, $depth), 
-    # where x, y is the window size divided by $self->_zoom.
-    my ($cw, $ch) = $self->GetSizeWH;
-    my $bar_width = 70;
-    my ($bar_left, $bar_right) = ((0.5 * $cw - $bar_width)/$self->_zoom, $cw/(2*$self->_zoom));
-    my ($bar_bottom, $bar_top) = (-$ch/(2*$self->_zoom), $ch/(2*$self->_zoom));
-    my $mouse_pos = $self->ScreenToClientPoint(Wx::GetMousePosition());
-    my $z_cursor_relative = ($mouse_pos->x < $cw - $bar_width) ? -1000. :
-        ($ch - $mouse_pos->y - 1.) / ($ch - 1);
-
+    my $z_cursor_relative = $self->_variable_layer_thickness_bar_mouse_cursor_z_relative;
     foreach my $volume_idx (0..$#{$self->volumes}) {
         my $volume = $self->volumes->[$volume_idx];
 
         my $shader_active = 0;
-        if ($self->layer_editing_enabled && ! $fakecolor && $volume->selected && $self->{shader} && $volume->{layer_height_texture_data} && $volume->{layer_height_texture_cells}) {
+        if ($self->layer_editing_enabled && ! $fakecolor && $volume->selected && $self->{shader} && $volume->{layer_height_texture_data}) {
+            my $print_object = $self->{print}->get_object(int($volume->select_group_id / 1000000));
+            {
+                # Update the height texture if the ModelObject::layer_height_texture is invalid.
+                my $ncells = $print_object->generate_layer_height_texture(
+                    $volume->{layer_height_texture_data}->ptr,
+                    $self->{layer_preview_z_texture_height},
+                    $self->{layer_preview_z_texture_width},
+                    !defined($volume->{layer_height_texture_cells}));
+                $volume->{layer_height_texture_cells} = $ncells if $ncells > 0;
+            }
             $self->{shader}->Enable;
             my $z_to_texture_row_id             = $self->{shader}->Map('z_to_texture_row');
             my $z_texture_row_to_normalized_id  = $self->{shader}->Map('z_texture_row_to_normalized');
@@ -1259,11 +1306,82 @@ sub draw_volumes {
     if (defined $self->cutting_plane_z) {
         glLineWidth(2);
         glColor3f(0, 0, 0);
-        glVertexPointer_p(3, $self->cut_lines_vertices);
+        glVertexPointer_c(3, GL_FLOAT, 0, $self->cut_lines_vertices->ptr());
         glDrawArrays(GL_LINES, 0, $self->cut_lines_vertices->elements / 3);
         glVertexPointer_c(3, GL_FLOAT, 0, 0);
     }
     glDisableClientState(GL_VERTEX_ARRAY);
+}
+
+sub _load_image_set_texture {
+    my ($self, $file_name) = @_;
+    # Load a PNG with an alpha channel.
+    my $img = Wx::Image->new;
+    $img->LoadFile($Slic3r::var->($file_name), wxBITMAP_TYPE_PNG);
+    # Get RGB & alpha raw data from wxImage, interleave them into a Perl array.
+    my @rgb = unpack 'C*', $img->GetData();
+    my @alpha = $img->HasAlpha ? unpack 'C*', $img->GetAlpha() : (255) x (int(@rgb) / 3);
+#    my @alpha = unpack 'C*', $img->GetAlpha();
+    my $n_pixels = int(@alpha);
+    my @data = (0)x($n_pixels * 4);
+    for (my $i = 0; $i < $n_pixels; $i += 1) {
+        $data[$i*4  ] = $rgb[$i*3];
+        $data[$i*4+1] = $rgb[$i*3+1];
+        $data[$i*4+2] = $rgb[$i*3+2];
+        $data[$i*4+3] = $alpha[$i];
+    }
+    # Initialize a raw bitmap data.
+    my $params = {
+        loaded => 1,
+        valid  => $n_pixels > 0,
+        width  => $img->GetWidth, 
+        height => $img->GetHeight,
+        data   => OpenGL::Array->new_list(GL_UNSIGNED_BYTE, @data),
+        texture_id => glGenTextures_p(1)
+    };
+    # Create and initialize a texture with the raw data.
+    glBindTexture(GL_TEXTURE_2D, $params->{texture_id});
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
+    glTexImage2D_c(GL_TEXTURE_2D, 0, GL_RGBA8, $params->{width}, $params->{height}, 0, GL_RGBA, GL_UNSIGNED_BYTE, $params->{data}->ptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return $params;
+}
+
+sub _variable_layer_thickness_load_overlay_image {
+    my ($self) = @_;
+    $self->{layer_preview_annotation} = $self->_load_image_set_texture('variable_layer_height_tooltip.png')
+        if (! $self->{layer_preview_annotation}->{loaded});
+    return $self->{layer_preview_annotation}->{valid};
+}
+
+sub _variable_layer_thickness_load_reset_image {
+    my ($self) = @_;
+    $self->{layer_preview_reset_image} = $self->_load_image_set_texture('variable_layer_height_reset.png')
+        if (! $self->{layer_preview_reset_image}->{loaded});
+    return $self->{layer_preview_reset_image}->{valid};
+}
+
+# Paint the tooltip.
+sub _render_image {
+    my ($self, $image, $l, $r, $b, $t) = @_;
+    glColor4f(1.,1.,1.,1.);
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, $image->{texture_id});
+    glBegin(GL_QUADS);
+    glTexCoord2d(0.,1.); glVertex3f($l, $b, 0);
+    glTexCoord2d(1.,1.); glVertex3f($r, $b, 0);
+    glTexCoord2d(1.,0.); glVertex3f($r, $t, 0);
+    glTexCoord2d(0.,0.); glVertex3f($l, $t, 0);
+    glEnd();
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
 }
 
 sub draw_active_object_annotations {
@@ -1284,13 +1402,9 @@ sub draw_active_object_annotations {
     
     # The viewport and camera are set to complete view and glOrtho(-$x/2, $x/2, -$y/2, $y/2, -$depth, $depth), 
     # where x, y is the window size divided by $self->_zoom.
-    my ($cw, $ch) = $self->GetSizeWH;
-    my $bar_width = 70;
-    my ($bar_left, $bar_right) = ((0.5 * $cw - $bar_width)/$self->_zoom, $cw/(2*$self->_zoom));
-    my ($bar_bottom, $bar_top) = (-$ch/(2*$self->_zoom), $ch/(2*$self->_zoom));
-    my $mouse_pos = $self->ScreenToClientPoint(Wx::GetMousePosition());
-    my $z_cursor_relative = ($mouse_pos->x < $cw - $bar_width) ? -1000. :
-        ($ch - $mouse_pos->y - 1.) / ($ch - 1);
+    my ($bar_left, $bar_bottom, $bar_right, $bar_top) = $self->_variable_layer_thickness_bar_rect_viewport;
+    my ($reset_left, $reset_bottom, $reset_right, $reset_top) = $self->_variable_layer_thickness_reset_rect_viewport;
+    my $z_cursor_relative = $self->_variable_layer_thickness_bar_mouse_cursor_z_relative;
 
     $self->{shader}->Enable;
     my $z_to_texture_row_id             = $self->{shader}->Map('z_to_texture_row');
@@ -1327,11 +1441,25 @@ sub draw_active_object_annotations {
     glBindTexture(GL_TEXTURE_2D, 0);
     $self->{shader}->Disable;
 
+    # Paint the tooltip.
+    if ($self->_variable_layer_thickness_load_overlay_image) {
+        my $gap = 10/$self->_zoom;
+        my ($l, $r, $b, $t) = ($bar_left - $self->{layer_preview_annotation}->{width}/$self->_zoom - $gap, $bar_left - $gap, $reset_bottom + $self->{layer_preview_annotation}->{height}/$self->_zoom + $gap, $reset_bottom + $gap);
+        $self->_render_image($self->{layer_preview_annotation}, $l, $r, $t, $b);
+    }
+
+    # Paint the reset button.
+    if ($self->_variable_layer_thickness_load_reset_image) {
+        $self->_render_image($self->{layer_preview_reset_image}, $reset_left, $reset_right, $reset_bottom, $reset_top);
+    }
+
     # Paint the graph.
+    #FIXME use the min / maximum layer height
+    #FIXME show some kind of legend.
     my $object_idx = int($volume->select_group_id / 1000000);
     my $print_object = $self->{print}->get_object($object_idx);
     my $max_z = unscale($print_object->size->z);
-    my $profile = $print_object->layer_height_profile;
+    my $profile = $print_object->model_object->layer_height_profile;
     my $layer_height = $print_object->config->get('layer_height');
     # Baseline
     glColor3f(0., 0., 0.);
@@ -1525,7 +1653,7 @@ has 'layer_height_texture_cells'  => (is => 'rw');
 
 sub object_idx {
     my ($self) = @_;
-    return $self->composite_id / 1000000;
+    return int($self->composite_id / 1000000);
 }
 
 sub volume_idx {
@@ -1596,11 +1724,6 @@ sub load_object {
     if ($print && $obj_idx < $print->object_count) {
         # Generate the layer height texture. Allocate data for the 0th and 1st mipmap levels.
         $layer_height_texture_data = OpenGL::Array->new($self->{layer_preview_z_texture_width}*$self->{layer_preview_z_texture_height}*5, GL_UNSIGNED_BYTE);
-#        $print->get_object($obj_idx)->update_layer_height_profile_from_ranges();
-        $layer_height_texture_cells = $print->get_object($obj_idx)->generate_layer_height_texture(
-            $layer_height_texture_data->ptr,
-            $self->{layer_preview_z_texture_height},
-            $self->{layer_preview_z_texture_width});
     }
     
     my @volumes_idx = ();
@@ -1624,7 +1747,6 @@ sub load_object {
             # not correspond to the color of the filament.
             my $color = [ @{COLORS->[ $color_idx % scalar(@{&COLORS}) ]} ];
             $color->[3] = $volume->modifier ? 0.5 : 1;
-            print "Reloading object $volume_idx, $instance_idx\n";
             push @{$self->volumes}, my $v = Slic3r::GUI::3DScene::Volume->new(
                 bounding_box    => $mesh->bounding_box,
                 color           => $color,
@@ -1969,7 +2091,8 @@ sub _extrusionentity_to_verts {
         $lines   = [];
         $widths  = [];
         $heights = [];
-        $closed  = 1;
+        # $entity is either of type Slic3r::ExtrusionLoop or Slic3r::ExtrusionMultiPath.
+        $closed  = $entity->isa('Slic3r::ExtrusionLoop') ? 1 : 0;
         foreach my $path (@$entity) {
             my $polyline = $path->polyline->clone;
             $polyline->remove_duplicate_points;
