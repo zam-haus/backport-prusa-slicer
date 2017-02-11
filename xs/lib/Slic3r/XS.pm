@@ -107,6 +107,11 @@ sub new_from_paths {
     return $loop;
 }
 
+package Slic3r::ExtrusionMultiPath;
+use overload
+    '@{}' => sub { $_[0]->arrayref },
+    'fallback' => 1;
+
 package Slic3r::ExtrusionPath;
 use overload
     '@{}' => sub { $_[0]->arrayref },
@@ -259,6 +264,7 @@ for my $class (qw(
         Slic3r::ExPolygon::Collection
         Slic3r::Extruder
         Slic3r::ExtrusionLoop
+        Slic3r::ExtrusionMultiPath
         Slic3r::ExtrusionPath
         Slic3r::ExtrusionPath::Collection
         Slic3r::ExtrusionSimulator

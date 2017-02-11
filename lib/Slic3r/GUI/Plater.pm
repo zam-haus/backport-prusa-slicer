@@ -51,10 +51,12 @@ sub new {
     my ($parent) = @_;
     my $self = $class->SUPER::new($parent, -1, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
     $self->{config} = Slic3r::Config->new_from_defaults(qw(
-        bed_shape complete_objects extruder_clearance_radius skirts skirt_distance brim_width
+        bed_shape complete_objects extruder_clearance_radius skirts skirt_distance brim_width variable_layer_height
         serial_port serial_speed octoprint_host octoprint_apikey
     ));
+    # C++ Slic3r::Model with Perl extensions in Slic3r/Model.pm
     $self->{model} = Slic3r::Model->new;
+    # C++ Slic3r::Print with Perl extensions in Slic3r/Print.pm
     $self->{print} = Slic3r::Print->new;
     # List of Perl objects Slic3r::GUI::Plater::Object, representing a 2D preview of the platter.
     $self->{objects} = [];
@@ -102,6 +104,12 @@ sub new {
         $self->{canvas3D}->set_on_double_click($on_double_click);
         $self->{canvas3D}->set_on_right_click(sub { $on_right_click->($self->{canvas3D}, @_); });
         $self->{canvas3D}->set_on_instances_moved($on_instances_moved);
+        $self->{canvas3D}->set_on_model_update(sub {
+            if ($Slic3r::GUI::Settings->{_}{background_processing}) {
+                $self->{apply_config_timer}->Stop if defined $self->{apply_config_timer};
+                $self->async_apply_config();
+            }
+        });
         $self->{canvas3D}->on_viewport_changed(sub {
             $self->{preview3D}->canvas->set_viewport_from_scene($self->{canvas3D});
         });
@@ -156,10 +164,7 @@ sub new {
         $self->{htoolbar}->AddTool(TB_CUT, "Cut…", Wx::Bitmap->new($Slic3r::var->("package.png"), wxBITMAP_TYPE_PNG), '');
         $self->{htoolbar}->AddSeparator;
         $self->{htoolbar}->AddTool(TB_SETTINGS, "Settings…", Wx::Bitmap->new($Slic3r::var->("cog.png"), wxBITMAP_TYPE_PNG), '');
-
-        # FIXME add a button for layer editing
-        $self->{htoolbar}->AddTool(TB_LAYER_EDITING, 'Layer Editing', Wx::Bitmap->new($Slic3r::var->("delete.png"), wxBITMAP_TYPE_PNG), wxNullBitmap, 1, undef, 'Layer Editing')
-            if (defined($ENV{'SLIC3R_EXPERIMENTAL'}) && $ENV{'SLIC3R_EXPERIMENTAL'} == 1);
+        $self->{htoolbar}->AddTool(TB_LAYER_EDITING, 'Layer Editing', Wx::Bitmap->new($Slic3r::var->("variable_layer_height.png"), wxBITMAP_TYPE_PNG), wxNullBitmap, 1, undef, 'Layer Editing');
     } else {
         my %tbar_buttons = (
             add             => "Add…",
@@ -181,10 +186,8 @@ sub new {
             $self->{"btn_$_"} = Wx::Button->new($self, -1, $tbar_buttons{$_}, wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
             $self->{btoolbar}->Add($self->{"btn_$_"});
         }
-        if (defined($ENV{'SLIC3R_EXPERIMENTAL'}) && $ENV{'SLIC3R_EXPERIMENTAL'} == 1) {
-            $self->{"btn_layer_editing"} = Wx::ToggleButton->new($self, -1, $tbar_buttons{'layer_editing'}, wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-            $self->{btoolbar}->Add($self->{"btn_layer_editing"});
-        }
+        $self->{"btn_layer_editing"} = Wx::ToggleButton->new($self, -1, $tbar_buttons{'layer_editing'}, wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+        $self->{btoolbar}->Add($self->{"btn_layer_editing"});
     }
 
     $self->{list} = Wx::ListView->new($self, -1, wxDefaultPosition, wxDefaultSize,
@@ -415,6 +418,34 @@ sub new {
                 }
             }
         }
+
+        my $print_info_sizer;
+        {
+            my $box = Wx::StaticBox->new($self, -1, "Sliced Info");
+            $print_info_sizer = Wx::StaticBoxSizer->new($box, wxVERTICAL);
+            $print_info_sizer->SetMinSize([350,-1]);
+            my $grid_sizer = Wx::FlexGridSizer->new(2, 2, 5, 5);
+            $grid_sizer->SetFlexibleDirection(wxHORIZONTAL);
+            $grid_sizer->AddGrowableCol(1, 1);
+            $grid_sizer->AddGrowableCol(3, 1);
+            $print_info_sizer->Add($grid_sizer, 0, wxEXPAND);
+            my @info = (
+                fil_mm3 => "Used Filament (mm^3)",
+                fil_g   => "Used Filament (g)",
+                cost    => "Cost",
+            );
+            while (my $field = shift @info) {
+                my $label = shift @info;
+                my $text = Wx::StaticText->new($self, -1, "$label:", wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
+                $text->SetFont($Slic3r::GUI::small_font);
+                $grid_sizer->Add($text, 0);
+                
+                $self->{"print_info_$field"} = Wx::StaticText->new($self, -1, "", wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
+                $self->{"print_info_$field"}->SetFont($Slic3r::GUI::small_font);
+                $grid_sizer->Add($self->{"print_info_$field"}, 0);
+            }
+            
+        }
         
         my $buttons_sizer = Wx::BoxSizer->new(wxHORIZONTAL);
         $self->{buttons_sizer} = $buttons_sizer;
@@ -430,6 +461,7 @@ sub new {
         $right_sizer->Add($buttons_sizer, 0, wxEXPAND | wxBOTTOM, 5);
         $right_sizer->Add($self->{list}, 1, wxEXPAND, 5);
         $right_sizer->Add($object_info_sizer, 0, wxEXPAND, 0);
+        $right_sizer->Add($print_info_sizer, 0, wxEXPAND, 0);
         
         my $hsizer = Wx::BoxSizer->new(wxHORIZONTAL);
         $hsizer->Add($self->{preview_notebook}, 1, wxEXPAND | wxTOP, 1);
@@ -503,7 +535,7 @@ sub update_ui_from_settings
     }
 }
 
-# Update presets (Print settings, Filament, Printer) from their respective tabs.
+# Update preset combo boxes (Print settings, Filament, Printer) from their respective tabs.
 # Called by 
 #       Slic3r::GUI::Tab::Print::_on_presets_changed
 #       Slic3r::GUI::Tab::Filament::_on_presets_changed
@@ -625,10 +657,9 @@ sub load_model_objects {
     my @obj_idx = ();
     foreach my $model_object (@model_objects) {
         my $o = $self->{model}->add_object($model_object);
-        
-        push @{ $self->{objects} }, Slic3r::GUI::Plater::Object->new(
-            name => basename($model_object->input_file),
-        );
+        my $object_name = $model_object->name;
+        $object_name = basename($model_object->input_file) if ($object_name eq '');
+        push @{ $self->{objects} }, Slic3r::GUI::Plater::Object->new(name => $object_name);
         push @obj_idx, $#{ $self->{objects} };
     
         if ($model_object->instances_count == 0) {
@@ -1062,6 +1093,9 @@ sub async_apply_config {
     
     # apply new config
     my $invalidated = $self->{print}->apply_config($self->GetFrame->config);
+
+#    $self->{canvas3D}->Refresh if ($invalidated && $self->{canvas3D}->layer_editing_enabled);
+    $self->{canvas3D}->Refresh if ($self->{canvas3D}->layer_editing_enabled);
     
     return if !$Slic3r::GUI::Settings->{_}{background_processing};
     
@@ -1174,7 +1208,10 @@ sub reslice {
     my ($self) = @_;
     # Don't reslice if export of G-code or sending to OctoPrint is running.
     if ($Slic3r::have_threads && ! defined($self->{export_gcode_output_file}) && ! defined($self->{send_gcode_file})) {
+        # Stop the background processing threads, stop the async update timer.
         $self->stop_background_process;
+        # Rather perform one additional unnecessary update of the print object instead of skipping a pending async update.
+        $self->async_apply_config;
         $self->statusbar->SetCancelCallback(sub {
             $self->stop_background_process;
             $self->statusbar->SetStatusText("Slicing cancelled");
@@ -1358,6 +1395,9 @@ sub on_export_completed {
     $self->send_gcode if $send_gcode;
     $self->{print_file} = undef;
     $self->{send_gcode_file} = undef;
+    $self->{"print_info_cost"}->SetLabel(sprintf("%.2f" , $self->{print}->total_cost));
+    $self->{"print_info_fil_g"}->SetLabel(sprintf("%.2f" , $self->{print}->total_weight));
+    $self->{"print_info_fil_mm3"}->SetLabel(sprintf("%.2f" , $self->{print}->total_extruded_volume));
     
     # this updates buttons status
     $self->object_list_changed;
@@ -1505,8 +1545,6 @@ sub on_thumbnail_made {
 sub update {
     my ($self, $force_autocenter) = @_;
 
-    print "Platter - update\n";
-    
     if ($Slic3r::GUI::Settings->{_}{autocenter} || $force_autocenter) {
         $self->{model}->center_instances_around_point($self->bed_centerf);
     }
@@ -1596,6 +1634,15 @@ sub on_config_change {
                 $self->{btn_send_gcode}->Hide;
             }
             $self->Layout;
+        } elsif ($opt_key eq 'variable_layer_height') {
+            if ($config->get('variable_layer_height') != 1) {
+                $self->{"btn_layer_editing"}->Disable;
+                $self->{"btn_layer_editing"}->SetValue(0);
+                $self->{canvas3D}->layer_editing_enabled(0);
+                $self->{canvas3D}->update;
+            } else {
+                $self->{"btn_layer_editing"}->Enable;
+            }
         }
     }
     
@@ -1705,6 +1752,7 @@ sub object_list_changed {
     my $method = $have_objects ? 'Enable' : 'Disable';
     $self->{"btn_$_"}->$method
         for grep $self->{"btn_$_"}, qw(reset arrange reslice export_gcode export_stl print send_gcode layer_editing);
+    $self->{"btn_layer_editing"}->Disable if (! $self->{config}->variable_layer_height);
     
     if ($self->{export_gcode_output_file} || $self->{send_gcode_file}) {
         $self->{btn_reslice}->Disable;

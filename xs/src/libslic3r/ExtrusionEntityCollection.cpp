@@ -5,12 +5,6 @@
 
 namespace Slic3r {
 
-ExtrusionEntityCollection::ExtrusionEntityCollection(const ExtrusionEntityCollection& collection)
-    : orig_indices(collection.orig_indices), no_sort(collection.no_sort)
-{
-    this->append(collection.entities);
-}
-
 ExtrusionEntityCollection::ExtrusionEntityCollection(const ExtrusionPaths &paths)
     : no_sort(false)
 {
@@ -70,20 +64,6 @@ ExtrusionEntityCollection::reverse()
         if (!(*it)->is_loop()) (*it)->reverse();
     }
     std::reverse(this->entities.begin(), this->entities.end());
-}
-
-void
-ExtrusionEntityCollection::append(const ExtrusionEntitiesPtr &entities)
-{
-    for (ExtrusionEntitiesPtr::const_iterator ptr = entities.begin(); ptr != entities.end(); ++ptr)
-        this->append(**ptr);
-}
-
-void
-ExtrusionEntityCollection::append(const ExtrusionPaths &paths)
-{
-    for (ExtrusionPaths::const_iterator path = paths.begin(); path != paths.end(); ++path)
-        this->append(*path);
 }
 
 void

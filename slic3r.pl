@@ -298,7 +298,7 @@ $j
                         (default: 100,100)
     --z-offset          Additional height in mm to add to vertical coordinates
                         (+/-, default: $config->{z_offset})
-    --gcode-flavor      The type of G-code to generate (reprap/teacup/makerware/sailfish/mach3/machinekit/no-extrusion,
+    --gcode-flavor      The type of G-code to generate (reprap/teacup/repetier/makerware/sailfish/mach3/machinekit/smoothie/no-extrusion,
                         default: $config->{gcode_flavor})
     --use-relative-e-distances Enable this to get relative E values (default: no)
     --use-firmware-retraction  Enable firmware-controlled retraction using G10/G11 (default: no)
@@ -540,9 +540,11 @@ $j
     --infill-extruder   Extruder to use for infill (1+, default: $config->{infill_extruder})
     --solid-infill-extruder   Extruder to use for solid infill (1+, default: $config->{solid_infill_extruder})
     --support-material-extruder
-                        Extruder to use for support material, raft and skirt (1+, default: $config->{support_material_extruder})
+                        Extruder to use for support material, raft and skirt 
+                        (1+, 0 to use the current extruder to minimize tool changes, default: $config->{support_material_extruder})
     --support-material-interface-extruder
-                        Extruder to use for support material interface (1+, default: $config->{support_material_interface_extruder})
+                        Extruder to use for support material interface 
+                        (1+, 0 to use the current extruder to minimize tool changes, default: $config->{support_material_interface_extruder})
     --ooze-prevention   Drop temperature and park extruders outside a full skirt for automatic wiping
                         (default: no)
     --standby-temperature-delta

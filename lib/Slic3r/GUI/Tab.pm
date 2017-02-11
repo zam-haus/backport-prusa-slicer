@@ -207,16 +207,17 @@ sub on_presets_changed {
     $self->{on_presets_changed} = $cb;
 }
 
-# This method is supposed to be called whenever new values are loaded
-# or changed by user (so also when a preset is loaded).
-# propagate event to the parent
+# This method is called whenever an option field is changed by the user.
+# Propagate event to the parent through the 'on_value_changed' callback
+# and call _update.
 sub _on_value_change {
-    my $self = shift;
-    
-    $self->{on_value_change}->(@_) if $self->{on_value_change};
-    $self->_update;
+    my ($self, $key, $value) = @_;
+    $self->{on_value_change}->($key, $value) if $self->{on_value_change};
+    $self->_update({ $key => 1 });
 }
 
+# Override this to capture changes of configuration caused either by loading or switching a preset,
+# or by a user changing an option field.
 sub _update {}
 
 sub _on_presets_changed {
@@ -298,15 +299,20 @@ sub on_select_preset {
     my $preset_config = $self->get_preset_config($preset);
     eval {
         local $SIG{__WARN__} = Slic3r::GUI::warning_catcher($self);
+        my %keys_modified = ();
         foreach my $opt_key (@{$self->{config}->get_keys}) {
-            $self->{config}->set($opt_key, $preset_config->get($opt_key))
-                if $preset_config->has($opt_key);
+            if ($preset_config->has($opt_key)) {
+                if ($self->{config}->serialize($opt_key) ne $preset_config->serialize($opt_key)) {
+                    $self->{config}->set($opt_key, $preset_config->get($opt_key));
+                    $keys_modified{$opt_key} = 1;
+                }
+            }
         }
         ($preset->default || $preset->external)
             ? $self->{btn_delete_preset}->Disable
             : $self->{btn_delete_preset}->Enable;
         
-        $self->_update;
+        $self->_update(\%keys_modified);
         $self->on_preset_loaded;
         $self->reload_config;
         $Slic3r::GUI::Settings->{presets}{$self->name} = $preset->file ? basename($preset->file) : '';
@@ -463,12 +469,15 @@ sub load_config {
     my $self = shift;
     my ($config) = @_;
     
+    my %keys_modified = ();
     foreach my $opt_key (@{$self->{config}->diff($config)}) {
         $self->{config}->set($opt_key, $config->get($opt_key));
+        $keys_modified{$opt_key} = 1;
         $self->update_dirty;
     }
+    # Initialize UI components with the config values.
     $self->reload_config;
-    $self->_update;
+    $self->_update(\%keys_modified);
 }
 
 sub get_preset_config {
@@ -797,9 +806,12 @@ sub build {
     }
 }
 
+# Slic3r::GUI::Tab::Print::_update is called after a configuration preset is loaded or switched, or when a single option is modifed by the user.
 sub _update {
-    my ($self) = @_;
-    
+    # $keys_modified is a reference to hash with modified keys set to 1, unmodified keys missing.
+    my ($self, $keys_modified) = @_;
+    $keys_modified //= {};
+
     my $config = $self->{config};
     
     if ($config->spiral_vase && !($config->perimeters == 1 && $config->top_solid_layers == 0 && $config->fill_density == 0)) {
@@ -823,6 +835,10 @@ sub _update {
             $new_conf->set("spiral_vase", 0);
             $self->load_config($new_conf);
         }
+    }
+
+    if ($keys_modified->{'layer_height'}) {
+        # If the user had set the variable layer height, reset it and let the user know.
     }
 
     if ($config->support_material) {
@@ -946,7 +962,7 @@ sub build {
     my $self = shift;
     
     $self->init_config_options(qw(
-        filament_colour filament_diameter filament_notes filament_max_volumetric_speed extrusion_multiplier
+        filament_colour filament_diameter filament_notes filament_max_volumetric_speed extrusion_multiplier filament_density filament_cost
         temperature first_layer_temperature bed_temperature first_layer_bed_temperature
         fan_always_on cooling
         min_fan_speed max_fan_speed bridge_fan_speed disable_fan_first_layers
@@ -961,6 +977,8 @@ sub build {
             $optgroup->append_single_option_line('filament_colour', 0);
             $optgroup->append_single_option_line('filament_diameter', 0);
             $optgroup->append_single_option_line('extrusion_multiplier', 0);
+            $optgroup->append_single_option_line('filament_density', 0);
+            $optgroup->append_single_option_line('filament_cost', 0);
         }
     
         {
@@ -1050,8 +1068,10 @@ sub build {
     }
 }
 
+# Slic3r::GUI::Tab::Filament::_update is called after a configuration preset is loaded or switched, or when a single option is modifed by the user.
 sub _update {
-    my ($self) = @_;
+    # $keys_modified is a reference to hash with modified keys set to 1, unmodified keys missing.
+    my ($self, $keys_modified) = @_;
     
     $self->_update_description;
     
@@ -1109,7 +1129,7 @@ sub build {
         serial_port serial_speed
         octoprint_host octoprint_apikey
         use_firmware_retraction pressure_advance
-        use_volumetric_e
+        use_volumetric_e variable_layer_height
         start_gcode end_gcode before_layer_gcode layer_gcode toolchange_gcode
         nozzle_diameter extruder_offset
         retract_length retract_lift retract_speed retract_restart_extra retract_before_travel retract_layer_change wipe
@@ -1314,6 +1334,7 @@ sub build {
             $optgroup->append_single_option_line('use_firmware_retraction');
             $optgroup->append_single_option_line('use_volumetric_e');
             $optgroup->append_single_option_line('pressure_advance');
+            $optgroup->append_single_option_line('variable_layer_height');
         }
     }
     {
@@ -1382,10 +1403,9 @@ sub _extruders_count_changed {
     $self->{extruders_count} = $extruders_count;
     $self->_build_extruder_pages;
     $self->_on_value_change('extruders_count', $extruders_count);
-    $self->_update;
 }
 
-sub _extruder_options { qw(nozzle_diameter extruder_offset retract_length retract_lift retract_lift_above retract_lift_below retract_speed retract_restart_extra retract_before_travel wipe
+sub _extruder_options { qw(nozzle_diameter min_layer_height max_layer_height extruder_offset retract_length retract_lift retract_lift_above retract_lift_below retract_speed retract_restart_extra retract_before_travel wipe
     retract_layer_change retract_length_toolchange retract_restart_extra_toolchange) }
 
 sub _build_extruder_pages {
@@ -1413,6 +1433,11 @@ sub _build_extruder_pages {
         {
             my $optgroup = $page->new_optgroup('Size');
             $optgroup->append_single_option_line('nozzle_diameter', $extruder_idx);
+        }
+        {
+            my $optgroup = $page->new_optgroup('Layer height limits');
+            $optgroup->append_single_option_line($_, $extruder_idx)
+                for qw(min_layer_height max_layer_height);
         }
         {
             my $optgroup = $page->new_optgroup('Position (for multi-extruder printers)');
@@ -1464,8 +1489,10 @@ sub _build_extruder_pages {
     $self->update_tree;
 }
 
+# Slic3r::GUI::Tab::Printer::_update is called after a configuration preset is loaded or switched, or when a single option is modifed by the user.
 sub _update {
-    my ($self) = @_;
+    # $keys_modified is a reference to hash with modified keys set to 1, unmodified keys missing.
+    my ($self, $keys_modified) = @_;
     
     my $config = $self->{config};
     

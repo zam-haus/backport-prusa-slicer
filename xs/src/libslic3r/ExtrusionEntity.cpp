@@ -63,6 +63,62 @@ void ExtrusionPath::polygons_covered_by_spacing(Polygons &out, const float scale
     polygons_append(out, offset(this->polyline, 0.5f * float(flow.scaled_spacing()) + scaled_epsilon));
 }
 
+void ExtrusionMultiPath::reverse()
+{
+    for (ExtrusionPaths::iterator path = this->paths.begin(); path != this->paths.end(); ++path)
+        path->reverse();
+    std::reverse(this->paths.begin(), this->paths.end());
+}
+
+double ExtrusionMultiPath::length() const
+{
+    double len = 0;
+    for (ExtrusionPaths::const_iterator path = this->paths.begin(); path != this->paths.end(); ++path)
+        len += path->polyline.length();
+    return len;
+}
+
+void ExtrusionMultiPath::polygons_covered_by_width(Polygons &out, const float scaled_epsilon) const
+{
+    for (ExtrusionPaths::const_iterator path = this->paths.begin(); path != this->paths.end(); ++path)
+        path->polygons_covered_by_width(out, scaled_epsilon);
+}
+
+void ExtrusionMultiPath::polygons_covered_by_spacing(Polygons &out, const float scaled_epsilon) const
+{
+    for (ExtrusionPaths::const_iterator path = this->paths.begin(); path != this->paths.end(); ++path)
+        path->polygons_covered_by_spacing(out, scaled_epsilon);
+}
+
+double ExtrusionMultiPath::min_mm3_per_mm() const
+{
+    double min_mm3_per_mm = std::numeric_limits<double>::max();
+    for (ExtrusionPaths::const_iterator path = this->paths.begin(); path != this->paths.end(); ++path)
+        min_mm3_per_mm = std::min(min_mm3_per_mm, path->mm3_per_mm);
+    return min_mm3_per_mm;
+}
+
+Polyline ExtrusionMultiPath::as_polyline() const
+{
+    size_t len = 0;
+    for (size_t i_path = 0; i_path < paths.size(); ++ i_path) {
+        assert(! paths[i_path].polyline.points.empty());
+        assert(i_path == 0 || paths[i_path - 1].polyline.points.back() == paths[i_path].polyline.points.front());
+        len += paths[i_path].polyline.points.size();
+    }
+    // The connecting points between the segments are equal.
+    len -= paths.size() - 1;
+
+    Polyline out;
+    if (len > 0) {
+        out.points.reserve(len);
+        out.points.push_back(paths.front().polyline.points.front());
+        for (size_t i_path = 0; i_path < paths.size(); ++ i_path)
+            out.points.insert(out.points.end(), paths[i_path].polyline.points.begin() + 1, paths[i_path].polyline.points.end());
+    }
+    return out;
+}
+
 bool
 ExtrusionLoop::make_clockwise()
 {
@@ -148,22 +204,38 @@ ExtrusionLoop::split_at_vertex(const Point &point)
     return false;
 }
 
-void
-ExtrusionLoop::split_at(const Point &point)
+// Splitting an extrusion loop, possibly made of multiple segments, some of the segments may be bridging.
+void ExtrusionLoop::split_at(const Point &point, bool prefer_non_overhang)
 {
-    if (this->paths.empty()) return;
+    if (this->paths.empty())
+        return;
     
-    // find the closest path and closest point belonging to that path
+    // Find the closest path and closest point belonging to that path. Avoid overhangs, if asked for.
     size_t path_idx = 0;
-    Point p = this->paths.front().first_point();
-    double min = point.distance_to(p);
-    for (ExtrusionPaths::const_iterator path = this->paths.begin(); path != this->paths.end(); ++path) {
-        Point p_tmp = point.projection_onto(path->polyline);
-        double dist = point.distance_to(p_tmp);
-        if (dist < min) {
-            p = p_tmp;
-            min = dist;
-            path_idx = path - this->paths.begin();
+    Point  p;
+    {
+        double min = std::numeric_limits<double>::max();
+        Point  p_non_overhang;
+        size_t path_idx_non_overhang = 0;
+        double min_non_overhang = std::numeric_limits<double>::max();
+        for (ExtrusionPaths::const_iterator path = this->paths.begin(); path != this->paths.end(); ++path) {
+            Point p_tmp = point.projection_onto(path->polyline);
+            double dist = point.distance_to(p_tmp);
+            if (dist < min) {
+                p = p_tmp;
+                min = dist;
+                path_idx = path - this->paths.begin();
+            } 
+            if (prefer_non_overhang && ! path->is_bridge() && dist < min_non_overhang) {
+                p_non_overhang = p_tmp;
+                min_non_overhang = dist;
+                path_idx_non_overhang = path - this->paths.begin();
+            }
+        }
+        if (prefer_non_overhang && min_non_overhang != std::numeric_limits<double>::max()) {
+            // Only apply the non-overhang point if there is one.
+            path_idx = path_idx_non_overhang;
+            p        = p_non_overhang;
         }
     }
     

@@ -14,14 +14,19 @@ class Polygon;
 typedef std::vector<Polygon> Polygons;
 
 class Polygon : public MultiPoint {
-    public:
+public:
     operator Polygons() const;
     operator Polyline() const;
     Point& operator[](Points::size_type idx);
     const Point& operator[](Points::size_type idx) const;
     
-    Polygon() {};
-    explicit Polygon(const Points &points): MultiPoint(points) {};
+    Polygon() {}
+    explicit Polygon(const Points &points): MultiPoint(points) {}
+    Polygon(const Polygon &other) : MultiPoint(other.points) {}
+    Polygon(Polygon &&other) : MultiPoint(std::move(other.points)) {}
+    Polygon& operator=(const Polygon &other) { points = other.points; return *this; }
+    Polygon& operator=(Polygon &&other) { points = std::move(other.points); return *this; }
+
     Point last_point() const;
     virtual Lines lines() const;
     Polyline split_at_vertex(const Point &point) const;
@@ -54,6 +59,13 @@ extern BoundingBox get_extents_rotated(const Polygon &poly, double angle);
 extern BoundingBox get_extents_rotated(const Polygons &polygons, double angle);
 extern std::vector<BoundingBox> get_extents_vector(const Polygons &polygons);
 
+inline double total_length(const Polygons &polylines) {
+    double total = 0;
+    for (Polygons::const_iterator it = polylines.begin(); it != polylines.end(); ++it)
+        total += it->length();
+    return total;
+}
+
 // Remove sticks (tentacles with zero area) from the polygon.
 extern bool        remove_sticks(Polygon &poly);
 extern bool        remove_sticks(Polygons &polys);
@@ -64,15 +76,16 @@ extern bool        remove_small(Polygons &polys, double min_area);
 
 // Append a vector of polygons at the end of another vector of polygons.
 inline void        polygons_append(Polygons &dst, const Polygons &src) { dst.insert(dst.end(), src.begin(), src.end()); }
-#if SLIC3R_CPPVER >= 11
+
 inline void        polygons_append(Polygons &dst, Polygons &&src) 
 {
-    if (dst.empty())
+    if (dst.empty()) {
         dst = std::move(src);
-    else
+    } else {
         std::move(std::begin(src), std::end(src), std::back_inserter(dst));
+        src.clear();
+    }
 }
-#endif
 
 inline void polygons_rotate(Polygons &polys, double angle)
 {

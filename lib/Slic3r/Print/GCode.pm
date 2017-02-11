@@ -321,17 +321,33 @@ sub export {
     $self->print->clear_filament_stats;
     $self->print->total_used_filament(0);
     $self->print->total_extruded_volume(0);
+    $self->print->total_weight(0);
+    $self->print->total_cost(0);
     foreach my $extruder (@{$gcodegen->writer->extruders}) {
         my $used_filament = $extruder->used_filament;
         my $extruded_volume = $extruder->extruded_volume;
+        my $filament_weight = $extruded_volume * $extruder->filament_density / 1000;
+        my $filament_cost = $filament_weight * ($extruder->filament_cost / 1000);
         $self->print->set_filament_stats($extruder->id, $used_filament);
         
         printf $fh "; filament used = %.1fmm (%.1fcm3)\n",
             $used_filament, $extruded_volume/1000;
+        if ($filament_weight > 0) {
+            $self->print->total_weight($self->print->total_weight + $filament_weight);
+            printf $fh "; filament used = %.1fg\n",
+                   $filament_weight;
+            if ($filament_cost > 0) {
+                $self->print->total_cost($self->print->total_cost + $filament_cost);
+                printf $fh "; filament cost = %.1f\n",
+                       $filament_cost;
+            }
+        }
         
         $self->print->total_used_filament($self->print->total_used_filament + $used_filament);
         $self->print->total_extruded_volume($self->print->total_extruded_volume + $extruded_volume);
     }
+    printf $fh "; total filament cost = %.1f\n",
+           $self->print->total_cost;
     
     # append full config
     print $fh "\n";
@@ -480,14 +496,28 @@ sub process_layer {
         # and also because we avoid travelling on other things when printing it
         if ($layer->isa('Slic3r::Layer::Support')) {
             if ($layer->support_interface_fills->count > 0) {
-                $gcode .= $self->_gcodegen->set_extruder($object->config->support_material_interface_extruder-1);
-                $gcode .= $self->_gcodegen->extrude_path($_, 'support material interface', $object->config->get_abs_value('support_material_interface_speed')) 
-                    for @{$layer->support_interface_fills->chained_path_from($self->_gcodegen->last_pos, 0)}; 
+                # Don't change extruder if the extruder is set to 0. Use the current extruder instead.
+                $gcode .= $self->_gcodegen->set_extruder($object->config->support_material_interface_extruder-1)
+                    if ($object->config->support_material_interface_extruder > 0);
+                for my $path (@{$layer->support_interface_fills->chained_path_from($self->_gcodegen->last_pos, 0)}) {
+                    if ($path->isa('Slic3r::ExtrusionMultiPath')) {
+                        $gcode .= $self->_gcodegen->extrude_multipath($path, 'support material interface', $object->config->get_abs_value('support_material_interface_speed'));
+                    } else {
+                        $gcode .= $self->_gcodegen->extrude_path($path, 'support material interface', $object->config->get_abs_value('support_material_interface_speed'));
+                    }
+                }
             }
             if ($layer->support_fills->count > 0) {
-                $gcode .= $self->_gcodegen->set_extruder($object->config->support_material_extruder-1);
-                $gcode .= $self->_gcodegen->extrude_path($_, 'support material', $object->config->get_abs_value('support_material_speed')) 
-                    for @{$layer->support_fills->chained_path_from($self->_gcodegen->last_pos, 0)};
+                # Don't change extruder if the extruder is set to 0. Use the current extruder instead.
+                $gcode .= $self->_gcodegen->set_extruder($object->config->support_material_extruder-1)
+                    if ($object->config->support_material_extruder > 0);
+                for my $path (@{$layer->support_fills->chained_path_from($self->_gcodegen->last_pos, 0)}) {
+                    if ($path->isa('Slic3r::ExtrusionMultiPath')) {
+                        $gcode .= $self->_gcodegen->extrude_multipath($path, 'support material', $object->config->get_abs_value('support_material_speed'));
+                    } else {
+                        $gcode .= $self->_gcodegen->extrude_path($path, 'support material', $object->config->get_abs_value('support_material_speed'));
+                    }
+                }
             }
         }
         
