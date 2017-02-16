@@ -137,6 +137,26 @@ parallelize(T start, T end, boost::function<void(T)> func,
     parallelize(queue, func, threads_count);
 }
 
+template <typename T>
+void append(std::vector<T>& dest, const std::vector<T>& src)
+{
+    if (dest.empty())
+        dest = src;
+    else
+        dest.insert(dest.end(), src.begin(), src.end());
+}
+
+template <typename T>
+void append(std::vector<T>& dest, std::vector<T>&& src)
+{
+    if (dest.empty())
+        dest = std::move(src);
+    else
+        std::move(std::begin(src), std::end(src), std::back_inserter(dest));
+    src.clear();
+    src.shrink_to_fit();
+}
+
 } // namespace Slic3r
 
 #endif

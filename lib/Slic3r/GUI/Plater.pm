@@ -108,6 +108,9 @@ sub new {
             if ($Slic3r::GUI::Settings->{_}{background_processing}) {
                 $self->{apply_config_timer}->Stop if defined $self->{apply_config_timer};
                 $self->async_apply_config();
+            } else {
+                # Hide the print info box, it is no more valid.
+                $self->{"print_info_box_show"}->(0);
             }
         });
         $self->{canvas3D}->on_viewport_changed(sub {
@@ -462,7 +465,16 @@ sub new {
         $right_sizer->Add($self->{list}, 1, wxEXPAND, 5);
         $right_sizer->Add($object_info_sizer, 0, wxEXPAND, 0);
         $right_sizer->Add($print_info_sizer, 0, wxEXPAND, 0);
-        
+        # Callback for showing / hiding the print info box.
+        $self->{"print_info_box_show"} = sub {
+            if ($right_sizer->IsShown(4) != $_[0]) { 
+                $right_sizer->Show(4, $_[0]); 
+                $self->Layout
+            }
+        };
+        # Show the box initially, let it be shown after the slicing is finished.
+        $self->{"print_info_box_show"}->(0);
+
         my $hsizer = Wx::BoxSizer->new(wxHORIZONTAL);
         $hsizer->Add($self->{preview_notebook}, 1, wxEXPAND | wxTOP, 1);
         $hsizer->Add($right_sizer, 0, wxEXPAND | wxLEFT | wxRIGHT, 3);
@@ -1096,7 +1108,10 @@ sub async_apply_config {
 
 #    $self->{canvas3D}->Refresh if ($invalidated && $self->{canvas3D}->layer_editing_enabled);
     $self->{canvas3D}->Refresh if ($self->{canvas3D}->layer_editing_enabled);
-    
+
+    # Hide the slicing results if the current slicing status is no more valid.    
+    $self->{"print_info_box_show"}->(0) if $invalidated;
+
     return if !$Slic3r::GUI::Settings->{_}{background_processing};
     
     if ($invalidated) {
@@ -1398,7 +1413,8 @@ sub on_export_completed {
     $self->{"print_info_cost"}->SetLabel(sprintf("%.2f" , $self->{print}->total_cost));
     $self->{"print_info_fil_g"}->SetLabel(sprintf("%.2f" , $self->{print}->total_weight));
     $self->{"print_info_fil_mm3"}->SetLabel(sprintf("%.2f" , $self->{print}->total_extruded_volume));
-    
+    $self->{"print_info_box_show"}->(1);
+
     # this updates buttons status
     $self->object_list_changed;
 }
@@ -1636,12 +1652,21 @@ sub on_config_change {
             $self->Layout;
         } elsif ($opt_key eq 'variable_layer_height') {
             if ($config->get('variable_layer_height') != 1) {
-                $self->{"btn_layer_editing"}->Disable;
-                $self->{"btn_layer_editing"}->SetValue(0);
+                if ($self->{htoolbar}) {
+                    $self->{htoolbar}->EnableTool(TB_LAYER_EDITING, 0);
+                    $self->{htoolbar}->ToggleTool(TB_LAYER_EDITING, 0);
+                } else {
+                    $self->{"btn_layer_editing"}->Disable;
+                    $self->{"btn_layer_editing"}->SetValue(0);
+                }
                 $self->{canvas3D}->layer_editing_enabled(0);
                 $self->{canvas3D}->update;
             } else {
-                $self->{"btn_layer_editing"}->Enable;
+                if ($self->{htoolbar}) {
+                    $self->{htoolbar}->EnableTool(TB_LAYER_EDITING, 1);
+                } else {
+                    $self->{"btn_layer_editing"}->Enable;
+                }
             }
         }
     }
@@ -1746,24 +1771,27 @@ sub object_settings_dialog {
 # whether background processing (export of a G-code, sending to Octoprint, forced background re-slicing) is active.
 sub object_list_changed {
     my $self = shift;
-    
+        
     # Enable/disable buttons depending on whether there are any objects on the platter.
     my $have_objects = @{$self->{objects}} ? 1 : 0;
-    my $method = $have_objects ? 'Enable' : 'Disable';
-    $self->{"btn_$_"}->$method
-        for grep $self->{"btn_$_"}, qw(reset arrange reslice export_gcode export_stl print send_gcode layer_editing);
-    $self->{"btn_layer_editing"}->Disable if (! $self->{config}->variable_layer_height);
-    
+    if ($self->{htoolbar}) {
+        # On OSX or Linux
+        $self->{htoolbar}->EnableTool($_, $have_objects)
+            for (TB_RESET, TB_ARRANGE, TB_LAYER_EDITING);
+        $self->{htoolbar}->EnableTool(TB_LAYER_EDITING, 0) if (! $self->{config}->variable_layer_height);
+    } else {
+        # On MSW
+        my $method = $have_objects ? 'Enable' : 'Disable';
+        $self->{"btn_$_"}->$method
+            for grep $self->{"btn_$_"}, qw(reset arrange reslice export_gcode export_stl print send_gcode layer_editing);
+        $self->{"btn_layer_editing"}->Disable if (! $self->{config}->variable_layer_height);
+    }
+
     if ($self->{export_gcode_output_file} || $self->{send_gcode_file}) {
         $self->{btn_reslice}->Disable;
         $self->{btn_export_gcode}->Disable;
         $self->{btn_print}->Disable;
         $self->{btn_send_gcode}->Disable;
-    }
-    
-    if ($self->{htoolbar}) {
-        $self->{htoolbar}->EnableTool($_, $have_objects)
-            for (TB_RESET, TB_ARRANGE);
     }
 }
 
@@ -1773,13 +1801,15 @@ sub selection_changed {
     my ($obj_idx, $object) = $self->selected_object;
     my $have_sel = defined $obj_idx;
     
-    my $method = $have_sel ? 'Enable' : 'Disable';
-    $self->{"btn_$_"}->$method
-        for grep $self->{"btn_$_"}, qw(remove increase decrease rotate45cw rotate45ccw changescale split cut settings);
-    
     if ($self->{htoolbar}) {
+        # On OSX or Linux
         $self->{htoolbar}->EnableTool($_, $have_sel)
             for (TB_REMOVE, TB_MORE, TB_FEWER, TB_45CW, TB_45CCW, TB_SCALE, TB_SPLIT, TB_CUT, TB_SETTINGS);
+    } else {
+        # On MSW
+        my $method = $have_sel ? 'Enable' : 'Disable';
+        $self->{"btn_$_"}->$method
+            for grep $self->{"btn_$_"}, qw(remove increase decrease rotate45cw rotate45ccw changescale split cut settings);
     }
     
     if ($self->{object_info_size}) { # have we already loaded the info pane?
