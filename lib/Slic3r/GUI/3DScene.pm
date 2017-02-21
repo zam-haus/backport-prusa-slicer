@@ -19,7 +19,7 @@ package Slic3r::GUI::3DScene::Base;
 use strict;
 use warnings;
 
-use Wx qw(:timer :bitmap);
+use Wx qw(:timer :bitmap :icon :dialog);
 use Wx::Event qw(EVT_PAINT EVT_SIZE EVT_ERASE_BACKGROUND EVT_IDLE EVT_MOUSEWHEEL EVT_MOUSE_EVENTS EVT_TIMER);
 # must load OpenGL *before* Wx::GLCanvas
 use OpenGL qw(:glconstants :glfunctions :glufunctions :gluconstants);
@@ -193,22 +193,56 @@ sub layer_editing_enabled {
     my ($self, $value) = @_;
     if (@_ == 2) {
         $self->{layer_editing_enabled} = $value;
-        if ($value && ! $self->{layer_editing_initialized}) {
-            # Enabling the layer editing for the first time. This triggers compilation of the necessary OpenGL shaders.
-            # If compilation fails, the compile log is printed into the console.
-            $self->{layer_editing_initialized} = 1;
-            my $shader = $self->{shader} = new Slic3r::GUI::GLShader;
-            my $info = $shader->Load($self->_fragment_shader, $self->_vertex_shader);
-            print $info if $info;
-            ($self->{layer_preview_z_texture_id}) = glGenTextures_p(1);
-            glBindTexture(GL_TEXTURE_2D, $self->{layer_preview_z_texture_id});
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
-            glBindTexture(GL_TEXTURE_2D, 0);
+        if ($value) {
+            if (! $self->{layer_editing_initialized}) {
+                # Enabling the layer editing for the first time. This triggers compilation of the necessary OpenGL shaders.
+                # If compilation fails, a message box is shown with the error codes.
+                my $shader = $self->{shader} = new Slic3r::GUI::GLShader;
+                my $error_message;
+                if (ref($shader)) {
+                    my $info = $shader->Load($self->_fragment_shader, $self->_vertex_shader);
+                    if (defined($info)) {
+                        # Compilation or linking of the shaders failed.
+                        $error_message = "Cannot compile an OpenGL Shader, therefore the Variable Layer Editing will be disabled.\n\n" 
+                            . $info;
+                    } else {
+                        ($self->{layer_preview_z_texture_id}) = glGenTextures_p(1);
+                        glBindTexture(GL_TEXTURE_2D, $self->{layer_preview_z_texture_id});
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
+                        glBindTexture(GL_TEXTURE_2D, 0);
+                    }
+                } else {
+                    # Cannot initialize the Shader object, some of the OpenGL capabilities are missing.
+                    $error_message = "Cannot instantiate an OpenGL Shader, therefore the Variable Layer Editing will be disabled.\n\n" 
+                        . $shader;
+                }
+                if (defined($error_message)) {
+                    # Don't enable the layer editing tool.
+                    $self->{layer_editing_enabled} = 0;
+                    # 2 means failed
+                    $self->{layer_editing_initialized} = 2;
+                    # Show the error message.
+                    Wx::MessageBox($error_message, "Slic3r Error", wxOK | wxICON_EXCLAMATION, $self);
+                } else {
+                    $self->{layer_editing_initialized} = 1;
+                }
+            } elsif ($self->{layer_editing_initialized} == 2) {
+                # Initilization failed before. Don't try to initialize and disable layer editing.
+                $self->{layer_editing_enabled} = 0;
+            }
         }
     }
     return $self->{layer_editing_enabled};
+}
+
+sub layer_editing_allowed {
+    my ($self) = @_;
+    # Allow layer editing if either the shaders were not initialized yet and we don't know
+    # whether it will be possible to initialize them, 
+    # or if the initialization was done already and it failed.
+    return ! (defined($self->{layer_editing_initialized}) && $self->{layer_editing_initialized} == 2);
 }
 
 sub _first_selected_object_id {
@@ -1490,6 +1524,49 @@ sub draw_active_object_annotations {
     # Revert the matrices.
     glPopMatrix();
     glEnable(GL_DEPTH_TEST);
+}
+
+sub opengl_info
+{
+    my ($self, %params) = @_;
+    my %tag = Slic3r::tags($params{format});
+
+    my $gl_version       = glGetString(GL_VERSION);
+    my $gl_vendor        = glGetString(GL_VENDOR);
+    my $gl_renderer      = glGetString(GL_RENDERER);
+    my $glsl_version_ARB = glGetString(GL_SHADING_LANGUAGE_VERSION_ARB) // '';
+    my $glsl_version     = glGetString(GL_SHADING_LANGUAGE_VERSION) // $glsl_version_ARB;
+    $glsl_version .= 'ARB(' . $glsl_version_ARB . ')' if ($glsl_version_ARB ne '' && $glsl_version ne $glsl_version_ARB);
+
+    my $out = '';
+    $out .= "$tag{h2start}OpenGL installation$tag{h2end}$tag{eol}";
+    $out .= "  $tag{bstart}Using POGL$tag{bend} v$OpenGL::BUILD_VERSION$tag{eol}";
+    $out .= "  $tag{bstart}GL version:   $tag{bend}${gl_version}$tag{eol}";
+    $out .= "  $tag{bstart}vendor:       $tag{bend}${gl_vendor}$tag{eol}";
+    $out .= "  $tag{bstart}renderer:     $tag{bend}${gl_renderer}$tag{eol}";
+    $out .= "  $tag{bstart}GLSL version: $tag{bend}${glsl_version}$tag{eol}";
+
+    # Check for required OpenGL extensions
+    $out .= "$tag{h2start}Required extensions (* implemented):$tag{h2end}$tag{eol}";
+    my @extensions_required = qw(GL_ARB_shader_objects GL_ARB_fragment_shader GL_ARB_vertex_shader GL_ARB_shading_language_100);
+    foreach my $ext (sort @extensions_required) {
+        my $stat = glpCheckExtension($ext);
+        $out .= sprintf("%s ${ext}$tag{eol}", $stat?' ':'*');
+        $out .= sprintf("    ${stat}$tag{eol}") if ($stat && $stat !~ m|^$ext |);
+    }
+    # Check for other OpenGL extensions
+    $out .= "$tag{h2start}Installed extensions (* implemented in the module):$tag{h2end}$tag{eol}";
+    my $extensions = glGetString(GL_EXTENSIONS);
+    my @extensions = split(' ',$extensions);
+    foreach my $ext (sort @extensions) {
+        if(! grep(/^$extensions$/, @extensions_required)) {
+            my $stat = glpCheckExtension($ext);
+            $out .= sprintf("%s ${ext}$tag{eol}", $stat?' ':'*');
+            $out .= sprintf("    ${stat}$tag{eol}") if ($stat && $stat !~ m|^$ext |);
+        }
+    }
+
+    return $out;
 }
 
 sub _report_opengl_state
