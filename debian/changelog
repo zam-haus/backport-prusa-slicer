@@ -1,6 +1,8 @@
 slic3r-prusa (1.34.0-1) experimental; urgency=medium
 
   * [a157bd0] Imported Upstream version 1.34.0
+  * [d9d46a9] Refresh patches
+  * [0220070] Build-dep on libeigen3-dev
 
  -- Chow Loong Jin <hyperair@debian.org>  Fri, 31 Mar 2017 01:31:56 +0800
 
