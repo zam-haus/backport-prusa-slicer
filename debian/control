@@ -6,6 +6,7 @@ Uploaders: Chow Loong Jin <hyperair@debian.org>
 Build-Depends: debhelper (>= 9.20120312),
                help2man,
                libboost-all-dev,
+               libtbb-dev,
                libglew-dev,
                libeigen3-dev,
                libboost-geometry-utils-perl,
