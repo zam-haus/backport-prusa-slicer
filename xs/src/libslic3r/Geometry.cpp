@@ -317,12 +317,6 @@ rad2deg_dir(double angle)
     return rad2deg(angle);
 }
 
-double
-deg2rad(double angle)
-{
-    return PI * angle / 180.0;
-}
-
 void
 simplify_polygons(const Polygons &polygons, double tolerance, Polygons* retval)
 {
@@ -334,7 +328,7 @@ simplify_polygons(const Polygons &polygons, double tolerance, Polygons* retval)
         p.points.pop_back();
         pp.push_back(p);
     }
-    Slic3r::simplify_polygons(pp, retval);
+    *retval = Slic3r::simplify_polygons(pp);
 }
 
 double
@@ -989,6 +983,13 @@ MedialAxis::process_edge_neighbors(const VD::edge_type* edge, ThickPolyline* pol
 bool
 MedialAxis::validate_edge(const VD::edge_type* edge)
 {
+    // prevent overflows and detect almost-infinite edges
+    if (std::abs(edge->vertex0()->x()) > double(CLIPPER_MAX_COORD_UNSCALED) || 
+        std::abs(edge->vertex0()->y()) > double(CLIPPER_MAX_COORD_UNSCALED) || 
+        std::abs(edge->vertex1()->x()) > double(CLIPPER_MAX_COORD_UNSCALED) ||
+        std::abs(edge->vertex1()->y()) > double(CLIPPER_MAX_COORD_UNSCALED))
+        return false;
+
     // construct the line representing this edge of the Voronoi diagram
     const Line line(
         Point( edge->vertex0()->x(), edge->vertex0()->y() ),

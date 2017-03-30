@@ -112,6 +112,8 @@ _constant()
         %code%{ THIS->state.set_started(step); %};
 
     void _slice();
+    std::string _fix_slicing_errors();
+    void _simplify_slices(double distance);
     void detect_surfaces_type();
     void process_external_surfaces();
     void discover_vertical_shells();
@@ -140,20 +142,6 @@ _constant()
         %};
 
     void reset_layer_height_profile();
-    
-    int generate_layer_height_texture(void *data, int rows, int cols, bool force = true)
-        %code%{ 
-            force |= THIS->update_layer_height_profile(THIS->model_object()->layer_height_profile);
-            if (force) {
-                SlicingParameters slicing_params = THIS->slicing_parameters(); 
-                bool level_of_detail_2nd_level = true;
-                RETVAL = generate_layer_height_texture(
-                    slicing_params, 
-                    generate_object_layers(slicing_params, THIS->model_object()->layer_height_profile), 
-                    data, rows, cols, level_of_detail_2nd_level); 
-            } else
-                RETVAL = 0;
-        %};
     
     int ptr()
         %code%{ RETVAL = (int)(intptr_t)THIS; %};
@@ -257,6 +245,8 @@ _constant()
     double max_allowed_layer_height() const;
     bool has_support_material() const;
     void auto_assign_extruders(ModelObject* model_object);
+    std::string output_filename();
+    std::string output_filepath(std::string path = "");
     
     void add_model_object(ModelObject* model_object, int idx = -1);
     bool apply_config(DynamicPrintConfig* config)

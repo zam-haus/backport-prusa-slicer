@@ -91,7 +91,12 @@ public:
 				return false;
 		}
 
+		// For the bridging flow, bottom_print_z will be above bottom_z to account for the vertical separation.
+		// For the non-bridging flow, bottom_print_z will be equal to bottom_z.
 		coordf_t bottom_print_z() const { return print_z - height; }
+
+		// To sort the extremes of top / bottom interface layers.
+		coordf_t extreme_z() const { return (this->layer_type == sltTopContact) ? this->bottom_z : this->print_z; }
 
 		SupporLayerType layer_type;
 		// Z used for printing, in unscaled coordinates.
@@ -162,8 +167,7 @@ private:
 	    const PrintObject   &object,
 	    const MyLayersPtr   &bottom_contacts,
 	    const MyLayersPtr   &top_contacts,
-	    MyLayerStorage	 	&layer_storage,
-	    const coordf_t       max_object_layer_height) const;
+	    MyLayerStorage	 	&layer_storage) const;
 
 	// Fill in the base layers with polygons.
 	void generate_base_layers(
@@ -171,12 +175,11 @@ private:
 	    const MyLayersPtr   &bottom_contacts,
 	    const MyLayersPtr   &top_contacts,
 	    MyLayersPtr         &intermediate_layers,
-	    std::vector<Polygons> &layer_support_areas) const;
+	    const std::vector<Polygons> &layer_support_areas) const;
 
 	// Generate raft layers, also expand the 1st support layer
 	// in case there is no raft layer to improve support adhesion.
     MyLayersPtr generate_raft_base(
-	    const PrintObject   &object,
 	    const MyLayersPtr   &top_contacts,
 	    const MyLayersPtr   &interface_layers,
 	    const MyLayersPtr   &base_layers,
@@ -184,7 +187,6 @@ private:
 
     // Turn some of the base layers into interface layers.
 	MyLayersPtr generate_interface_layers(
-	    const PrintObject   &object,
 	    const MyLayersPtr   &bottom_contacts,
 	    const MyLayersPtr   &top_contacts,
 	    MyLayersPtr         &intermediate_layers,

@@ -26,13 +26,6 @@ sub status_cb {
     return $status_cb // sub {};
 }
 
-# this value is not supposed to be compared with $layer->id
-# since they have different semantics
-sub total_layer_count {
-    my $self = shift;
-    return max(map $_->total_layer_count, @{$self->objects});
-}
-
 sub size {
     my $self = shift;
     return $self->bounding_box->size;
@@ -42,7 +35,7 @@ sub size {
 sub process {
     my ($self) = @_;
     
-    $self->status_cb->(20, "Generating perimeters");
+    Slic3r::trace(3, "Staring the slicing process.");
     $_->make_perimeters for @{$self->objects};
     
     $self->status_cb->(70, "Infilling layers");
@@ -67,6 +60,7 @@ sub process {
         eval "use Slic3r::Test::SectionCut";
         Slic3r::Test::SectionCut->new(print => $self)->export_svg("section_cut.svg");
     }
+    Slic3r::trace(3, "Slicing process finished.")
 }
 
 sub export_gcode {
@@ -77,9 +71,40 @@ sub export_gcode {
     $self->process;
     
     # output everything to a G-code file
-    my $output_file = $self->expanded_output_filepath($params{output_file});
+    my $output_file = $self->output_filepath($params{output_file} // '');
     $self->status_cb->(90, "Exporting G-code" . ($output_file ? " to $output_file" : ""));
-    $self->write_gcode($params{output_fh} || $output_file);
+    
+    {
+        # open output gcode file if we weren't supplied a file-handle
+        my ($fh, $tempfile);
+        if ($params{output_fh}) {
+            $fh = $params{output_fh};
+        } else {
+            $tempfile = "$output_file.tmp";
+            Slic3r::open(\$fh, ">", $tempfile)
+                or die "Failed to open $tempfile for writing\n";
+    
+            # enable UTF-8 output since user might have entered Unicode characters in fields like notes
+            binmode $fh, ':utf8';
+        }
+
+        Slic3r::Print::GCode->new(
+            print   => $self,
+            fh      => $fh,
+        )->export;
+
+        # close our gcode file
+        close $fh;
+        if ($tempfile) {
+            my $i;
+            for ($i = 0; $i < 5; $i += 1)  {
+                last if (rename Slic3r::encode_path($tempfile), Slic3r::encode_path($output_file));
+                # Wait for 1/4 seconds and try to rename once again.
+                select(undef, undef, undef, 0.25);
+            }
+            Slic3r::debugf "Failed to remove the output G-code file from $tempfile to $output_file. Is $tempfile locked?\n" if ($i == 5);
+        } 
+    }
     
     # run post-processing scripts
     if (@{$self->config->post_process}) {
@@ -105,7 +130,7 @@ sub export_svg {
     
     my $fh = $params{output_fh};
     if (!$fh) {
-        my $output_file = $self->expanded_output_filepath($params{output_file});
+        my $output_file = $self->output_filepath($params{output_file});
         $output_file =~ s/\.gcode$/.svg/i;
         Slic3r::open(\$fh, ">", $output_file) or die "Failed to open $output_file for writing\n";
         print "Exporting to $output_file..." unless $params{quiet};
@@ -285,84 +310,6 @@ sub make_brim {
     ), reverse @{union_pt_chained(\@loops)});
     
     $self->set_step_done(STEP_BRIM);
-}
-
-sub write_gcode {
-    my $self = shift;
-    my ($file) = @_;
-    
-    my $tempfile;
-    
-    # open output gcode file if we weren't supplied a file-handle
-    my $fh;
-    if (ref $file eq 'IO::Scalar') {
-        $fh = $file;
-    } else {
-        $tempfile = "$file.tmp";
-        Slic3r::open(\$fh, ">", $tempfile)
-            or die "Failed to open $tempfile for writing\n";
-        
-        # enable UTF-8 output since user might have entered Unicode characters in fields like notes
-        binmode $fh, ':utf8';
-    }
-    
-    my $exporter = Slic3r::Print::GCode->new(
-        print   => $self,
-        fh      => $fh,
-    );
-    $exporter->export;
-    
-    # close our gcode file
-    close $fh;
-    
-    if ($tempfile) {
-        my $i;
-        for ($i = 0; $i < 5; $i += 1)  {
-            last if (rename Slic3r::encode_path($tempfile), Slic3r::encode_path($file));
-            # Wait for 1/4 seconds and try to rename once again.
-            select(undef, undef, undef, 0.25);
-        }
-        Slic3r::debugf "Failed to remove the output G-code file from $tempfile to $file. Is $tempfile locked?\n" if ($i == 5);
-    }
-}
-
-# this method will return the supplied input file path after expanding its
-# format variables with their values
-sub expanded_output_filepath {
-    my $self = shift;
-    my ($path) = @_;
-    
-    return undef if !@{$self->objects};
-    my $input_file = first { defined $_ } map $_->model_object->input_file, @{$self->objects};
-    return undef if !defined $input_file;
-    
-    my $filename = my $filename_base = basename($input_file);
-    $filename_base =~ s/\.[^.]+$//;  # without suffix
-    
-    # set filename in placeholder parser so that it's available also in custom G-code
-    $self->placeholder_parser->set(input_filename => $filename);
-    $self->placeholder_parser->set(input_filename_base => $filename_base);
-    
-    # set other variables from model object
-    $self->placeholder_parser->set_multiple(
-        scale => [ map $_->model_object->instances->[0]->scaling_factor * 100 . "%", @{$self->objects} ],
-    );
-    
-    if ($path && -d $path) {
-        # if output path is an existing directory, we take that and append
-        # the specified filename format
-        $path = File::Spec->join($path, $self->config->output_filename_format);
-    } elsif (!$path) {
-        # if no explicit output file was defined, we take the input
-        # file directory and append the specified filename format
-        $path = (fileparse($input_file))[1] . $self->config->output_filename_format;
-    } else {
-        # path is a full path to a file so we use it as it is
-    }
-    
-    # make sure we use an up-to-date timestamp
-    $self->placeholder_parser->update_timestamp;
-    return $self->placeholder_parser->process($path);
 }
 
 # Wrapper around the C++ Slic3r::Print::validate()

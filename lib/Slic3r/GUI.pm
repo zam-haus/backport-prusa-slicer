@@ -14,7 +14,6 @@ use Slic3r::GUI::ConfigWizard;
 use Slic3r::GUI::Controller;
 use Slic3r::GUI::Controller::ManualControlDialog;
 use Slic3r::GUI::Controller::PrinterPanel;
-use Slic3r::GUI::GLShader;
 use Slic3r::GUI::MainFrame;
 use Slic3r::GUI::Notifier;
 use Slic3r::GUI::Plater;
@@ -25,6 +24,7 @@ use Slic3r::GUI::Plater::3DPreview;
 use Slic3r::GUI::Plater::ObjectPartsPanel;
 use Slic3r::GUI::Plater::ObjectCutDialog;
 use Slic3r::GUI::Plater::ObjectSettingsDialog;
+use Slic3r::GUI::Plater::LambdaObjectDialog;
 use Slic3r::GUI::Plater::OverrideSettingsPanel;
 use Slic3r::GUI::Preferences;
 use Slic3r::GUI::ProgressStatusBar;
@@ -44,15 +44,16 @@ use Wx::Event qw(EVT_IDLE EVT_COMMAND);
 use base 'Wx::App';
 
 use constant FILE_WILDCARDS => {
-    known   => 'Known files (*.stl, *.obj, *.amf, *.xml)|*.stl;*.STL;*.obj;*.OBJ;*.amf;*.AMF;*.xml;*.XML',
+    known   => 'Known files (*.stl, *.obj, *.amf, *.xml, *.prus)|*.stl;*.STL;*.obj;*.OBJ;*.amf;*.AMF;*.xml;*.XML;*.prus;*.PRUS',
     stl     => 'STL files (*.stl)|*.stl;*.STL',
     obj     => 'OBJ files (*.obj)|*.obj;*.OBJ',
     amf     => 'AMF files (*.amf)|*.amf;*.AMF;*.xml;*.XML',
+    prus    => 'PRUS files (*.prus)|*.prus;*.PRUS',
     ini     => 'INI files *.ini|*.ini;*.INI',
     gcode   => 'G-code files (*.gcode, *.gco, *.g, *.ngc)|*.gcode;*.GCODE;*.gco;*.GCO;*.g;*.G;*.ngc;*.NGC',
     svg     => 'SVG files *.svg|*.svg;*.SVG',
 };
-use constant MODEL_WILDCARD => join '|', @{&FILE_WILDCARDS}{qw(known stl obj amf)};
+use constant MODEL_WILDCARD => join '|', @{&FILE_WILDCARDS}{qw(known stl obj amf prus)};
 
 our $datadir;
 # If set, the "Controller" tab for the control of the printer over serial line and the serial port settings are hidden.
@@ -369,7 +370,7 @@ sub open_model {
            || $Slic3r::GUI::Settings->{recent}{config_directory}
            || '';
     
-    my $dialog = Wx::FileDialog->new($window // $self->GetTopWindow, 'Choose one or more files (STL/OBJ/AMF):', $dir, "",
+    my $dialog = Wx::FileDialog->new($window // $self->GetTopWindow, 'Choose one or more files (STL/OBJ/AMF/PRUS):', $dir, "",
         MODEL_WILDCARD, wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
     if ($dialog->ShowModal != wxID_OK) {
         $dialog->Destroy;

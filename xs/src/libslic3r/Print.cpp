@@ -6,6 +6,8 @@
 #include "Geometry.hpp"
 #include "SupportMaterial.hpp"
 #include <algorithm>
+#include <boost/filesystem.hpp>
+#include <boost/lexical_cast.hpp>
 
 namespace Slic3r {
 
@@ -32,12 +34,6 @@ Print::clear_objects()
         this->delete_object(i);
 
     this->clear_regions();
-}
-
-PrintObject*
-Print::get_object(size_t idx)
-{
-    return objects.at(idx);
 }
 
 void
@@ -410,6 +406,29 @@ Print::add_model_object(ModelObject* model_object, int idx)
     // apply config to print object
     o->config.apply(this->default_object_config);
     o->config.apply(object_config, true);
+    
+    // update placeholders
+    {
+        // get the first input file name
+        std::string input_file;
+        std::vector<std::string> v_scale;
+        for (const PrintObject *object : this->objects) {
+            const ModelObject &mobj = *object->model_object();
+            v_scale.push_back( boost::lexical_cast<std::string>(mobj.instances[0]->scaling_factor*100) + "%" );
+            if (input_file.empty())
+                input_file = mobj.input_file;
+        }
+        
+        PlaceholderParser &pp = this->placeholder_parser;
+        pp.set("scale", v_scale);
+        if (!input_file.empty()) {
+            // get basename with and without suffix
+            const std::string input_basename = boost::filesystem::path(input_file).filename().string();
+            pp.set("input_filename", input_basename);
+            const std::string input_basename_base = input_basename.substr(0, input_basename.find_last_of("."));
+            pp.set("input_filename_base", input_basename_base);
+        }
+    }
 }
 
 bool
@@ -939,7 +958,12 @@ void Print::_make_skirt()
         // Offset the skirt outside.
         distance += coord_t(scale_(spacing));
         // Generate the skirt centerline.
-        Polygon loop = offset(convex_hull, distance, ClipperLib::jtRound, scale_(0.1)).front();
+        Polygon loop;
+        {
+            Polygons loops = offset(convex_hull, distance, ClipperLib::jtRound, scale_(0.1));
+            Geometry::simplify_polygons(loops, scale_(0.05), &loops);
+            loop = loops.front();
+        }
         // Extrude the skirt loop.
         ExtrusionLoop eloop(elrSkirt);
         eloop.paths.emplace_back(ExtrusionPath(
@@ -971,6 +995,36 @@ void Print::_make_skirt()
     }
     // Brims were generated inside out, reverse to print the outmost contour first.
     this->skirt.reverse();
+}
+
+std::string
+Print::output_filename()
+{
+    this->placeholder_parser.update_timestamp();
+    return this->placeholder_parser.process(this->config.output_filename_format.value);
+}
+
+std::string
+Print::output_filepath(const std::string &path)
+{
+    // if we were supplied no path, generate an automatic one based on our first object's input file
+    if (path.empty()) {
+        // get the first input file name
+        std::string input_file;
+        FOREACH_OBJECT(this, object) {
+            input_file = (*object)->model_object()->input_file;
+            if (!input_file.empty()) break;
+        }
+        return (boost::filesystem::path(input_file).parent_path() / this->output_filename()).string();
+    }
+    
+    // if we were supplied a directory, use it and append our automatically generated filename
+    boost::filesystem::path p(path);
+    if (boost::filesystem::is_directory(p))
+        return (p / this->output_filename()).string();
+    
+    // if we were supplied a file which is not a directory, use it
+    return path;
 }
 
 }
