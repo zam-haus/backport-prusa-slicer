@@ -164,6 +164,10 @@
 %typemap{Ref<OozePrevention>}{simple};
 %typemap{Clone<OozePrevention>}{simple};
 
+%typemap{CoolingBuffer*};
+%typemap{Ref<CoolingBuffer>}{simple};
+%typemap{Clone<CoolingBuffer>}{simple};
+
 %typemap{GCode*};
 %typemap{Ref<GCode>}{simple};
 %typemap{Clone<GCode>}{simple};
@@ -207,7 +211,12 @@
 %typemap{ModelInstancePtrs*};
 %typemap{Ref<ModelInstancePtrs>}{simple};
 %typemap{Clone<ModelInstancePtrs>}{simple};
-%typemap{GLVertexArray*};
+%typemap{GLShader*};
+%typemap{Ref<GLShader>}{simple};
+%typemap{GLVolume*};
+%typemap{Ref<GLVolume>}{simple};
+%typemap{GLVolumeCollection*};
+%typemap{Ref<GLVolumeCollection>}{simple};
 
 %typemap{PrintRegionPtrs*};
 %typemap{PrintObjectPtrs*};

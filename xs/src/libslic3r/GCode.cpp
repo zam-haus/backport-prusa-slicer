@@ -261,13 +261,11 @@ GCode::set_extruders(const std::vector<unsigned int> &extruder_ids)
     
     // enable wipe path generation if any extruder has wipe enabled
     this->wipe.enable = false;
-    for (std::vector<unsigned int>::const_iterator it = extruder_ids.begin();
-        it != extruder_ids.end(); ++it) {
-        if (this->config.wipe.get_at(*it)) {
+    for (auto id : extruder_ids)
+        if (this->config.wipe.get_at(id)) {
             this->wipe.enable = true;
             break;
         }
-    }
 }
 
 void
@@ -587,7 +585,7 @@ GCode::extrude(ExtrusionLoop loop, std::string description, double speed)
             // Seam is aligned to the seam at the preceding layer.
             if (this->layer != NULL && this->_seam_position.count(this->layer->object()) > 0) {
                 last_pos = this->_seam_position[this->layer->object()];
-                last_pos_weight = 5.f;
+                last_pos_weight = 1.f;
             }
             break;
         case spRear:
@@ -668,6 +666,25 @@ GCode::extrude(ExtrusionLoop loop, std::string description, double speed)
 
         // Find a point with a minimum penalty.
         size_t idx_min = std::min_element(penalties.begin(), penalties.end()) - penalties.begin();
+
+        // if (seam_position == spAligned)
+        // For all (aligned, nearest, rear) seams:
+        {
+            // Very likely the weight of idx_min is very close to the weight of last_pos_proj_idx.
+            // In that case use last_pos_proj_idx instead.
+            float penalty_aligned  = penalties[last_pos_proj_idx];
+            float penalty_min      = penalties[idx_min];
+            float penalty_diff_abs = std::abs(penalty_min - penalty_aligned);
+            float penalty_max      = std::max(penalty_min, penalty_aligned);
+            float penalty_diff_rel = (penalty_max == 0.f) ? 0.f : penalty_diff_abs / penalty_max;
+            // printf("Align seams, penalty aligned: %f, min: %f, diff abs: %f, diff rel: %f\n", penalty_aligned, penalty_min, penalty_diff_abs, penalty_diff_rel);
+            if (penalty_diff_rel < 0.05) {
+                // Penalty of the aligned point is very close to the minimum penalty.
+                // Align the seams as accurately as possible.
+                idx_min = last_pos_proj_idx;
+            }
+            this->_seam_position[this->layer->object()] = polygon.points[idx_min];
+        }
 
         // Export the contour into a SVG file.
         #if 0
@@ -982,20 +999,24 @@ GCode::travel_to(const Point &point, ExtrusionRole role, std::string comment)
     
     // generate G-code for the travel move
     std::string gcode;
-    if (needs_retraction) gcode += this->retract();
+    if (needs_retraction)
+        gcode += this->retract();
+    else
+        // Reset the wipe path when traveling, so one would not wipe along an old path.
+        this->wipe.reset_path();
     
     // use G1 because we rely on paths being straight (G0 may make round paths)
     Lines lines = travel.lines();
-    double path_length = 0;
-    for (Lines::const_iterator line = lines.begin(); line != lines.end(); ++line) {
-	    const double line_length = line->length() * SCALING_FACTOR;
-	    path_length += line_length;
-
+    for (Lines::const_iterator line = lines.begin(); line != lines.end(); ++line)
 	    gcode += this->writer.travel_to_xy(this->point_to_gcode(line->b), comment);
-    }
-
+    
+    /*  While this makes the estimate more accurate, CoolingBuffer calculates the slowdown
+        factor on the whole elapsed time but only alters non-travel moves, thus the resulting
+        time is still shorter than the configured threshold. We could create a new 
+        elapsed_travel_time but we would still need to account for bridges, retractions, wipe etc.
     if (this->config.cooling)
-        this->elapsed_time += path_length / this->config.get_abs_value("travel_speed");
+        this->elapsed_time += unscale(travel.length()) / this->config.get_abs_value("travel_speed");
+    */
 
     return gcode;
 }
@@ -1010,6 +1031,7 @@ GCode::needs_retraction(const Polyline &travel, ExtrusionRole role)
     
     if (role == erSupportMaterial) {
         const SupportLayer* support_layer = dynamic_cast<const SupportLayer*>(this->layer);
+        //FIXME support_layer->support_islands.contains should use some search structure!
         if (support_layer != NULL && support_layer->support_islands.contains(travel)) {
             // skip retraction if this is a travel move inside a support material island
             return false;
@@ -1021,15 +1043,6 @@ GCode::needs_retraction(const Polyline &travel, ExtrusionRole role)
             && this->layer->any_internal_region_slice_contains(travel)) {
             /*  skip retraction if travel is contained in an internal slice *and*
                 internal infill is enabled (so that stringing is entirely not visible)  */
-            return false;
-        } else if (this->layer->any_bottom_region_slice_contains(travel)
-            && this->layer->upper_layer != NULL
-            && this->layer->upper_layer->slices.contains(travel)
-            && (this->config.bottom_solid_layers.value >= 2 || this->config.fill_density.value > 0)) {
-            /*  skip retraction if travel is contained in an *infilled* bottom slice
-                but only if it's also covered by an *infilled* upper layer's slice
-                so that it's not visible from above (a bottom surface might not have an
-                upper slice in case of a thin membrane)  */
             return false;
         }
     }
@@ -1087,6 +1100,9 @@ GCode::set_extruder(unsigned int extruder_id)
     
     // prepend retraction on the current extruder
     std::string gcode = this->retract(true);
+
+    // Always reset the extrusion path, even if the tool change retract is set to zero.
+    this->wipe.reset_path();
     
     // append custom toolchange G-code
     if (this->writer.extruder() != NULL && !this->config.toolchange_gcode.value.empty()) {

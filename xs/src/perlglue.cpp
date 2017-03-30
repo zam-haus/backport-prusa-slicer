@@ -15,6 +15,7 @@ REGISTER_CLASS(ExtrusionSimulator, "ExtrusionSimulator");
 REGISTER_CLASS(Filler, "Filler");
 REGISTER_CLASS(Flow, "Flow");
 REGISTER_CLASS(AvoidCrossingPerimeters, "GCode::AvoidCrossingPerimeters");
+REGISTER_CLASS(CoolingBuffer, "GCode::CoolingBuffer");
 REGISTER_CLASS(OozePrevention, "GCode::OozePrevention");
 REGISTER_CLASS(Wipe, "GCode::Wipe");
 REGISTER_CLASS(GCode, "GCode");
@@ -59,7 +60,9 @@ REGISTER_CLASS(Surface, "Surface");
 REGISTER_CLASS(SurfaceCollection, "Surface::Collection");
 REGISTER_CLASS(PrintObjectSupportMaterial, "Print::SupportMaterial2");
 REGISTER_CLASS(TriangleMesh, "TriangleMesh");
-REGISTER_CLASS(GLVertexArray, "GUI::_3DScene::GLVertexArray");
+REGISTER_CLASS(GLShader, "GUI::_3DScene::GLShader");
+REGISTER_CLASS(GLVolume, "GUI::_3DScene::GLVolume");
+REGISTER_CLASS(GLVolumeCollection, "GUI::_3DScene::GLVolume::Collection");
 
 SV*
 ConfigBase__as_hash(ConfigBase* THIS) {

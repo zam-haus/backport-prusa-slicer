@@ -46,70 +46,13 @@ sub slice {
     $self->print->status_cb->(10, "Processing triangulated mesh");
     
     $self->_slice;
-    
-    # detect slicing errors
-    my $warning_thrown = 0;
-    for my $i (0 .. ($self->layer_count - 1)) {
-        my $layer = $self->get_layer($i);
-        next unless $layer->slicing_errors;
-        if (!$warning_thrown) {
-            warn "The model has overlapping or self-intersecting facets. I tried to repair it, "
-                . "however you might want to check the results or repair the input file and retry.\n";
-            $warning_thrown = 1;
-        }
-        
-        # try to repair the layer surfaces by merging all contours and all holes from
-        # neighbor layers
-        Slic3r::debugf "Attempting to repair layer %d\n", $i;
-        
-        foreach my $region_id (0 .. ($layer->region_count - 1)) {
-            my $layerm = $layer->region($region_id);
-            
-            my (@upper_surfaces, @lower_surfaces);
-            for (my $j = $i+1; $j < $self->layer_count; $j++) {
-                if (!$self->get_layer($j)->slicing_errors) {
-                    @upper_surfaces = @{$self->get_layer($j)->region($region_id)->slices};
-                    last;
-                }
-            }
-            for (my $j = $i-1; $j >= 0; $j--) {
-                if (!$self->get_layer($j)->slicing_errors) {
-                    @lower_surfaces = @{$self->get_layer($j)->region($region_id)->slices};
-                    last;
-                }
-            }
-            
-            my $union = union_ex([
-                map $_->expolygon->contour, @upper_surfaces, @lower_surfaces,
-            ]);
-            my $diff = diff_ex(
-                [ map @$_, @$union ],
-                [ map @{$_->expolygon->holes}, @upper_surfaces, @lower_surfaces, ],
-            );
-            
-            $layerm->slices->clear;
-            $layerm->slices->append($_)
-                for map Slic3r::Surface->new
-                    (expolygon => $_, surface_type => S_TYPE_INTERNAL),
-                    @$diff;
-        }
-            
-        # update layer slices after repairing the single regions
-        $layer->make_slices;
-    }
-    
-    # remove empty layers from bottom
-    while (@{$self->layers} && !@{$self->get_layer(0)->slices}) {
-        $self->delete_layer(0);
-        for (my $i = 0; $i <= $#{$self->layers}; $i++) {
-            $self->get_layer($i)->set_id( $self->get_layer($i)->id-1 );
-        }
-    }
-    
+
+    my $warning = $self->_fix_slicing_errors;
+    warn $warning if (defined($warning) && $warning ne '');
+
     # simplify slices if required
-    if ($self->print->config->resolution) {
-        $self->_simplify_slices(scale($self->print->config->resolution));
-    }
+    $self->_simplify_slices(scale($self->print->config->resolution))
+        if ($self->print->config->resolution);
     
     die "No layers were detected. You might want to repair your STL file(s) or check their size or thickness and retry.\n"
         if !@{$self->layers};
@@ -126,7 +69,11 @@ sub make_perimeters {
     
     # prerequisites
     $self->slice;
-    $self->_make_perimeters;
+
+    if (! $self->step_done(STEP_PERIMETERS)) {
+        $self->print->status_cb->(20, "Generating perimeters");
+        $self->_make_perimeters;
+    }
 }
 
 sub prepare_infill {
@@ -268,7 +215,7 @@ sub generate_support_material {
     }
     
     $self->set_step_done(STEP_SUPPORTMATERIAL);
-    my $stats = "Weight: %.1fg, Cost: %.1f" , $self->print->total_weight, $self->print->total_cost;
+    my $stats = sprintf "Weight: %.1fg, Cost: %.1f" , $self->print->total_weight, $self->print->total_cost;
     $self->print->status_cb->(85, $stats);
 }
 
@@ -695,18 +642,6 @@ sub combine_infill {
                 }
             }
         }
-    }
-}
-
-# Simplify the sliced model, if "resolution" configuration parameter > 0.
-# The simplification is problematic, because it simplifies the slices independent from each other,
-# which makes the simplified discretization visible on the object surface.
-sub _simplify_slices {
-    my ($self, $distance) = @_;
-    
-    foreach my $layer (@{$self->layers}) {
-        $layer->slices->simplify($distance);
-        $_->slices->simplify($distance) for @{$layer->regions};
     }
 }
 

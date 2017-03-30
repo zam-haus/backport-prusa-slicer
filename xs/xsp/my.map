@@ -197,6 +197,10 @@ OozePrevention*             O_OBJECT_SLIC3R
 Ref<OozePrevention>         O_OBJECT_SLIC3R_T
 Clone<OozePrevention>       O_OBJECT_SLIC3R_T
 
+CoolingBuffer*             O_OBJECT_SLIC3R
+Ref<CoolingBuffer>         O_OBJECT_SLIC3R_T
+Clone<CoolingBuffer>       O_OBJECT_SLIC3R_T
+
 GCode*                      O_OBJECT_SLIC3R
 Ref<GCode>                  O_OBJECT_SLIC3R_T
 Clone<GCode>                O_OBJECT_SLIC3R_T
@@ -229,7 +233,12 @@ PrintObjectSupportMaterial*       O_OBJECT_SLIC3R
 Ref<PrintObjectSupportMaterial>   O_OBJECT_SLIC3R_T
 Clone<PrintObjectSupportMaterial> O_OBJECT_SLIC3R_T
 
-GLVertexArray*             O_OBJECT_SLIC3R
+GLShader*                  O_OBJECT_SLIC3R
+Ref<GLShader>              O_OBJECT_SLIC3R_T
+GLVolume*                  O_OBJECT_SLIC3R
+Ref<GLVolume>              O_OBJECT_SLIC3R_T
+GLVolumeCollection*        O_OBJECT_SLIC3R
+Ref<GLVolumeCollection>    O_OBJECT_SLIC3R_T
 
 Axis                  T_UV
 ExtrusionLoopRole     T_UV
