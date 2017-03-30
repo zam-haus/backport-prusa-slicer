@@ -7,10 +7,10 @@ Subject: Use system GLEW
  1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/xs/Build.PL b/xs/Build.PL
-index 9accef3..9788062 100644
+index ff91114..e0732ec 100644
 --- a/xs/Build.PL
 +++ b/xs/Build.PL
-@@ -14,7 +14,7 @@ my $mswin = $^O eq 'MSWin32';
+@@ -27,7 +27,7 @@ if ($mswin) {
  # HAS_BOOL         : stops Perl/lib/CORE/handy.h from doing "#  define bool char" for MSVC
  # NOGDI            : prevents inclusion of wingdi.h which defines functions Polygon() and Polyline() in global namespace
  # BOOST_ASIO_DISABLE_KQUEUE : prevents a Boost ASIO bug on OS X: https://svn.boost.org/trac/boost/ticket/5339
@@ -19,18 +19,18 @@ index 9accef3..9788062 100644
  my @ldflags = ();
  if ($^O eq 'darwin') {
      push @ldflags, qw(-framework IOKit -framework CoreFoundation);
-@@ -26,7 +26,7 @@ if ($mswin) {
+@@ -43,7 +43,7 @@ if (! $cpp_guess->is_msvc) {
  }
  
  my @early_includes = ();
--my @INC  = qw(-Isrc/libslic3r -Isrc/glew/include);
-+my @INC  = qw(-Isrc/libslic3r);
+-my @INC  = qw(-Isrc/libslic3r -Isrc/glew/include -Isrc/eigen);
++my @INC  = qw(-Isrc/libslic3r -I/usr/include/eigen3);
  my @LIBS = $cpp_guess->is_msvc ? qw(-LIBPATH:src/libslic3r) : qw(-Lsrc/libslic3r);
  
- if ($ENV{SLIC3R_GUI}) 
-@@ -180,7 +180,7 @@ if ($ENV{SLIC3R_GUI}) {
-             push @LIBS, qw(-lopengl32);
-         }
+ $ENV{SLIC3R_GUI} = 1 if ! defined($ENV{SLIC3R_NOGUI}) || $ENV{SLIC3R_NOGUI} != 1;
+@@ -316,7 +316,7 @@ if ($ENV{SLIC3R_GUI}) {
+     } elsif ($^O eq 'darwin') {
+         push @LIBS, qw(-framework OpenGL);
      } else {
 -        push @LIBS, qw(-lGL -lGLU);
 +        push @LIBS, qw(-lGL -lGLU -lGLEW);
