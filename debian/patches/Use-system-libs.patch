@@ -1,10 +1,11 @@
 From: Chow Loong Jin <hyperair@debian.org>
 Date: Thu, 17 Nov 2016 23:16:26 +0800
-Subject: Use system GLEW
+Subject: Use system libs
 
 ---
- xs/Build.PL | 6 +++---
- 1 file changed, 3 insertions(+), 3 deletions(-)
+ xs/Build.PL                     | 6 +++---
+ xs/src/libslic3r/Format/AMF.cpp | 2 +-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/xs/Build.PL b/xs/Build.PL
 index ff91114..e0732ec 100644
@@ -37,3 +38,16 @@ index ff91114..e0732ec 100644
      }
  }
  
+diff --git a/xs/src/libslic3r/Format/AMF.cpp b/xs/src/libslic3r/Format/AMF.cpp
+index 7e5e905..a2c22c0 100644
+--- a/xs/src/libslic3r/Format/AMF.cpp
++++ b/xs/src/libslic3r/Format/AMF.cpp
+@@ -1,7 +1,7 @@
+ #include <string.h>
+ #include <map>
+ #include <string>
+-#include <expat/expat.h>
++#include <expat.h>
+ 
+ #include "../libslic3r.h"
+ #include "../Model.hpp"
