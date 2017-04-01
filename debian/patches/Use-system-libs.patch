@@ -3,12 +3,12 @@ Date: Thu, 17 Nov 2016 23:16:26 +0800
 Subject: Use system libs
 
 ---
- xs/Build.PL                     | 6 +++---
+ xs/Build.PL                     | 9 ++++++---
  xs/src/libslic3r/Format/AMF.cpp | 2 +-
- 2 files changed, 4 insertions(+), 4 deletions(-)
+ 2 files changed, 7 insertions(+), 4 deletions(-)
 
 diff --git a/xs/Build.PL b/xs/Build.PL
-index ff91114..e0732ec 100644
+index ff91114..c40f3e2 100644
 --- a/xs/Build.PL
 +++ b/xs/Build.PL
 @@ -27,7 +27,7 @@ if ($mswin) {
@@ -38,6 +38,16 @@ index ff91114..e0732ec 100644
      }
  }
  
+@@ -329,6 +329,9 @@ if ($ENV{SLIC3R_DEBUG}) {
+     push @cflags, '-DNDEBUG';
+ }
+ 
++# link against libexpat
++push @LIBS, qw(-lexpat);
++
+ print "\n";
+ print 'With @cflags: ', join(', ', map "\"$_\"", @cflags), "\n";
+ print 'With @ldflags: ', join(', ', map "\"$_\"", @ldflags), "\n";
 diff --git a/xs/src/libslic3r/Format/AMF.cpp b/xs/src/libslic3r/Format/AMF.cpp
 index 7e5e905..a2c22c0 100644
 --- a/xs/src/libslic3r/Format/AMF.cpp
