@@ -1,10 +1,18 @@
-slic3r-prusa (1.34.0-1) experimental; urgency=medium
+slic3r-prusa (1.34.0+dfsg-1) experimental; urgency=medium
 
+  * [0cfd53e] Build-dep on libtbb-dev
+  * [43d066f] Delete glew and expat
+  * [b7d8afa] Rename Use-system-GLEW.patch.
+    We need to unbundle a couple of other libs.
+  * [5175bc5] Fix expat include
+  * [88a0b44] Link against libexpat
+  * [be8218c] Exclude more bundled libraries
+  * [3a32f7f] Imported Upstream version 1.34.0+dfsg
   * [a157bd0] Imported Upstream version 1.34.0
   * [d9d46a9] Refresh patches
   * [0220070] Build-dep on libeigen3-dev
 
- -- Chow Loong Jin <hyperair@debian.org>  Fri, 31 Mar 2017 01:31:56 +0800
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 06 Apr 2017 01:16:59 +0800
 
 slic3r-prusa (1.33.8-1) experimental; urgency=medium
 
