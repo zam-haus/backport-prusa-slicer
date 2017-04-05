@@ -2,7 +2,7 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Source: http://slic3r.org/
 Upstream-Contact: Vojtech Bubnik <bubnikv@gmail.com>
 Upstream-Name: slic3r-prusa
-Files-Excluded: xs/src/boost
+Files-Excluded: xs/src/eigen xs/src/expat xs/src/glew
 
 Files: *
 Copyright: 2011-2016, Alessandro Ranellucci <alessandro@unterwelt.it>
