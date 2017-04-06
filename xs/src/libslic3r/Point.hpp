@@ -38,6 +38,8 @@ class Point
         return Point(scale_(x), scale_(y));
     };
     bool operator==(const Point& rhs) const { return this->x == rhs.x && this->y == rhs.y; }
+    bool operator!=(const Point& rhs) const { return ! (*this == rhs); }
+    bool operator<(const Point& rhs) const { return this->x < rhs.x || (this->x == rhs.x && this->y < rhs.y); }
     std::string wkt() const;
     std::string dump_perl() const;
     void scale(double factor);
