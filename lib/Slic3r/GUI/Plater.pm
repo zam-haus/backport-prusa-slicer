@@ -1819,6 +1819,7 @@ sub object_settings_dialog {
     my $dlg = Slic3r::GUI::Plater::ObjectSettingsDialog->new($self,
 		object          => $self->{objects}[$obj_idx],
 		model_object    => $model_object,
+        config          => $self->GetFrame->config,
 	);
 	$self->pause_background_process;
 	$dlg->ShowModal;
@@ -2112,7 +2113,7 @@ sub OnDropFiles {
     @_ = ();
     
     # only accept STL, OBJ and AMF files
-    return 0 if grep !/\.(?:stl|obj|amf(?:\.xml)?|prus)$/i, @$filenames;
+    return 0 if grep !/\.(?:stl|obj|amf(?:\.xml)?|prusa)$/i, @$filenames;
     
     $self->{window}->load_file($_) for @$filenames;
 }
