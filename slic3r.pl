@@ -304,11 +304,8 @@ $j
     --use-relative-e-distances Enable this to get relative E values (default: no)
     --use-firmware-retraction  Enable firmware-controlled retraction using G10/G11 (default: no)
     --use-volumetric-e  Express E in cubic millimeters and prepend M200 (default: no)
-    --gcode-arcs        Use G2/G3 commands for native arcs (experimental, not supported
-                        by all firmwares)
+    --set-and-wait-temperatures Use M190 instead of M140 for temperature changes past the first (default: no)
     --gcode-comments    Make G-code verbose by adding comments (default: no)
-    --pressure-advance  Adjust pressure using the experimental advance algorithm (K constant,
-                        set zero to disable; default: $config->{pressure_advance})
     
   Filament options:
     --filament-diameter Diameter in mm of your raw filament (default: $config->{filament_diameter}->[0])
@@ -446,6 +443,7 @@ $j
    Retraction options:
     --retract-length    Length of retraction in mm when pausing extrusion (default: $config->{retract_length}[0])
     --retract-speed     Speed for retraction in mm/s (default: $config->{retract_speed}[0])
+    --deretract-speed   Speed for deretraction (loading of filament after a retract) in mm/s (default: $config->{retract_speed}[0])
     --retract-restart-extra
                         Additional amount of filament in mm to push after
                         compensating retraction (default: $config->{retract_restart_extra}[0])

@@ -240,11 +240,13 @@ sub layer_editing_allowed {
     return ! (defined($self->{layer_editing_initialized}) && $self->{layer_editing_initialized} == 2);
 }
 
-sub _first_selected_object_id {
+sub _first_selected_object_id_for_variable_layer_height_editing {
     my ($self) = @_;
     for my $i (0..$#{$self->volumes}) {
         if ($self->volumes->[$i]->selected) {
-            return int($self->volumes->[$i]->select_group_id / 1000000);
+            my $object_id = int($self->volumes->[$i]->select_group_id / 1000000);
+            # Objects with object_id >= 1000 have a specific meaning, for example the wipe tower proxy.
+            return $object_id if $object_id < 10000;
         }
     }
     return -1;
@@ -332,7 +334,7 @@ sub mouse_event {
     my ($self, $e) = @_;
     
     my $pos = Slic3r::Pointf->new($e->GetPositionXY);
-    my $object_idx_selected = $self->{layer_height_edit_last_object_id} = ($self->layer_editing_enabled && $self->{print}) ? $self->_first_selected_object_id : -1;
+    my $object_idx_selected = $self->{layer_height_edit_last_object_id} = ($self->layer_editing_enabled && $self->{print}) ? $self->_first_selected_object_id_for_variable_layer_height_editing : -1;
 
     if ($e->Entering && &Wx::wxMSW) {
         # wxMSW needs focus in order to catch mouse wheel events
@@ -502,7 +504,7 @@ sub mouse_wheel_event {
     my ($self, $e) = @_;
     
     if ($self->layer_editing_enabled && $self->{print}) {
-        my $object_idx_selected = $self->_first_selected_object_id;
+        my $object_idx_selected = $self->_first_selected_object_id_for_variable_layer_height_editing;
         if ($object_idx_selected != -1) {
             # A volume is selected. Test, whether hovering over a layer thickness bar.
             if ($self->_variable_layer_thickness_bar_rect_mouse_inside($e)) {
@@ -908,7 +910,10 @@ sub UseVBOs {
     if (! defined ($self->{use_VBOs})) {
         # This is a special path for wxWidgets on GTK, where an OpenGL context is initialized
         # first when an OpenGL widget is shown for the first time. How ugly.
-        return 0 if (! $self->init && $^O eq 'linux');
+        # It seems like the wipe tower configuration fills in the VBOs before the window is created.
+        # Therefore it is safer to wait for the first screen refresh on Windows and OSX as well.
+#        return 0 if (! $self->init && $^O eq 'linux');
+        return 0 if (! $self->init);
         # Don't use VBOs if anything fails.
         $self->{use_VBOs} = 0;
         if ($self->GetContext) {
@@ -1470,11 +1475,13 @@ sub draw_active_object_annotations {
     my $max_z = unscale($print_object->size->z);
     my $profile = $print_object->model_object->layer_height_profile;
     my $layer_height = $print_object->config->get('layer_height');
+    my $layer_heights_max = $print_object->print->config->get('max_layer_height');
+    my $layer_height_max = my $max = max(@{$layer_heights_max}) * 1.12;
     # Baseline
     glColor3f(0., 0., 0.);
     glBegin(GL_LINE_STRIP);
-    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / 0.45,  $bar_bottom);
-    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / 0.45,  $bar_top);
+    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / $layer_height_max,  $bar_bottom);
+    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / $layer_height_max,  $bar_top);
     glEnd();
     # Curve
     glColor3f(0., 0., 1.);
@@ -1482,7 +1489,7 @@ sub draw_active_object_annotations {
     for (my $i = 0; $i < int(@{$profile}); $i += 2) {
         my $z = $profile->[$i];
         my $h = $profile->[$i+1];
-        glVertex3f($bar_left + $h * ($bar_right - $bar_left) / 0.45,  $bar_bottom + $z * ($bar_top - $bar_bottom) / $max_z, $z);
+        glVertex3f($bar_left + $h * ($bar_right - $bar_left) / $layer_height_max,  $bar_bottom + $z * ($bar_top - $bar_bottom) / $max_z, $z);
     }
     glEnd();
     # Revert the matrices.
