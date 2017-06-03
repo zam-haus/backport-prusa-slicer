@@ -1,3 +1,9 @@
+slic3r-prusa (1.35.1+dfsg-1) experimental; urgency=medium
+
+  * [83eeeb5] New upstream version 1.35.1+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sun, 04 Jun 2017 02:04:02 +0800
+
 slic3r-prusa (1.35.0+dfsg-1) experimental; urgency=medium
 
   * [f28744f] New upstream version 1.35.0+dfsg
