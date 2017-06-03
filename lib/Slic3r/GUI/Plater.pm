@@ -53,8 +53,6 @@ sub new {
     $self->{config} = Slic3r::Config->new_from_defaults(qw(
         bed_shape complete_objects extruder_clearance_radius skirts skirt_distance brim_width variable_layer_height
         serial_port serial_speed octoprint_host octoprint_apikey
-        nozzle_diameter single_extruder_multi_material 
-        wipe_tower wipe_tower_x wipe_tower_y wipe_tower_width wipe_tower_per_color_wipe 
     ));
     # C++ Slic3r::Model with Perl extensions in Slic3r/Model.pm
     $self->{model} = Slic3r::Model->new;
@@ -79,8 +77,7 @@ sub new {
     # Initialize handlers for canvases
     my $on_select_object = sub {
         my ($obj_idx) = @_;
-        # Ignore the special objects (the wipe tower proxy and such).
-        $self->select_object((defined($obj_idx) && $obj_idx < 1000) ? $obj_idx : undef);
+        $self->select_object($obj_idx);
     };
     my $on_double_click = sub {
         $self->object_settings_dialog if $self->selected_object;
@@ -107,13 +104,6 @@ sub new {
         $self->{canvas3D}->set_on_double_click($on_double_click);
         $self->{canvas3D}->set_on_right_click(sub { $on_right_click->($self->{canvas3D}, @_); });
         $self->{canvas3D}->set_on_instances_moved($on_instances_moved);
-        $self->{canvas3D}->set_on_wipe_tower_moved(sub {
-            my ($new_pos_3f) = @_;
-            my $cfg = Slic3r::Config->new;
-            $cfg->set('wipe_tower_x', $new_pos_3f->x);
-            $cfg->set('wipe_tower_y', $new_pos_3f->y);
-            $self->GetFrame->{options_tabs}{print}->load_config($cfg);
-        });
         $self->{canvas3D}->set_on_model_update(sub {
             if ($Slic3r::GUI::Settings->{_}{background_processing}) {
                 $self->{apply_config_timer}->Stop if defined $self->{apply_config_timer};
@@ -548,8 +538,7 @@ sub on_layer_editing_toggled {
             $self->{"btn_layer_editing"}->SetValue(0);
         }
     }
-    $self->{canvas3D}->Refresh;
-    $self->{canvas3D}->Update;
+    $self->{canvas3D}->update;
 }
 
 sub GetFrame {
@@ -1711,7 +1700,6 @@ sub on_config_change {
     my $self = shift;
     my ($config) = @_;
     
-    my $update_scheduled;
     foreach my $opt_key (@{$self->{config}->diff($config)}) {
         $self->{config}->set($opt_key, $config->get($opt_key));
         if ($opt_key eq 'bed_shape') {
@@ -1719,9 +1707,7 @@ sub on_config_change {
             $self->{canvas3D}->update_bed_size if $self->{canvas3D};
             $self->{preview3D}->set_bed_shape($self->{config}->bed_shape)
                 if $self->{preview3D};
-            $update_scheduled = 1;
-        } elsif ($opt_key =~ '^wipe_tower' || $opt_key eq 'single_extruder_multi_material') {
-            $update_scheduled = 1;
+            $self->update;
         } elsif ($opt_key eq 'serial_port') {
             if ($config->get('serial_port')) {
                 $self->{btn_print}->Show;
@@ -1746,8 +1732,7 @@ sub on_config_change {
                     $self->{"btn_layer_editing"}->SetValue(0);
                 }
                 $self->{canvas3D}->layer_editing_enabled(0);
-                $self->{canvas3D}->Refresh;
-                $self->{canvas3D}->Update;
+                $self->{canvas3D}->update;
             } elsif ($self->{canvas3D}->layer_editing_allowed) {
                 # Want to allow the layer editing, but do it only if the OpenGL supports it.
                 if ($self->{htoolbar}) {
@@ -1758,8 +1743,6 @@ sub on_config_change {
             }
         }
     }
-
-    $self->update if $update_scheduled;
     
     return if !$self->GetFrame->is_loaded;
     
@@ -1972,7 +1955,7 @@ sub refresh_canvases {
     my ($self) = @_;
     
     $self->{canvas}->Refresh;
-    $self->{canvas3D}->reload_scene if $self->{canvas3D};
+    $self->{canvas3D}->update if $self->{canvas3D};
     $self->{preview3D}->reload_print if $self->{preview3D};
 }
 

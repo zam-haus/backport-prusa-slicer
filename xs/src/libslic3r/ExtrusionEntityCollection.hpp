@@ -24,14 +24,6 @@ public:
     explicit operator ExtrusionPaths() const;
     
     bool is_collection() const { return true; };
-    virtual ExtrusionRole role() const {
-        ExtrusionRole out = erNone;
-        for (const ExtrusionEntity *ee : entities) {
-            ExtrusionRole er = ee->role();
-            out = (out == erNone || out == er) ? er : erMixed;
-        }
-        return out;
-    }
     bool can_reverse() const { return !this->no_sort; };
     bool empty() const { return this->entities.empty(); };
     void clear();
@@ -57,10 +49,9 @@ public:
     }
     void replace(size_t i, const ExtrusionEntity &entity);
     void remove(size_t i);
-    ExtrusionEntityCollection chained_path(bool no_reverse = false, ExtrusionRole role = erMixed) const;
-    void chained_path(ExtrusionEntityCollection* retval, bool no_reverse = false, ExtrusionRole role = erMixed, std::vector<size_t>* orig_indices = nullptr) const;
-    ExtrusionEntityCollection chained_path_from(Point start_near, bool no_reverse = false, ExtrusionRole role = erMixed) const;
-    void chained_path_from(Point start_near, ExtrusionEntityCollection* retval, bool no_reverse = false, ExtrusionRole role = erMixed, std::vector<size_t>* orig_indices = nullptr) const;
+    ExtrusionEntityCollection chained_path(bool no_reverse = false, std::vector<size_t>* orig_indices = NULL) const;
+    void chained_path(ExtrusionEntityCollection* retval, bool no_reverse = false, std::vector<size_t>* orig_indices = NULL) const;
+    void chained_path_from(Point start_near, ExtrusionEntityCollection* retval, bool no_reverse = false, std::vector<size_t>* orig_indices = NULL) const;
     void reverse();
     Point first_point() const { return this->entities.front()->first_point(); }
     Point last_point() const { return this->entities.back()->last_point(); }
@@ -79,8 +70,6 @@ public:
     void flatten(ExtrusionEntityCollection* retval) const;
     ExtrusionEntityCollection flatten() const;
     double min_mm3_per_mm() const;
-
-    // Following methods shall never be called on an ExtrusionEntityCollection.
     Polyline as_polyline() const {
         CONFESS("Calling as_polyline() on a ExtrusionEntityCollection");
         return Polyline();

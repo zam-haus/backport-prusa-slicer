@@ -34,7 +34,7 @@ class ConfigOption {
     virtual int getInt() const { return 0; };
     virtual double getFloat() const { return 0; };
     virtual bool getBool() const { return false; };
-    virtual void setInt(int /* val */) { };
+    virtual void setInt(int val) {};
     friend bool operator== (const ConfigOption &a, const ConfigOption &b);
     friend bool operator!= (const ConfigOption &a, const ConfigOption &b);
 };
@@ -57,7 +57,6 @@ class ConfigOptionSingle : public ConfigOption {
 class ConfigOptionVectorBase : public ConfigOption {
     public:
     virtual ~ConfigOptionVectorBase() {};
-    // Currently used only to initialize the PlaceholderParser.
     virtual std::vector<std::string> vserialize() const = 0;
 };
 
@@ -143,7 +142,7 @@ class ConfigOptionInt : public ConfigOptionSingle<int>
 {
     public:
     ConfigOptionInt() : ConfigOptionSingle<int>(0) {};
-    ConfigOptionInt(double _value) : ConfigOptionSingle<int>(int(floor(_value + 0.5))) {};
+    ConfigOptionInt(double _value) : ConfigOptionSingle<int>(_value) {};
     
     int getInt() const { return this->value; };
     void setInt(int val) { this->value = val; };
@@ -255,46 +254,6 @@ class ConfigOptionPercent : public ConfigOptionFloat
         std::istringstream iss(str);
         iss >> this->value;
         return !iss.fail();
-    };
-};
-
-class ConfigOptionPercents : public ConfigOptionFloats
-{
-public:    
-    std::string serialize() const {
-        std::ostringstream ss;
-        for (const auto &v : this->values) {
-            if (&v != &this->values.front()) ss << ",";
-            ss << v << "%";
-        }
-        std::string str = ss.str();
-        return str;
-    };
-    
-    std::vector<std::string> vserialize() const {
-        std::vector<std::string> vv;
-        vv.reserve(this->values.size());
-        for (const auto v : this->values) {
-            std::ostringstream ss;
-            ss << v;
-            std::string sout = ss.str() + "%";
-            vv.push_back(sout);
-        }
-        return vv;
-    };
-
-    bool deserialize(std::string str) {
-        this->values.clear();
-        std::istringstream is(str);
-        std::string item_str;
-        while (std::getline(is, item_str, ',')) {
-            std::istringstream iss(item_str);
-            double value;
-            // don't try to parse the trailing % since it's optional
-            iss >> value;
-            this->values.push_back(value);
-        }
-        return true;
     };
 };
 
@@ -529,8 +488,6 @@ enum ConfigOptionType {
     coStrings,
     // percent value. Currently only used for infill.
     coPercent,
-    // percents value. Currently used for retract before wipe only.
-    coPercents,
     // a fraction or an absolute value
     coFloatOrPercent,
     // single 2d point. Currently not used.

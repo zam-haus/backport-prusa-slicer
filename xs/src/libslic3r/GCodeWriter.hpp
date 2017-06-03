@@ -12,25 +12,17 @@ namespace Slic3r {
 class GCodeWriter {
 public:
     GCodeConfig config;
-    std::set<Extruder> extruders;
+    std::map<unsigned int,Extruder> extruders;
     bool multiple_extruders;
     
-    GCodeWriter() : 
-        multiple_extruders(false), _extrusion_axis("E"), _extruder(nullptr),
-        _last_acceleration(0), _last_fan_speed(0), _lifted(0)
-        {}
-    Extruder*   extruder() { return this->_extruder; }
-    const Extruder* extruder() const { return this->_extruder; }
+    GCodeWriter()
+        : multiple_extruders(false), _extrusion_axis("E"), _extruder(NULL),
+            _last_acceleration(0), _last_fan_speed(0), _lifted(0)
+        {};
+    Extruder* extruder() const { return this->_extruder; }
     std::string extrusion_axis() const { return this->_extrusion_axis; }
-    void        apply_print_config(const PrintConfig &print_config);
-    void        set_extruders(const std::vector<unsigned int> &extruder_ids);
-    std::vector<unsigned int> extruder_ids() const { 
-        std::vector<unsigned int> out; 
-        out.reserve(extruders.size()); 
-        for (const auto e : extruders) 
-            out.push_back(e.id); 
-        return out;
-    }
+    void apply_print_config(const PrintConfig &print_config);
+    void set_extruders(const std::vector<unsigned int> &extruder_ids);
     std::string preamble();
     std::string postamble() const;
     std::string set_temperature(unsigned int temperature, bool wait = false, int tool = -1) const;
@@ -39,33 +31,29 @@ public:
     std::string set_acceleration(unsigned int acceleration);
     std::string reset_e(bool force = false);
     std::string update_progress(unsigned int num, unsigned int tot, bool allow_100 = false) const;
-    // return false if this extruder was already selected
-    bool        need_toolchange(unsigned int extruder_id) const 
-        { return (this->_extruder == nullptr) || (this->_extruder->id != extruder_id); }
-    std::string set_extruder(unsigned int extruder_id)
-        { return this->need_toolchange(extruder_id) ? this->toolchange(extruder_id) : ""; }
+    bool need_toolchange(unsigned int extruder_id) const;
+    std::string set_extruder(unsigned int extruder_id);
     std::string toolchange(unsigned int extruder_id);
     std::string set_speed(double F, const std::string &comment = std::string(), const std::string &cooling_marker = std::string()) const;
     std::string travel_to_xy(const Pointf &point, const std::string &comment = std::string());
     std::string travel_to_xyz(const Pointf3 &point, const std::string &comment = std::string());
     std::string travel_to_z(double z, const std::string &comment = std::string());
-    bool        will_move_z(double z) const;
+    bool will_move_z(double z) const;
     std::string extrude_to_xy(const Pointf &point, double dE, const std::string &comment = std::string());
     std::string extrude_to_xyz(const Pointf3 &point, double dE, const std::string &comment = std::string());
-    std::string retract(bool before_wipe = false);
-    std::string retract_for_toolchange(bool before_wipe = false);
+    std::string retract();
+    std::string retract_for_toolchange();
     std::string unretract();
     std::string lift();
     std::string unlift();
-    Pointf3     get_position() const { return this->_pos; }
-
+    Pointf3 get_position() const { return this->_pos; }
 private:
-    std::string     _extrusion_axis;
-    Extruder*       _extruder;
-    unsigned int    _last_acceleration;
-    unsigned int    _last_fan_speed;
-    double          _lifted;
-    Pointf3         _pos;
+    std::string _extrusion_axis;
+    Extruder* _extruder;
+    unsigned int _last_acceleration;
+    unsigned int _last_fan_speed;
+    double _lifted;
+    Pointf3 _pos;
     
     std::string _travel_to_z(double z, const std::string &comment);
     std::string _retract(double length, double restart_extra, const std::string &comment);
