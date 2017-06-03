@@ -76,17 +76,34 @@ sub export_gcode {
     
     {
         # open output gcode file if we weren't supplied a file-handle
-        my $tempfile = "$output_file.tmp";
-        my $gcode    = Slic3r::GCode->new();
-        my $result   = $gcode->do_export($self, Slic3r::encode_path($tempfile));
-        die $result . "\n" if ($result ne '');
-        my $i;
-        for ($i = 0; $i < 5; $i += 1)  {
-            last if (rename Slic3r::encode_path($tempfile), Slic3r::encode_path($output_file));
-            # Wait for 1/4 seconds and try to rename once again.
-            select(undef, undef, undef, 0.25);
+        my ($fh, $tempfile);
+        if ($params{output_fh}) {
+            $fh = $params{output_fh};
+        } else {
+            $tempfile = "$output_file.tmp";
+            Slic3r::open(\$fh, ">", $tempfile)
+                or die "Failed to open $tempfile for writing\n";
+    
+            # enable UTF-8 output since user might have entered Unicode characters in fields like notes
+            binmode $fh, ':utf8';
         }
-        Slic3r::debugf "Failed to remove the output G-code file from $tempfile to $output_file. Is $tempfile locked?\n" if ($i == 5);
+
+        Slic3r::Print::GCode->new(
+            print   => $self,
+            fh      => $fh,
+        )->export;
+
+        # close our gcode file
+        close $fh;
+        if ($tempfile) {
+            my $i;
+            for ($i = 0; $i < 5; $i += 1)  {
+                last if (rename Slic3r::encode_path($tempfile), Slic3r::encode_path($output_file));
+                # Wait for 1/4 seconds and try to rename once again.
+                select(undef, undef, undef, 0.25);
+            }
+            Slic3r::debugf "Failed to remove the output G-code file from $tempfile to $output_file. Is $tempfile locked?\n" if ($i == 5);
+        } 
     }
     
     # run post-processing scripts
@@ -263,6 +280,9 @@ sub make_brim {
             push @object_islands,
                 (map @{$_->polyline->grow($grow_distance)}, @{$support_layer0->support_fills})
                 if $support_layer0->support_fills;
+            push @object_islands,
+                (map @{$_->polyline->grow($grow_distance)}, @{$support_layer0->support_interface_fills})
+                if $support_layer0->support_interface_fills;
         }
         foreach my $copy (@{$object->_shifted_copies}) {
             push @islands, map { $_->translate(@$copy); $_ } map $_->clone, @object_islands;

@@ -23,8 +23,8 @@ GCodeWriter::apply_print_config(const PrintConfig &print_config)
 void
 GCodeWriter::set_extruders(const std::vector<unsigned int> &extruder_ids)
 {
-    for (unsigned int extruder_id : extruder_ids)
-        this->extruders.insert(Extruder(extruder_id, &this->config));
+    for (std::vector<unsigned int>::const_iterator i = extruder_ids.begin(); i != extruder_ids.end(); ++i)
+        this->extruders.insert( std::pair<unsigned int,Extruder>(*i, Extruder(*i, &this->config)) );
     
     /*  we enable support for multiple extruder if any extruder greater than 0 is used
         (even if prints only uses that one) since we need to output Tx commands
@@ -194,12 +194,11 @@ GCodeWriter::reset_e(bool force)
         || FLAVOR_IS(gcfSailfish))
         return "";
     
-    if (this->_extruder != nullptr) {
-        if (this->_extruder->E == 0. && ! force)
-            return "";
-        this->_extruder->E = 0.;
+    if (this->_extruder != NULL) {
+        if (this->_extruder->E == 0 && !force) return "";
+        this->_extruder->E = 0;
     }
-
+    
     if (!this->_extrusion_axis.empty() && !this->config.use_relative_e_distances) {
         std::ostringstream gcode;
         gcode << "G92 " << this->_extrusion_axis << "0";
@@ -227,10 +226,25 @@ GCodeWriter::update_progress(unsigned int num, unsigned int tot, bool allow_100)
     return gcode.str();
 }
 
-std::string GCodeWriter::toolchange(unsigned int extruder_id)
+bool
+GCodeWriter::need_toolchange(unsigned int extruder_id) const
+{
+    // return false if this extruder was already selected
+    return (this->_extruder == NULL) || (this->_extruder->id != extruder_id);
+}
+
+std::string
+GCodeWriter::set_extruder(unsigned int extruder_id)
+{
+    if (!this->need_toolchange(extruder_id)) return "";
+    return this->toolchange(extruder_id);
+}
+
+std::string
+GCodeWriter::toolchange(unsigned int extruder_id)
 {
     // set the new extruder
-    this->_extruder = const_cast<Extruder*>(&*this->extruders.find(Extruder::key(extruder_id)));
+    this->_extruder = &this->extruders.find(extruder_id)->second;
     
     // return the toolchange command
     // if we are running a single-extruder setup, just set the extruder and return nothing
@@ -384,24 +398,22 @@ GCodeWriter::extrude_to_xyz(const Pointf3 &point, double dE, const std::string &
     return gcode.str();
 }
 
-std::string GCodeWriter::retract(bool before_wipe)
+std::string
+GCodeWriter::retract()
 {
-    double factor = before_wipe ? this->_extruder->retract_before_wipe() : 1.;
-    assert(factor >= 0. && factor <= 1. + EPSILON);
     return this->_retract(
-        factor * this->_extruder->retract_length(),
-        factor * this->_extruder->retract_restart_extra(),
+        this->_extruder->retract_length(),
+        this->_extruder->retract_restart_extra(),
         "retract"
     );
 }
 
-std::string GCodeWriter::retract_for_toolchange(bool before_wipe)
+std::string
+GCodeWriter::retract_for_toolchange()
 {
-    double factor = before_wipe ? this->_extruder->retract_before_wipe() : 1.;
-    assert(factor >= 0. && factor <= 1. + EPSILON);
     return this->_retract(
-        factor * this->_extruder->retract_length_toolchange(),
-        factor * this->_extruder->retract_restart_extra_toolchange(),
+        this->_extruder->retract_length_toolchange(),
+        this->_extruder->retract_restart_extra_toolchange(),
         "retract for toolchange"
     );
 }
@@ -433,7 +445,7 @@ GCodeWriter::_retract(double length, double restart_extra, const std::string &co
                 gcode << "G10 ; retract\n";
         } else {
             gcode << "G1 " << this->_extrusion_axis << E_NUM(this->_extruder->E)
-                           << " F" << float(this->_extruder->retract_speed() * 60.);
+                           << " F" << this->_extruder->retract_speed_mm_min;
             COMMENT(comment);
             gcode << "\n";
         }
@@ -464,7 +476,7 @@ GCodeWriter::unretract()
         } else {
             // use G1 instead of G0 because G0 will blend the restart with the previous travel move
             gcode << "G1 " << this->_extrusion_axis << E_NUM(this->_extruder->E)
-                           << " F" << float(this->_extruder->deretract_speed() * 60.);
+                           << " F" << this->_extruder->retract_speed_mm_min;
             if (this->config.gcode_comments) gcode << " ; unretract";
             gcode << "\n";
         }

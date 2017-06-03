@@ -97,34 +97,23 @@ PlaceholderParser::apply_env_variables()
     }
 }
 
-void PlaceholderParser::set(const std::string &key, const std::string &value)
+void
+PlaceholderParser::set(const std::string &key, const std::string &value)
 {
     this->_single[key] = value;
     this->_multiple.erase(key);
 }
 
-void PlaceholderParser::set(const std::string &key, int value)
+void
+PlaceholderParser::set(const std::string &key, int value)
 {
     std::ostringstream ss;
     ss << value;
     this->set(key, ss.str());
 }
 
-void PlaceholderParser::set(const std::string &key, unsigned int value)
-{
-    std::ostringstream ss;
-    ss << value;
-    this->set(key, ss.str());
-}
-
-void PlaceholderParser::set(const std::string &key, double value)
-{
-    std::ostringstream ss;
-    ss << value;
-    this->set(key, ss.str());
-}
-
-void PlaceholderParser::set(const std::string &key, std::vector<std::string> values)
+void
+PlaceholderParser::set(const std::string &key, std::vector<std::string> values)
 {
     if (values.empty()) {
         this->_multiple.erase(key);
@@ -135,7 +124,8 @@ void PlaceholderParser::set(const std::string &key, std::vector<std::string> val
     }
 }
 
-std::string PlaceholderParser::process(std::string str) const
+std::string
+PlaceholderParser::process(std::string str) const
 {
     // replace single options, like [foo]
     for (t_strstr_map::const_iterator it = this->_single.begin(); it != this->_single.end(); ++it) {
@@ -164,7 +154,8 @@ std::string PlaceholderParser::process(std::string str) const
     return str;
 }
 
-bool PlaceholderParser::find_and_replace(std::string &source, std::string const &find, std::string const &replace) const
+bool
+PlaceholderParser::find_and_replace(std::string &source, std::string const &find, std::string const &replace) const
 {
     bool found = false;
     for (std::string::size_type i = 0; (i = source.find(find, i)) != std::string::npos; ) {
