@@ -44,6 +44,7 @@ sub process {
     $_->generate_support_material for @{$self->objects};
     $self->make_skirt;
     $self->make_brim;  # must come after make_skirt
+    $self->make_wipe_tower;
     
     # time to make some statistics
     if (0) {
@@ -76,34 +77,17 @@ sub export_gcode {
     
     {
         # open output gcode file if we weren't supplied a file-handle
-        my ($fh, $tempfile);
-        if ($params{output_fh}) {
-            $fh = $params{output_fh};
-        } else {
-            $tempfile = "$output_file.tmp";
-            Slic3r::open(\$fh, ">", $tempfile)
-                or die "Failed to open $tempfile for writing\n";
-    
-            # enable UTF-8 output since user might have entered Unicode characters in fields like notes
-            binmode $fh, ':utf8';
+        my $tempfile = "$output_file.tmp";
+        my $gcode    = Slic3r::GCode->new();
+        my $result   = $gcode->do_export($self, Slic3r::encode_path($tempfile));
+        die $result . "\n" if ($result ne '');
+        my $i;
+        for ($i = 0; $i < 5; $i += 1)  {
+            last if (rename Slic3r::encode_path($tempfile), Slic3r::encode_path($output_file));
+            # Wait for 1/4 seconds and try to rename once again.
+            select(undef, undef, undef, 0.25);
         }
-
-        Slic3r::Print::GCode->new(
-            print   => $self,
-            fh      => $fh,
-        )->export;
-
-        # close our gcode file
-        close $fh;
-        if ($tempfile) {
-            my $i;
-            for ($i = 0; $i < 5; $i += 1)  {
-                last if (rename Slic3r::encode_path($tempfile), Slic3r::encode_path($output_file));
-                # Wait for 1/4 seconds and try to rename once again.
-                select(undef, undef, undef, 0.25);
-            }
-            Slic3r::debugf "Failed to remove the output G-code file from $tempfile to $output_file. Is $tempfile locked?\n" if ($i == 5);
-        } 
+        Slic3r::debugf "Failed to remove the output G-code file from $tempfile to $output_file. Is $tempfile locked?\n" if ($i == 5);
     }
     
     # run post-processing scripts
@@ -224,19 +208,13 @@ sub make_skirt {
     $_->generate_support_material for @{$self->objects};
     
     return if $self->step_done(STEP_SKIRT);
-    $self->set_step_started(STEP_SKIRT);
-    
-    # since this method must be idempotent, we clear skirt paths *before*
-    # checking whether we need to generate them
-    $self->skirt->clear;
-    
-    if (!$self->has_skirt) {
-        $self->set_step_done(STEP_SKIRT);
-        return;
-    }
 
-    $self->status_cb->(88, "Generating skirt");
-    $self->_make_skirt();
+    $self->set_step_started(STEP_SKIRT);
+    $self->skirt->clear;    
+    if ($self->has_skirt) {
+        $self->status_cb->(88, "Generating skirt");
+        $self->_make_skirt();
+    }
     $self->set_step_done(STEP_SKIRT);
 }
 
@@ -280,9 +258,6 @@ sub make_brim {
             push @object_islands,
                 (map @{$_->polyline->grow($grow_distance)}, @{$support_layer0->support_fills})
                 if $support_layer0->support_fills;
-            push @object_islands,
-                (map @{$_->polyline->grow($grow_distance)}, @{$support_layer0->support_interface_fills})
-                if $support_layer0->support_interface_fills;
         }
         foreach my $copy (@{$object->_shifted_copies}) {
             push @islands, map { $_->translate(@$copy); $_ } map $_->clone, @object_islands;
@@ -310,6 +285,27 @@ sub make_brim {
     ), reverse @{union_pt_chained(\@loops)});
     
     $self->set_step_done(STEP_BRIM);
+}
+
+sub make_wipe_tower {
+    my $self = shift;
+    
+    # prerequisites
+    $_->make_perimeters for @{$self->objects};
+    $_->infill for @{$self->objects};
+    $_->generate_support_material for @{$self->objects};
+    $self->make_skirt;
+    $self->make_brim;
+    
+    return if $self->step_done(STEP_WIPE_TOWER);
+    
+    $self->set_step_started(STEP_WIPE_TOWER);
+    $self->_clear_wipe_tower;
+    if ($self->has_wipe_tower) {
+#       $self->status_cb->(95, "Generating wipe tower");
+        $self->_make_wipe_tower;
+    }
+    $self->set_step_done(STEP_WIPE_TOWER);
 }
 
 # Wrapper around the C++ Slic3r::Print::validate()

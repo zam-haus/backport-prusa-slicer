@@ -224,6 +224,9 @@ public:
         const std::string        &select_by,
         const std::string        &drag_by);
 
+    int load_wipe_tower_preview(
+        int obj_idx, float pos_x, float pos_y, float width, float depth, float height, bool use_VBOs);
+
     // Bounding box of this volume, in unscaled coordinates.
     BoundingBoxf3       bounding_box;
     // Offset of the volume to be rendered.
@@ -310,6 +313,9 @@ public:
         const std::string       &drag_by,
         bool                     use_VBOs);
 
+    int load_wipe_tower_preview(
+        int obj_idx, float pos_x, float pos_y, float width, float depth, float height, bool use_VBOs);
+
     // Render the volumes by OpenGL.
     void render_VBOs() const;
     void render_legacy() const;
@@ -338,14 +344,23 @@ public:
     static void _glew_init();
 
     static void _load_print_toolpaths(
-        const Print         *print,
-        GLVolumeCollection  *volumes,
-        bool                 use_VBOs);
+        const Print                     *print,
+        GLVolumeCollection              *volumes,
+        const std::vector<std::string>  &tool_colors,
+        bool                             use_VBOs);
 
     static void _load_print_object_toolpaths(
-        const PrintObject   *print_object,
-        GLVolumeCollection  *volumes,
-        bool                 use_VBOs);
+        const PrintObject               *print_object,
+        GLVolumeCollection              *volumes,
+        const std::vector<std::string>  &tool_colors,
+        bool                             use_VBOs);
+
+
+    static void _load_wipe_tower_toolpaths(
+        const Print                    *print,
+        GLVolumeCollection             *volumes,
+        const std::vector<std::string> &tool_colors_str,
+        bool                            use_VBOs);
 };
 
 }
