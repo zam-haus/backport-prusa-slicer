@@ -156,6 +156,19 @@ PrintConfigDef::PrintConfigDef()
     def->height = 120;
     def->default_value = new ConfigOptionString("M104 S0 ; turn off temperature\nG28 X0  ; home X axis\nM84     ; disable motors\n");
 
+    def = this->add("end_filament_gcode", coStrings);
+    def->label = "End G-code";
+    def->tooltip = "This end procedure is inserted at the end of the output file, before the printer end gcode. Note that you can use placeholder variables for all Slic3r settings. If you have multiple extruders, the gcode is processed in extruder order.";
+    def->cli = "end-filament-gcode=s@";
+    def->multiline = true;
+    def->full_width = true;
+    def->height = 120;
+    {
+        ConfigOptionStrings* opt = new ConfigOptionStrings();
+        opt->values.push_back("; Filament-specific end gcode \n;END gcode for filament\n");
+        def->default_value = opt;
+    }
+
     def = this->add("ensure_vertical_shell_thickness", coBool);
     def->label = "Ensure vertical shell thickness";
     def->category = "Layers and Perimeters";
@@ -242,6 +255,19 @@ PrintConfigDef::PrintConfigDef()
     def->cli = "extruder-clearance-radius=f";
     def->min = 0;
     def->default_value = new ConfigOptionFloat(20);
+
+    def = this->add("extruder_colour", coStrings);
+    def->label = "Extruder Color";
+    def->tooltip = "This is only used in the Slic3r interface as a visual help.";
+    def->cli = "extruder-color=s@";
+    def->gui_type = "color";
+    {
+        ConfigOptionStrings* opt = new ConfigOptionStrings();
+        // Empty string means no color assigned yet.
+//        opt->values.push_back("#FFFFFF");
+        opt->values.push_back("");
+        def->default_value = opt;
+    }
 
     def = this->add("extruder_offset", coPoints);
     def->label = "Extruder offset";
@@ -351,6 +377,37 @@ PrintConfigDef::PrintConfigDef()
     {
         ConfigOptionFloats* opt = new ConfigOptionFloats();
         opt->values.push_back(0);
+        def->default_value = opt;
+    }
+
+    def = this->add("filament_type", coStrings);
+    def->label = "Filament type";
+    def->tooltip = "If you want to process the output G-code through custom scripts, just list their absolute paths here. Separate multiple scripts with a semicolon. Scripts will be passed the absolute path to the G-code file as the first argument, and they can access the Slic3r config settings by reading environment variables.";
+    def->cli = "filament_type=s@";
+    def->gui_type = "f_enum_open";
+    def->gui_flags = "show_value";
+    def->enum_values.push_back("PLA");
+    def->enum_values.push_back("ABS");
+    def->enum_values.push_back("PET");
+    def->enum_values.push_back("HIPS");
+    def->enum_values.push_back("FLEX");
+    def->enum_values.push_back("SCAFF");
+    def->enum_values.push_back("EDGE");
+    def->enum_values.push_back("NGEN");
+    def->enum_values.push_back("PVA");
+    {
+        ConfigOptionStrings* opt = new ConfigOptionStrings();
+        opt->values.push_back("PLA");
+        def->default_value = opt;
+    }
+
+    def = this->add("filament_soluble", coBools);
+    def->label = "Soluble material";
+    def->tooltip = "Soluble material is most likely used for a soluble support.";
+    def->cli = "filament-soluble!";
+    {
+        ConfigOptionBools* opt = new ConfigOptionBools();
+        opt->values.push_back(false);
         def->default_value = opt;
     }
 
@@ -513,12 +570,6 @@ PrintConfigDef::PrintConfigDef()
     def->cli = "gap-fill-speed=f";
     def->min = 0;
     def->default_value = new ConfigOptionFloat(20);
-
-    def = this->add("gcode_arcs", coBool);
-    def->label = "Use native G-code arcs";
-    def->tooltip = "This experimental feature tries to detect arcs from segments and generates G2/G3 arc commands instead of multiple straight G1 commands.";
-    def->cli = "gcode-arcs!";
-    def->default_value = new ConfigOptionBool(0);
 
     def = this->add("gcode_comments", coBool);
     def->label = "Verbose G-code";
@@ -847,18 +898,20 @@ PrintConfigDef::PrintConfigDef()
     def->full_width = true;
     def->height = 60;
 
+    def = this->add("printer_notes", coString);
+    def->label = "Printer notes";
+    def->tooltip = "You can put your notes regarding the printer here.";
+    def->cli = "printer-notes=s";
+    def->multiline = true;
+    def->full_width = true;
+    def->height = 130;
+    def->default_value = new ConfigOptionString("");
+
     def = this->add("print_settings_id", coString);
     def->default_value = new ConfigOptionString("");
     
     def = this->add("printer_settings_id", coString);
     def->default_value = new ConfigOptionString("");
-
-    def = this->add("pressure_advance", coFloat);
-    def->label = "Pressure advance";
-    def->tooltip = "When set to a non-zero value, this experimental option enables pressure regulation. It's the K constant for the advance algorithm that pushes more or less filament upon speed changes. It's useful for Bowden-tube extruders. Reasonable values are in range 0-10.";
-    def->cli = "pressure-advance=f";
-    def->min = 0;
-    def->default_value = new ConfigOptionFloat(0);
 
     def = this->add("raft_layers", coInt);
     def->label = "Raft layers";
@@ -885,6 +938,17 @@ PrintConfigDef::PrintConfigDef()
     {
         ConfigOptionFloats* opt = new ConfigOptionFloats();
         opt->values.push_back(2);
+        def->default_value = opt;
+    }
+
+    def = this->add("retract_before_wipe", coPercents);
+    def->label = "Retract amount before wipe";
+    def->tooltip = "With bowden extruders, it may be wise to do some amount of quick retract before doing the wipe movement.";
+    def->sidetext = "%";
+    def->cli = "retract-before-wipe=s@";
+    {
+        ConfigOptionPercents* opt = new ConfigOptionPercents();
+        opt->values.push_back(0.f);
         def->default_value = opt;
     }
     
@@ -980,7 +1044,7 @@ PrintConfigDef::PrintConfigDef()
     }
 
     def = this->add("retract_speed", coFloats);
-    def->label = "Speed";
+    def->label = "Retraction Speed";
     def->full_label = "Retraction Speed";
     def->tooltip = "The speed for retractions (it only applies to the extruder motor).";
     def->sidetext = "mm/s";
@@ -988,6 +1052,18 @@ PrintConfigDef::PrintConfigDef()
     {
         ConfigOptionFloats* opt = new ConfigOptionFloats();
         opt->values.push_back(40);
+        def->default_value = opt;
+    }
+
+    def = this->add("deretract_speed", coFloats);
+    def->label = "Deretraction Speed";
+    def->full_label = "Deretraction Speed";
+    def->tooltip = "The speed for loading of a filament into extruder after retraction (it only applies to the extruder motor). If left to zero, the retraction speed is used.";
+    def->sidetext = "mm/s";
+    def->cli = "retract-speed=f@";
+    {
+        ConfigOptionFloats* opt = new ConfigOptionFloats();
+        opt->values.push_back(0);
         def->default_value = opt;
     }
 
@@ -1171,6 +1247,25 @@ PrintConfigDef::PrintConfigDef()
     def->full_width = true;
     def->height = 120;
     def->default_value = new ConfigOptionString("G28 ; home all axes\nG1 Z5 F5000 ; lift nozzle\n");
+
+    def = this->add("start_filament_gcode", coStrings);
+    def->label = "Start G-code";
+    def->tooltip = "This start procedure is inserted at the beginning, after any printer start gcode. This is used to override settings for a specific filament. If Slic3r detects M104, M109, M140 or M190 in your custom codes, such commands will not be prepended automatically so you're free to customize the order of heating commands and other custom actions. Note that you can use placeholder variables for all Slic3r settings, so you can put a \"M109 S[first_layer_temperature]\" command wherever you want. If you have multiple extruders, the gcode is processed in extruder order.";
+    def->cli = "start-filament-gcode=s@";
+    def->multiline = true;
+    def->full_width = true;
+    def->height = 120;
+    {
+        ConfigOptionStrings* opt = new ConfigOptionStrings();
+        opt->values.push_back("; Filament gcode\n");
+        def->default_value = opt;
+    }
+
+    def = this->add("single_extruder_multi_material", coBool);
+    def->label = "Single Extruder Multi Material";
+    def->tooltip = "The printer multiplexes filaments into a single hot end.";
+    def->cli = "single-extruder-multi-material!";
+    def->default_value = new ConfigOptionBool(false);
 
     def = this->add("support_material", coBool);
     def->label = "Generate support material";
@@ -1442,6 +1537,12 @@ PrintConfigDef::PrintConfigDef()
     def->cli = "use-volumetric-e!";
     def->default_value = new ConfigOptionBool(false);
 
+    def = this->add("set_and_wait_temperatures", coBool);
+    def->label = "Use Set and Wait for changing bed temperatures";
+    def->tooltip = "Check this to change gcode for temperature changes from not waiting (usually M140) to waiting (usually M190). Only necessary if you have a slow-to-heat bed and the first layer bed temp is lower than the other layers.";
+    def->cli = "set-and-wait-temperatures!";
+    def->default_value = new ConfigOptionBool(false);
+
     def = this->add("variable_layer_height", coBool);
     def->label = "Enable variable layer height feature";
     def->tooltip = "Some printers or printer setups may have difficulties printing with a variable layer height. Enabled by default.";
@@ -1457,6 +1558,40 @@ PrintConfigDef::PrintConfigDef()
         opt->values.push_back(false);
         def->default_value = opt;
     }
+
+    def = this->add("wipe_tower", coBool);
+    def->label = "Enable";
+    def->tooltip = "Multi material printers may need to prime or purge extruders on tool changes. Extrude the excess material into the wipe tower.";
+    def->cli = "wipe-tower!";
+    def->default_value = new ConfigOptionBool(false);
+
+    def = this->add("wipe_tower_x", coFloat);
+    def->label = "Position X";
+    def->tooltip = "X coordinate of the left front corner of a wipe tower";
+    def->sidetext = "mm";
+    def->cli = "wipe-tower-x=f";
+    def->default_value = new ConfigOptionFloat(180.);
+
+    def = this->add("wipe_tower_y", coFloat);
+    def->label = "Position Y";
+    def->tooltip = "Y coordinate of the left front corner of a wipe tower";
+    def->sidetext = "mm";
+    def->cli = "wipe-tower-y=f";
+    def->default_value = new ConfigOptionFloat(140.);
+
+    def = this->add("wipe_tower_width", coFloat);
+    def->label = "Width";
+    def->tooltip = "Width of a wipe tower";
+    def->sidetext = "mm";
+    def->cli = "wipe-tower-width=f";
+    def->default_value = new ConfigOptionFloat(60.);
+
+    def = this->add("wipe_tower_per_color_wipe", coFloat);
+    def->label = "Per color change depth";
+    def->tooltip = "Depth of a wipe color per color change. For N colors, there will be maximum (N-1) tool switches performed, therefore the total depth of the wipe tower will be (N-1) times this value.";
+    def->sidetext = "mm";
+    def->cli = "wipe-tower-per-color-wipe=f";
+    def->default_value = new ConfigOptionFloat(15.);
 
     def = this->add("xy_size_compensation", coFloat);
     def->label = "XY Size Compensation";

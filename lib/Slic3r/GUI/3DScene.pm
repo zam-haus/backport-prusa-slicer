@@ -240,11 +240,13 @@ sub layer_editing_allowed {
     return ! (defined($self->{layer_editing_initialized}) && $self->{layer_editing_initialized} == 2);
 }
 
-sub _first_selected_object_id {
+sub _first_selected_object_id_for_variable_layer_height_editing {
     my ($self) = @_;
     for my $i (0..$#{$self->volumes}) {
         if ($self->volumes->[$i]->selected) {
-            return int($self->volumes->[$i]->select_group_id / 1000000);
+            my $object_id = int($self->volumes->[$i]->select_group_id / 1000000);
+            # Objects with object_id >= 1000 have a specific meaning, for example the wipe tower proxy.
+            return $object_id if $object_id < 10000;
         }
     }
     return -1;
@@ -332,7 +334,7 @@ sub mouse_event {
     my ($self, $e) = @_;
     
     my $pos = Slic3r::Pointf->new($e->GetPositionXY);
-    my $object_idx_selected = $self->{layer_height_edit_last_object_id} = ($self->layer_editing_enabled && $self->{print}) ? $self->_first_selected_object_id : -1;
+    my $object_idx_selected = $self->{layer_height_edit_last_object_id} = ($self->layer_editing_enabled && $self->{print}) ? $self->_first_selected_object_id_for_variable_layer_height_editing : -1;
 
     if ($e->Entering && &Wx::wxMSW) {
         # wxMSW needs focus in order to catch mouse wheel events
@@ -502,7 +504,7 @@ sub mouse_wheel_event {
     my ($self, $e) = @_;
     
     if ($self->layer_editing_enabled && $self->{print}) {
-        my $object_idx_selected = $self->_first_selected_object_id;
+        my $object_idx_selected = $self->_first_selected_object_id_for_variable_layer_height_editing;
         if ($object_idx_selected != -1) {
             # A volume is selected. Test, whether hovering over a layer thickness bar.
             if ($self->_variable_layer_thickness_bar_rect_mouse_inside($e)) {
@@ -913,6 +915,7 @@ sub UseVBOs {
         $self->{use_VBOs} = 0;
         if ($self->GetContext) {
             $self->SetCurrent($self->GetContext);
+            Slic3r::GUI::_3DScene::_glew_init;
             my @gl_version = split(/\./, glGetString(GL_VERSION));
             $self->{use_VBOs} = int($gl_version[0]) >= 2;
             # print "UseVBOs $self OpenGL major: $gl_version[0], minor: $gl_version[1]. Use VBOs: ", $self->{use_VBOs}, "\n";
@@ -1017,8 +1020,6 @@ sub InitGL {
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_COLOR_MATERIAL);
     glEnable(GL_MULTISAMPLE);
-
-    Slic3r::GUI::_3DScene::_glew_init;
 
     if ($self->UseVBOs) {
         my $shader = new Slic3r::GUI::_3DScene::GLShader;
@@ -1470,11 +1471,26 @@ sub draw_active_object_annotations {
     my $max_z = unscale($print_object->size->z);
     my $profile = $print_object->model_object->layer_height_profile;
     my $layer_height = $print_object->config->get('layer_height');
+    my $layer_height_max  = 10000000000.;
+    {
+        # Get a maximum layer height value.
+        #FIXME This is a duplicate code of Slicing.cpp.
+        my $nozzle_diameters  = $print_object->print->config->get('nozzle_diameter');
+        my $layer_heights_min = $print_object->print->config->get('min_layer_height');
+        my $layer_heights_max = $print_object->print->config->get('max_layer_height');
+        for (my $i = 0; $i < scalar(@{$nozzle_diameters}); $i += 1) {
+            my $lh_min = ($layer_heights_min->[$i] == 0.) ? 0.07 : max(0.01, $layer_heights_min->[$i]);
+            my $lh_max = ($layer_heights_max->[$i] == 0.) ? (0.75 * $nozzle_diameters->[$i]) : $layer_heights_max->[$i];
+            $layer_height_max = min($layer_height_max, max($lh_min, $lh_max));
+        }
+    }
+    # Make the vertical bar a bit wider so the layer height curve does not touch the edge of the bar region.
+    $layer_height_max *= 1.12;
     # Baseline
     glColor3f(0., 0., 0.);
     glBegin(GL_LINE_STRIP);
-    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / 0.45,  $bar_bottom);
-    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / 0.45,  $bar_top);
+    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / $layer_height_max,  $bar_bottom);
+    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / $layer_height_max,  $bar_top);
     glEnd();
     # Curve
     glColor3f(0., 0., 1.);
@@ -1482,7 +1498,7 @@ sub draw_active_object_annotations {
     for (my $i = 0; $i < int(@{$profile}); $i += 2) {
         my $z = $profile->[$i];
         my $h = $profile->[$i+1];
-        glVertex3f($bar_left + $h * ($bar_right - $bar_left) / 0.45,  $bar_bottom + $z * ($bar_top - $bar_bottom) / $max_z, $z);
+        glVertex3f($bar_left + $h * ($bar_right - $bar_left) / $layer_height_max,  $bar_bottom + $z * ($bar_top - $bar_bottom) / $max_z, $z);
     }
     glEnd();
     # Revert the matrices.
@@ -1864,10 +1880,10 @@ sub load_object {
 # Create 3D thick extrusion lines for a skirt and brim.
 # Adds a new Slic3r::GUI::3DScene::Volume to $self->volumes.
 sub load_print_toolpaths {
-    my ($self, $print) = @_;
+    my ($self, $print, $colors) = @_;
 
     $self->SetCurrent($self->GetContext) if $self->UseVBOs;
-    Slic3r::GUI::_3DScene::_load_print_toolpaths($print, $self->volumes, $self->UseVBOs)
+    Slic3r::GUI::_3DScene::_load_print_toolpaths($print, $self->volumes, $colors, $self->UseVBOs)
         if ($print->step_done(STEP_SKIRT) && $print->step_done(STEP_BRIM));
 }
 
@@ -1875,10 +1891,19 @@ sub load_print_toolpaths {
 # Adds a new Slic3r::GUI::3DScene::Volume to $self->volumes,
 # one for perimeters, one for infill and one for supports.
 sub load_print_object_toolpaths {
-    my ($self, $object) = @_;
+    my ($self, $object, $colors) = @_;
 
     $self->SetCurrent($self->GetContext) if $self->UseVBOs;
-    Slic3r::GUI::_3DScene::_load_print_object_toolpaths($object, $self->volumes, $self->UseVBOs);
+    Slic3r::GUI::_3DScene::_load_print_object_toolpaths($object, $self->volumes, $colors, $self->UseVBOs);
+}
+
+# Create 3D thick extrusion lines for wipe tower extrusions.
+sub load_wipe_tower_toolpaths {
+    my ($self, $print, $colors) = @_;
+
+    $self->SetCurrent($self->GetContext) if $self->UseVBOs;
+    Slic3r::GUI::_3DScene::_load_wipe_tower_toolpaths($print, $self->volumes, $colors, $self->UseVBOs)
+        if ($print->step_done(STEP_WIPE_TOWER));
 }
 
 sub set_toolpaths_range {
