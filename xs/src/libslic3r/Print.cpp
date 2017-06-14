@@ -148,7 +148,6 @@ bool Print::invalidate_state_by_config_options(const std::vector<t_config_option
         steps_ignore.insert("use_firmware_retraction");
         steps_ignore.insert("use_relative_e_distances");
         steps_ignore.insert("use_volumetric_e");
-        steps_ignore.insert("set_and_wait_temperatures");
         steps_ignore.insert("variable_layer_height");
         steps_ignore.insert("wipe");
     }
@@ -397,6 +396,16 @@ bool Print::apply_config(DynamicPrintConfig config)
         PrintObjectConfig new_config = this->default_object_config;
         // we override the new config with object-specific options
         normalize_and_apply_config(new_config, object->model_object()->config);
+        // Force a refresh of a variable layer height profile at the PrintObject if it is not valid.
+        if (! object->layer_height_profile_valid) {
+            // The layer_height_profile is not valid for some reason (updated by the user or invalidated due to some option change).
+            // Invalidate the slicing step, which in turn invalidates everything.
+            object->invalidate_step(posSlice);
+            // Following line sets the layer_height_profile_valid flag.
+            object->update_layer_height_profile();
+            // Trigger recalculation.
+            invalidated = true;
+        }
         // check whether the new config is different from the current one
         t_config_option_keys diff = object->config.diff(new_config);
         object->config.apply(new_config, diff, true);
@@ -475,22 +484,6 @@ exit_for_rearrange_regions:
             this->objects.back()->update_layer_height_profile();
         }
         invalidated = true;
-    } else {
-        // Check validity of the layer height profiles.
-        for (PrintObject *object : this->objects) {
-            if (! object->layer_height_profile_valid) {
-                // The layer_height_profile is not valid for some reason (updated by the user or invalidated due to some option change).
-                // Start slicing of this object from scratch.
-                object->invalidate_all_steps();
-                // Following line sets the layer_height_profile_valid flag.
-                object->update_layer_height_profile();
-                invalidated = true;
-            } else if (! step_done(posSlice)) {
-                // Update layer_height_profile from the main thread as it may pull the data from the associated ModelObject.
-                // Only update if the slicing was not finished yet.
-                object->update_layer_height_profile();
-            }
-        }
     }
     
     return invalidated;
@@ -515,9 +508,7 @@ std::string Print::validate() const
         {
             Polygons convex_hulls_other;
             for (PrintObject *object : this->objects) {
-                // Get convex hull of all meshes assigned to this print object
-                // (this is the same as model_object()->raw_mesh.convex_hull()
-                // but probably more efficient.
+                // Get convex hull of all meshes assigned to this print object.
                 Polygon convex_hull;
                 {
                     Polygons mesh_convex_hulls;
@@ -565,7 +556,7 @@ std::string Print::validate() const
             return "The Spiral Vase option can only be used when printing single material objects.";
     }
 
-    if (this->config.wipe_tower) {
+    if (this->config.wipe_tower && ! this->objects.empty()) {
         for (auto dmr : this->config.nozzle_diameter.values)
             if (std::abs(dmr - 0.4) > EPSILON)
                 return "The Wipe Tower is currently only supported for the 0.4mm nozzle diameter.";
@@ -573,17 +564,25 @@ std::string Print::validate() const
             return "The Wipe Tower is currently only supported for the RepRap (Marlin / Sprinter) G-code flavor.";
         if (! this->config.use_relative_e_distances)
             return "The Wipe Tower is currently only supported with the relative extruder addressing (use_relative_e_distances=1).";
+        SlicingParameters slicing_params0 = this->objects.front()->slicing_parameters();
         for (PrintObject *object : this->objects) {
-            if (std::abs(object->config.first_layer_height - this->objects.front()->config.first_layer_height) > EPSILON ||
-                std::abs(object->config.layer_height       - this->objects.front()->config.layer_height      ) > EPSILON)
+            SlicingParameters slicing_params = object->slicing_parameters();
+            if (std::abs(slicing_params.first_print_layer_height - slicing_params0.first_print_layer_height) > EPSILON ||
+                std::abs(slicing_params.layer_height             - slicing_params0.layer_height            ) > EPSILON)
                 return "The Wipe Tower is only supported for multiple objects if they have equal layer heigths";
+            if (slicing_params.raft_layers() != slicing_params0.raft_layers())
+                return "The Wipe Tower is only supported for multiple objects if they are printed over an equal number of raft layers";
+            if (object->config.support_material_contact_distance != this->objects.front()->config.support_material_contact_distance)
+                return "The Wipe Tower is only supported for multiple objects if they are printed with the same support_material_contact_distance";
+            if (! equal_layering(slicing_params, slicing_params0))
+                return "The Wipe Tower is only supported for multiple objects if they are sliced equally.";
+            bool was_layer_height_profile_valid = object->layer_height_profile_valid;
             object->update_layer_height_profile();
-            if (object->layer_height_profile.size() != 8 ||
-                std::abs(object->layer_height_profile[1] - object->config.first_layer_height) > EPSILON ||
-                std::abs(object->layer_height_profile[3] - object->config.first_layer_height) > EPSILON ||
-                std::abs(object->layer_height_profile[5] - object->config.layer_height) > EPSILON ||
-                std::abs(object->layer_height_profile[7] - object->config.layer_height) > EPSILON)
-                return "The Wipe Tower is currently only supported with constant Z layer spacing. Layer editing is not allowed.";
+            object->layer_height_profile_valid = was_layer_height_profile_valid;
+            for (size_t i = 5; i < object->layer_height_profile.size(); i += 2)
+                if (object->layer_height_profile[i-1] > slicing_params.object_print_z_min + EPSILON &&
+                    std::abs(object->layer_height_profile[i] - object->config.layer_height) > EPSILON)
+                    return "The Wipe Tower is currently only supported with constant Z layer spacing. Layer editing is not allowed.";
         }
     }
     
@@ -959,9 +958,7 @@ void Print::_make_wipe_tower()
         bool last_layer  = &layer_tools == &m_tool_ordering.back() || (&layer_tools + 1)->wipe_tower_partitions == 0;
         wipe_tower.set_layer(
             float(layer_tools.print_z), 
-            float(first_layer ? 
-                this->objects.front()->config.first_layer_height.get_abs_value(this->objects.front()->config.layer_height.value) :
-                this->objects.front()->config.layer_height.value),
+            float(layer_tools.wipe_tower_layer_height),
             layer_tools.wipe_tower_partitions,
             first_layer,
             last_layer);

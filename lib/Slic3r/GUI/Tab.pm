@@ -855,17 +855,18 @@ sub _update {
     }
 
     if ($config->wipe_tower && 
-        ($config->first_layer_height != 0.2 || ($config->layer_height != 0.15 && $config->layer_height != 0.2))) {
+        ($config->first_layer_height != 0.2 || $config->layer_height < 0.15 || $config->layer_height > 0.35)) {
         my $dialog = Wx::MessageDialog->new($self,
             "The Wipe Tower currently supports only:\n"
             . "- first layer height 0.2mm\n"
-            . "- layer height 0.15mm or 0.2mm\n"
+            . "- layer height from 0.15mm to 0.35mm\n"
             . "\nShall I adjust those settings in order to enable the Wipe Tower?",
             'Wipe Tower', wxICON_WARNING | wxYES | wxNO);
         my $new_conf = Slic3r::Config->new;
         if ($dialog->ShowModal() == wxID_YES) {
             $new_conf->set("first_layer_height", 0.2);
-            $new_conf->set("layer_height", 0.15) if $config->layer_height != 0.15 && $config->layer_height != 0.2;
+            $new_conf->set("layer_height", 0.15) if  $config->layer_height < 0.15;
+            $new_conf->set("layer_height", 0.35) if  $config->layer_height > 0.35;
         } else {
             $new_conf->set("wipe_tower", 0);
         }
@@ -1232,7 +1233,7 @@ sub build {
         serial_port serial_speed
         octoprint_host octoprint_apikey
         use_firmware_retraction
-        use_volumetric_e set_and_wait_temperatures variable_layer_height
+        use_volumetric_e variable_layer_height
         single_extruder_multi_material start_gcode end_gcode before_layer_gcode layer_gcode toolchange_gcode
         nozzle_diameter extruder_offset
         retract_length retract_lift retract_speed deretract_speed retract_before_wipe retract_restart_extra retract_before_travel retract_layer_change wipe
@@ -1439,7 +1440,6 @@ sub build {
             $optgroup->append_single_option_line('use_firmware_retraction');
             $optgroup->append_single_option_line('use_volumetric_e');
             $optgroup->append_single_option_line('variable_layer_height');
-            $optgroup->append_single_option_line('set_and_wait_temperatures');
         }
     }
     {
