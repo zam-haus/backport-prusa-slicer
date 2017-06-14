@@ -14,11 +14,6 @@ use Slic3r::Surface ':types';
 # If enabled, phases of prepare_infill will be written into SVG files to an "out" directory.
 our $SLIC3R_DEBUG_SLICE_PROCESSING = 0;
 
-sub region_volumes {
-    my $self = shift;
-    return [ map $self->get_region_volumes($_), 0..($self->region_count - 1) ];
-}
-
 sub layers {
     my $self = shift;
     return [ map $self->get_layer($_), 0..($self->layer_count - 1) ];
@@ -643,27 +638,6 @@ sub combine_infill {
             }
         }
     }
-}
-
-# Used by t/support.t and by GCode.pm to export support line width as a comment.
-# To be removed.
-sub support_material_flow {
-    my ($self, $role) = @_;
-    
-    $role //= FLOW_ROLE_SUPPORT_MATERIAL;
-    my $extruder = ($role == FLOW_ROLE_SUPPORT_MATERIAL)
-        ? $self->config->support_material_extruder
-        : $self->config->support_material_interface_extruder;
-    
-    # we use a bogus layer_height because we use the same flow for all
-    # support material layers
-    return Slic3r::Flow->new_from_width(
-        width               => $self->config->support_material_extrusion_width || $self->config->extrusion_width,
-        role                => $role,
-        nozzle_diameter     => $self->print->config->nozzle_diameter->[$extruder-1] // $self->print->config->nozzle_diameter->[0],
-        layer_height        => $self->config->layer_height,
-        bridge_flow_ratio   => 0,
-    );
 }
 
 1;

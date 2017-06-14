@@ -34,7 +34,6 @@ use constant TB_SETTINGS => &Wx::NewId;
 use constant TB_LAYER_EDITING => &Wx::NewId;
 
 # package variables to avoid passing lexicals to threads
-our $THUMBNAIL_DONE_EVENT    : shared = Wx::NewEventType;
 our $PROGRESS_BAR_EVENT      : shared = Wx::NewEventType;
 our $ERROR_EVENT             : shared = Wx::NewEventType;
 # Emitted from the worker thread when the G-code export is finished.
@@ -116,8 +115,7 @@ sub new {
         });
         $self->{canvas3D}->set_on_model_update(sub {
             if ($Slic3r::GUI::Settings->{_}{background_processing}) {
-                $self->{apply_config_timer}->Stop if defined $self->{apply_config_timer};
-                $self->async_apply_config();
+                $self->schedule_background_process;
             } else {
                 # Hide the print info box, it is no more valid.
                 $self->{"print_info_box_show"}->(0);
@@ -307,14 +305,6 @@ sub new {
     $_->SetDropTarget(Slic3r::GUI::Plater::DropTarget->new($self))
         for grep defined($_),
             $self, $self->{canvas}, $self->{canvas3D}, $self->{preview3D}, $self->{list};
-    
-    EVT_COMMAND($self, -1, $THUMBNAIL_DONE_EVENT, sub {
-        my ($self, $event) = @_;
-        my ($obj_idx) = @{$event->GetData};
-        return if !$self->{objects}[$obj_idx];  # object was deleted before thumbnail generation completed
-        
-        $self->on_thumbnail_made($obj_idx);
-    });
     
     EVT_COMMAND($self, -1, $PROGRESS_BAR_EVENT, sub {
         my ($self, $event) = @_;
@@ -717,7 +707,7 @@ sub load_file {
     
     local $SIG{__WARN__} = Slic3r::GUI::warning_catcher($self);
     
-    my $model = eval { Slic3r::Model->read_from_file($input_file) };
+    my $model = eval { Slic3r::Model->read_from_file($input_file, 0) };
     Slic3r::GUI::show_error($self, $@) if $@;
     
     my @obj_idx = ();
@@ -804,7 +794,7 @@ sub load_model_objects {
         $self->{list}->SetItem($obj_idx, 1, $model_object->instances_count);
         $self->{list}->SetItem($obj_idx, 2, ($model_object->instances->[0]->scaling_factor * 100) . "%");
     
-        $self->make_thumbnail($obj_idx);
+        $self->reset_thumbnail($obj_idx);
     }
     $self->arrange if $need_arrange;
     $self->update;
@@ -989,10 +979,7 @@ sub rotate {
     
     my $model_object = $self->{model}->objects->[$obj_idx];
     my $model_instance = $model_object->instances->[0];
-    
-    # we need thumbnail to be computed before allowing rotation
-    return if !$object->thumbnail;
-    
+        
     if (!defined $angle) {
         my $axis_name = $axis == X ? 'X' : $axis == Y ? 'Y' : 'Z';
         my $default = $axis == Z ? rad2deg($model_instance->rotation) : 0;
@@ -1017,10 +1004,9 @@ sub rotate {
         
         # realign object to Z = 0
         $model_object->center_around_origin;
-        $self->make_thumbnail($obj_idx);
+        $self->reset_thumbnail($obj_idx);
     }
     
-    $model_object->update_bounding_box;
     # update print and start background processing
     $self->{print}->add_model_object($model_object, $obj_idx);
     
@@ -1045,11 +1031,10 @@ sub mirror {
     }
     
     $model_object->mirror($axis);
-    $model_object->update_bounding_box;
     
     # realign object to Z = 0
     $model_object->center_around_origin;
-    $self->make_thumbnail($obj_idx);
+    $self->reset_thumbnail($obj_idx);
         
     # update print and start background processing
     $self->stop_background_process;
@@ -1068,9 +1053,6 @@ sub changescale {
     
     my $model_object = $self->{model}->objects->[$obj_idx];
     my $model_instance = $model_object->instances->[0];
-    
-    # we need thumbnail to be computed before allowing scaling
-    return if !$object->thumbnail;
     
     my $object_size = $model_object->bounding_box->size;
     my $bed_size = Slic3r::Polygon->new_scale(@{$self->{config}->bed_shape})->bounding_box->size;
@@ -1102,7 +1084,7 @@ sub changescale {
         #FIXME Scale the layer height profile when $axis == Z?
         #FIXME Scale the layer height ranges $axis == Z?
         # object was already aligned to Z = 0, so no need to realign it
-        $self->make_thumbnail($obj_idx);
+        $self->reset_thumbnail($obj_idx);
     } else {
         my $scale;
         if ($tosize) {
@@ -1128,7 +1110,6 @@ sub changescale {
         $_->set_scaling_factor($scale) for @{ $model_object->instances };
         $object->transform_thumbnail($self->{model}, $obj_idx);
     }
-    $model_object->update_bounding_box;
     
     # update print and start background processing
     $self->stop_background_process;
@@ -1149,6 +1130,7 @@ sub arrange {
     # ignore arrange failures on purpose: user has visual feedback and we don't need to warn him
     # when parts don't fit in print bed
     
+    # Force auto center of the aligned grid of of objects on the print bed.
     $self->update(1);
 }
 
@@ -1622,12 +1604,6 @@ sub reload_from_disk {
     }
     
     $self->remove($obj_idx);
-    
-    # Trigger thumbnail generation again, because the remove() method altered
-    # object indexes before background thumbnail generation called its completion
-    # event, so the on_thumbnail_made callback is called with the wrong $obj_idx.
-    # When porting to C++ we'll probably have cleaner ways to do this.
-    $self->make_thumbnail($_-1) for @new_obj_idx;
 }
 
 sub export_object_stl {
@@ -1675,36 +1651,9 @@ sub _get_export_file {
     return $output_file;
 }
 
-sub make_thumbnail {
-    my $self = shift;
-    my ($obj_idx) = @_;
-    
-    my $plater_object = $self->{objects}[$obj_idx];
-    $plater_object->thumbnail(Slic3r::ExPolygon::Collection->new);
-    my $cb = sub {
-        $plater_object->make_thumbnail($self->{model}, $obj_idx);
-        
-        if ($Slic3r::have_threads) {
-            Wx::PostEvent($self, Wx::PlThreadEvent->new(-1, $THUMBNAIL_DONE_EVENT, shared_clone([ $obj_idx ])));
-            Slic3r::thread_cleanup();
-            threads->exit;
-        } else {
-            $self->on_thumbnail_made($obj_idx);
-        }
-    };
-    
-    @_ = ();
-    $Slic3r::have_threads
-        ? threads->create(sub { $cb->(); Slic3r::thread_cleanup(); })->detach
-        : $cb->();
-}
-
-sub on_thumbnail_made {
-    my $self = shift;
-    my ($obj_idx) = @_;
-    
-    $self->{objects}[$obj_idx]->transform_thumbnail($self->{model}, $obj_idx);
-    $self->{canvas}->Refresh;
+sub reset_thumbnail {
+    my ($self, $obj_idx) = @_;
+    $self->{objects}[$obj_idx]->thumbnail(undef);
 }
 
 # this method gets called whenever print center is changed or the objects' bounding box changes
@@ -1728,7 +1677,8 @@ sub update {
     } else {
         $self->resume_background_process;
     }
-    
+
+    $self->{canvas}->reload_scene if $self->{canvas};
     $self->{canvas3D}->reload_scene if $self->{canvas3D};
     $self->{preview3D}->reload_print if $self->{preview3D};
 }
@@ -1943,7 +1893,7 @@ sub object_settings_dialog {
     if ($dlg->PartsChanged) {
 	    # recenter and re-align to Z = 0
 	    $model_object->center_around_origin;
-        $self->make_thumbnail($obj_idx);
+        $self->reset_thumbnail($obj_idx);
     }
 	
 	# update print
@@ -1951,6 +1901,7 @@ sub object_settings_dialog {
 	    $self->stop_background_process;
         $self->{print}->reload_object($obj_idx);
         $self->schedule_background_process;
+        $self->{canvas}->reload_scene if $self->{canvas};
         $self->{canvas3D}->reload_scene if $self->{canvas3D};
     } else {
         $self->resume_background_process;
@@ -2245,19 +2196,21 @@ sub make_thumbnail {
     # make method idempotent
     $self->thumbnail->clear;
     
+    # raw_mesh is the non-transformed (non-rotated, non-scaled, non-translated) sum of non-modifier object volumes.
     my $mesh = $model->objects->[$obj_idx]->raw_mesh;
-    if ($mesh->facets_count <= 5000) {
-        # remove polygons with area <= 1mm
-        my $area_threshold = Slic3r::Geometry::scale 1;
-        $self->thumbnail->append(
-            grep $_->area >= $area_threshold,
-            @{ $mesh->horizontal_projection },   # horizontal_projection returns scaled expolygons
-        );
-        $self->thumbnail->simplify(0.5);
-    } else {
+#FIXME The "correct" variant could be extremely slow.
+#    if ($mesh->facets_count <= 5000) {
+#        # remove polygons with area <= 1mm
+#        my $area_threshold = Slic3r::Geometry::scale 1;
+#        $self->thumbnail->append(
+#            grep $_->area >= $area_threshold,
+#            @{ $mesh->horizontal_projection },   # horizontal_projection returns scaled expolygons
+#        );
+#        $self->thumbnail->simplify(0.5);
+#    } else {
         my $convex_hull = Slic3r::ExPolygon->new($mesh->convex_hull);
         $self->thumbnail->append($convex_hull);
-    }
+#    }
     
     return $self->thumbnail;
 }
