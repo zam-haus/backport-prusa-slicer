@@ -159,14 +159,14 @@ bool PrintObject::invalidate_state_by_config_options(const std::vector<t_config_
 			this->reset_layer_height_profile();
 		}
 		else if (
-               opt_key == "clip_multipart_objects" 
+               opt_key == "clip_multipart_objects"
+            || opt_key == "support_material_contact_distance" 
             || opt_key == "xy_size_compensation") {
             steps.emplace_back(posSlice);
         } else if (
                opt_key == "support_material"
             || opt_key == "support_material_angle"
             || opt_key == "support_material_buildplate_only"
-            || opt_key == "support_material_contact_distance"
             || opt_key == "support_material_enforce_layers"
             || opt_key == "support_material_extruder"
             || opt_key == "support_material_extrusion_width"
@@ -1468,6 +1468,7 @@ void PrintObject::reset_layer_height_profile()
 {
     // Reset the layer_heigth_profile.
     this->layer_height_profile.clear();
+	this->layer_height_profile_valid = false;
     // Reset the source layer_height_profile if it exists at the ModelObject.
     this->model_object()->layer_height_profile.clear();
     this->model_object()->layer_height_profile_valid = false;
