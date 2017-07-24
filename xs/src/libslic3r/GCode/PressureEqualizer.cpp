@@ -26,8 +26,7 @@ void PressureEqualizer::reset()
     circular_buffer_items   = 0;
     circular_buffer.assign(circular_buffer_size, GCodeLine());
 
-    // Preallocate some data, so that output_buffer.data() will return an empty string.
-    output_buffer.assign(32, 0);
+    output_buffer.clear();
     output_buffer_length    = 0;
 
     m_current_extruder = 0;

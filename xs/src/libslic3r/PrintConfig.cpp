@@ -156,19 +156,6 @@ PrintConfigDef::PrintConfigDef()
     def->height = 120;
     def->default_value = new ConfigOptionString("M104 S0 ; turn off temperature\nG28 X0  ; home X axis\nM84     ; disable motors\n");
 
-    def = this->add("end_filament_gcode", coStrings);
-    def->label = "End G-code";
-    def->tooltip = "This end procedure is inserted at the end of the output file, before the printer end gcode. Note that you can use placeholder variables for all Slic3r settings. If you have multiple extruders, the gcode is processed in extruder order.";
-    def->cli = "end-filament-gcode=s@";
-    def->multiline = true;
-    def->full_width = true;
-    def->height = 120;
-    {
-        ConfigOptionStrings* opt = new ConfigOptionStrings();
-        opt->values.push_back("; Filament-specific end gcode \n;END gcode for filament\n");
-        def->default_value = opt;
-    }
-
     def = this->add("ensure_vertical_shell_thickness", coBool);
     def->label = "Ensure vertical shell thickness";
     def->category = "Layers and Perimeters";
@@ -255,19 +242,6 @@ PrintConfigDef::PrintConfigDef()
     def->cli = "extruder-clearance-radius=f";
     def->min = 0;
     def->default_value = new ConfigOptionFloat(20);
-
-    def = this->add("extruder_colour", coStrings);
-    def->label = "Extruder Color";
-    def->tooltip = "This is only used in the Slic3r interface as a visual help.";
-    def->cli = "extruder-color=s@";
-    def->gui_type = "color";
-    {
-        ConfigOptionStrings* opt = new ConfigOptionStrings();
-        // Empty string means no color assigned yet.
-//        opt->values.push_back("#FFFFFF");
-        opt->values.push_back("");
-        def->default_value = opt;
-    }
 
     def = this->add("extruder_offset", coPoints);
     def->label = "Extruder offset";
@@ -1248,19 +1222,6 @@ PrintConfigDef::PrintConfigDef()
     def->height = 120;
     def->default_value = new ConfigOptionString("G28 ; home all axes\nG1 Z5 F5000 ; lift nozzle\n");
 
-    def = this->add("start_filament_gcode", coStrings);
-    def->label = "Start G-code";
-    def->tooltip = "This start procedure is inserted at the beginning, after any printer start gcode. This is used to override settings for a specific filament. If Slic3r detects M104, M109, M140 or M190 in your custom codes, such commands will not be prepended automatically so you're free to customize the order of heating commands and other custom actions. Note that you can use placeholder variables for all Slic3r settings, so you can put a \"M109 S[first_layer_temperature]\" command wherever you want. If you have multiple extruders, the gcode is processed in extruder order.";
-    def->cli = "start-filament-gcode=s@";
-    def->multiline = true;
-    def->full_width = true;
-    def->height = 120;
-    {
-        ConfigOptionStrings* opt = new ConfigOptionStrings();
-        opt->values.push_back("; Filament gcode\n");
-        def->default_value = opt;
-    }
-
     def = this->add("single_extruder_multi_material", coBool);
     def->label = "Single Extruder Multi Material";
     def->tooltip = "The printer multiplexes filaments into a single hot end.";
@@ -1535,6 +1496,12 @@ PrintConfigDef::PrintConfigDef()
     def->label = "Use volumetric E";
     def->tooltip = "This experimental setting uses outputs the E values in cubic millimeters instead of linear millimeters. If your firmware doesn't already know filament diameter(s), you can put commands like 'M200 D[filament_diameter_0] T0' in your start G-code in order to turn volumetric mode on and use the filament diameter associated to the filament selected in Slic3r. This is only supported in recent Marlin.";
     def->cli = "use-volumetric-e!";
+    def->default_value = new ConfigOptionBool(false);
+
+    def = this->add("set_and_wait_temperatures", coBool);
+    def->label = "Use Set and Wait for changing bed temperatures";
+    def->tooltip = "Check this to change gcode for temperature changes from not waiting (usually M140) to waiting (usually M190). Only necessary if you have a slow-to-heat bed and the first layer bed temp is lower than the other layers.";
+    def->cli = "set-and-wait-temperatures!";
     def->default_value = new ConfigOptionBool(false);
 
     def = this->add("variable_layer_height", coBool);

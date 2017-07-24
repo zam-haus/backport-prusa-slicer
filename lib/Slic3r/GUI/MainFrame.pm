@@ -31,6 +31,8 @@ sub new {
     }
     
     # store input params
+    $self->{mode} = $params{mode};
+    $self->{mode} = 'expert' if $self->{mode} !~ /^(?:simple|expert)$/;
     # If set, the "Controller" tab for the control of the printer over serial line and the serial port settings are hidden.
     $self->{no_controller} = $params{no_controller};
     $self->{no_plater} = $params{no_plater};
@@ -118,21 +120,39 @@ sub _init_tabpanel {
     }
     $self->{options_tabs} = {};
     
+    my $simple_config;
+    if ($self->{mode} eq 'simple') {
+        $simple_config = Slic3r::Config->load("$Slic3r::GUI::datadir/simple.ini")
+            if -e Slic3r::encode_path("$Slic3r::GUI::datadir/simple.ini");
+    }
+    
+    my $class_prefix = $self->{mode} eq 'simple' ? "Slic3r::GUI::SimpleTab::" : "Slic3r::GUI::Tab::";
     for my $tab_name (qw(print filament printer)) {
         my $tab;
-        $tab = $self->{options_tabs}{$tab_name} = ("Slic3r::GUI::Tab::" . ucfirst $tab_name)->new(
+        $tab = $self->{options_tabs}{$tab_name} = ($class_prefix . ucfirst $tab_name)->new(
             $panel, 
             no_controller => $self->{no_controller});
         # Callback to be executed after any of the configuration fields (Perl class Slic3r::GUI::OptionsGroup::Field) change their value.
         $tab->on_value_change(sub {
-            my ($opt_key, $value) = @_;
+            my ($opt_key, $value) = @_;            
             my $config = $tab->config;
             if ($self->{plater}) {
                 $self->{plater}->on_config_change($config); # propagate config change events to the plater
                 $self->{plater}->on_extruders_change($value) if $opt_key eq 'extruders_count';
             }
-            # don't save while loading for the first time
-            $self->config->save($Slic3r::GUI::autosave) if $Slic3r::GUI::autosave && $self->{loaded};
+            if ($self->{loaded}) {  # don't save while loading for the first time
+                if ($self->{mode} eq 'simple') {
+                    # save config
+                    $self->config->save("$Slic3r::GUI::datadir/simple.ini");
+                    
+                    # save a copy into each preset section
+                    # so that user gets the config when switching to expert mode
+                    $config->save(sprintf "$Slic3r::GUI::datadir/%s/%s.ini", $tab->name, 'Simple Mode');
+                    $Slic3r::GUI::Settings->{presets}{$tab->name} = 'Simple Mode.ini';
+                    wxTheApp->save_settings;
+                }
+                $self->config->save($Slic3r::GUI::autosave) if $Slic3r::GUI::autosave;
+            }
         });
         # Install a callback for the tab to update the platter and print controller presets, when
         # a preset changes at Slic3r::GUI::Tab.
@@ -148,6 +168,7 @@ sub _init_tabpanel {
         });
         $tab->load_presets;
         $panel->AddPage($tab, $tab->title);
+        $tab->load_config($simple_config) if $simple_config;
     }
     
     if ($self->{plater}) {
@@ -181,13 +202,13 @@ sub _init_menubar {
         }, undef, 'lorry_go.png');
         $fileMenu->AppendSeparator();
         my $repeat;
-        $self->_append_menu_item($fileMenu, "Q&uick Slice…\tCtrl+U", 'Slice a file into a G-code', sub {
+        $self->_append_menu_item($fileMenu, "Q&uick Slice…\tCtrl+U", 'Slice file', sub {
             wxTheApp->CallAfter(sub {
                 $self->quick_slice;
                 $repeat->Enable(defined $Slic3r::GUI::MainFrame::last_input_file);
             });
         }, undef, 'cog_go.png');
-        $self->_append_menu_item($fileMenu, "Quick Slice and Save &As…\tCtrl+Alt+U", 'Slice a file into a G-code, save as', sub {
+        $self->_append_menu_item($fileMenu, "Quick Slice and Save &As…\tCtrl+Alt+U", 'Slice file and save as', sub {
             wxTheApp->CallAfter(sub {
                 $self->quick_slice(save_as => 1);
                 $repeat->Enable(defined $Slic3r::GUI::MainFrame::last_input_file);
@@ -200,7 +221,7 @@ sub _init_menubar {
         }, undef, 'cog_go.png');
         $repeat->Enable(0);
         $fileMenu->AppendSeparator();
-        $self->_append_menu_item($fileMenu, "Slice to SV&G…\tCtrl+G", 'Slice file to a multi-layer SVG', sub {
+        $self->_append_menu_item($fileMenu, "Slice to SV&G…\tCtrl+G", 'Slice file to SVG', sub {
             $self->quick_slice(save_as => 1, export_svg => 1);
         }, undef, 'shape_handles.png');
         $self->{menu_item_reslice_now} = $self->_append_menu_item(
@@ -235,6 +256,13 @@ sub _init_menubar {
         $self->_append_menu_item($self->{plater_menu}, "Export plate as AMF...", 'Export current plate as AMF', sub {
             $plater->export_amf;
         }, undef, 'brick_go.png');
+        $self->_append_menu_item($self->{plater_menu}, "Open DLP Projector…\tCtrl+L", 'Open projector window for DLP printing', sub {
+            my $projector = Slic3r::GUI::Projector->new($self);
+            
+            # this double invocation is needed for properly hiding the MainFrame
+            $projector->Show;
+            $projector->ShowModal;
+        }, undef, 'film.png');
         
         $self->{object_menu} = $self->{plater}->object_menu;
         $self->on_plater_selection_changed(0);
@@ -345,7 +373,6 @@ sub on_plater_selection_changed {
         for $self->{object_menu}->GetMenuItems;
 }
 
-# To perform the "Quck Slice", "Quick Slice and Save As", "Repeat last Quick Slice" and "Slice to SVG".
 sub quick_slice {
     my $self = shift;
     my %params = @_;
@@ -505,9 +532,12 @@ sub repair_stl {
 
 sub extra_variables {
     my $self = shift;
+    
     my %extra_variables = ();
-    $extra_variables{"${_}_preset"} = $self->{options_tabs}{$_}->get_current_preset->name
-        for qw(print filament printer);
+    if ($self->{mode} eq 'expert') {
+        $extra_variables{"${_}_preset"} = $self->{options_tabs}{$_}->get_current_preset->name
+            for qw(print filament printer);
+    }
     return { %extra_variables };
 }
 
@@ -543,18 +573,17 @@ sub load_config_file {
         return unless $self->check_unsaved_changes;
         my $dir = $last_config ? dirname($last_config) : $Slic3r::GUI::Settings->{recent}{config_directory} || $Slic3r::GUI::Settings->{recent}{skein_directory} || '';
         my $dlg = Wx::FileDialog->new($self, 'Select configuration to load:', $dir, "config.ini", 
-                'INI files (*.ini, *.gcode)|*.ini;*.INI;*.gcode;*.g', wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+                &Slic3r::GUI::FILE_WILDCARDS->{ini}, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         return unless $dlg->ShowModal == wxID_OK;
         $file = Slic3r::decode_path($dlg->GetPaths);
         $dlg->Destroy;
     }
-    for my $tab (values %{$self->{options_tabs}}) {
-        # Dont proceed further if the config file cannot be loaded.
-        return undef if ! $tab->load_config_file($file);
-    }
     $Slic3r::GUI::Settings->{recent}{config_directory} = dirname($file);
     wxTheApp->save_settings;
     $last_config = $file;
+    for my $tab (values %{$self->{options_tabs}}) {
+        $tab->load_config_file($file);
+    }
 }
 
 sub export_configbundle {
@@ -577,9 +606,13 @@ sub export_configbundle {
         
         # leave default category empty to prevent the bundle from being parsed as a normal config file
         my $ini = { _ => {} };
-        $ini->{settings}{$_} = $Slic3r::GUI::Settings->{_}{$_} for qw(autocenter);
+        $ini->{settings}{$_} = $Slic3r::GUI::Settings->{_}{$_} for qw(autocenter mode);
         $ini->{presets} = $Slic3r::GUI::Settings->{presets};
-
+        if (-e "$Slic3r::GUI::datadir/simple.ini") {
+            my $config = Slic3r::Config->load("$Slic3r::GUI::datadir/simple.ini");
+            $ini->{simple} = $config->as_ini->{_};
+        }
+        
         foreach my $section (qw(print filament printer)) {
             my %presets = wxTheApp->presets($section);
             foreach my $preset_name (keys %presets) {
@@ -619,7 +652,15 @@ sub load_configbundle {
         $Slic3r::GUI::Settings->{presets} = $ini->{presets};
         wxTheApp->save_settings;
     }
-
+    if ($ini->{simple}) {
+        my $config = Slic3r::Config->load_ini_hash($ini->{simple});
+        $config->save("$Slic3r::GUI::datadir/simple.ini");
+        if ($self->{mode} eq 'simple') {
+            foreach my $tab (values %{$self->{options_tabs}}) {
+                $tab->load_config($config) for values %{$self->{options_tabs}};
+            }
+        }
+    }
     my $imported = 0;
     INI_BLOCK: foreach my $ini_category (sort keys %$ini) {
         next unless $ini_category =~ /^(print|filament|printer):(.+)$/;
@@ -640,14 +681,20 @@ sub load_configbundle {
         Slic3r::debugf "Imported %s preset %s\n", $section, $preset_name;
         $imported++;
     }
-    foreach my $tab (values %{$self->{options_tabs}}) {
-        $tab->load_presets;
+    if ($self->{mode} eq 'expert') {
+        foreach my $tab (values %{$self->{options_tabs}}) {
+            $tab->load_presets;
+        }
     }
     
     return if !$imported;
     
     my $message = sprintf "%d presets successfully imported.", $imported;
-    Slic3r::GUI::show_info($self, $message);
+    if ($self->{mode} eq 'simple' && $Slic3r::GUI::Settings->{_}{mode} eq 'expert') {
+        Slic3r::GUI::show_info($self, "$message You need to restart Slic3r to make the changes effective.");
+    } else {
+        Slic3r::GUI::show_info($self, $message);
+    }
 }
 
 sub load_config {
@@ -667,12 +714,18 @@ sub config_wizard {
 
     return unless $self->check_unsaved_changes;
     if (my $config = Slic3r::GUI::ConfigWizard->new($self)->run) {
-        for my $tab (values %{$self->{options_tabs}}) {
-            $tab->select_default_preset;
+        if ($self->{mode} eq 'expert') {
+            for my $tab (values %{$self->{options_tabs}}) {
+                $tab->select_default_preset;
+            }
+        } else {
+            # TODO: select default settings in simple mode
         }
         $self->load_config($config);
-        for my $tab (values %{$self->{options_tabs}}) {
-            $tab->save_preset('My Settings');
+        if ($self->{mode} eq 'expert') {
+            for my $tab (values %{$self->{options_tabs}}) {
+                $tab->save_preset('My Settings');
+            }
         }
     }
 }
@@ -693,7 +746,7 @@ sub config {
     
     # retrieve filament presets and build a single config object for them
     my $filament_config;
-    if (!$self->{plater} || $self->{plater}->filament_presets == 1) {
+    if (!$self->{plater} || $self->{plater}->filament_presets == 1 || $self->{mode} eq 'simple') {
         $filament_config = $self->{options_tabs}{filament}->config;
     } else {
         my $i = -1;
@@ -729,15 +782,27 @@ sub config {
         $filament_config,
     );
     
-    my $extruders_count = $self->{options_tabs}{printer}{extruders_count};
-    $config->set("${_}_extruder", min($config->get("${_}_extruder"), $extruders_count))
-        for qw(perimeter infill solid_infill support_material support_material_interface);
+    if ($self->{mode} eq 'simple') {
+        # set some sensible defaults
+        $config->set('first_layer_height', $config->nozzle_diameter->[0]);
+        $config->set('avoid_crossing_perimeters', 1);
+        $config->set('infill_every_layers', 10);
+    } else {
+        my $extruders_count = $self->{options_tabs}{printer}{extruders_count};
+        $config->set("${_}_extruder", min($config->get("${_}_extruder"), $extruders_count))
+            for qw(perimeter infill solid_infill support_material support_material_interface);
+    }
     
     return $config;
 }
 
 sub filament_preset_names {
     my ($self) = @_;
+    
+    if ($self->{mode} eq 'simple') {
+        return '';
+    }
+    
     return map $self->{options_tabs}{filament}->get_preset($_)->name,
         $self->{plater}->filament_presets;
 }

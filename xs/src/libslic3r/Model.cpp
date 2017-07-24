@@ -3,24 +3,28 @@
 
 namespace Slic3r {
 
+Model::Model() {}
+
 Model::Model(const Model &other)
 {
     // copy materials
-    for (const auto &m : other.materials)
-        this->add_material(m.first, *m.second);
+    for (ModelMaterialMap::const_iterator i = other.materials.begin(); i != other.materials.end(); ++i)
+        this->add_material(i->first, *i->second);
+    
     // copy objects
     this->objects.reserve(other.objects.size());
-    for (const ModelObject *o : other.objects)
-        this->add_object(*o, true);
+    for (ModelObjectPtrs::const_iterator i = other.objects.begin(); i != other.objects.end(); ++i)
+        this->add_object(**i, true);
 }
 
-Model& Model::operator=(Model other)
+Model& Model::operator= (Model other)
 {
     this->swap(other);
     return *this;
 }
 
-void Model::swap(Model &other)
+void
+Model::swap(Model &other)
 {
     std::swap(this->materials,  other.materials);
     std::swap(this->objects,    other.objects);
@@ -32,13 +36,16 @@ Model::~Model()
     this->clear_materials();
 }
 
-ModelObject* Model::add_object()
+ModelObject*
+Model::add_object()
 {
-    this->objects.emplace_back(new ModelObject(this));
-    return this->objects.back();
+    ModelObject* new_object = new ModelObject(this);
+    this->objects.push_back(new_object);
+    return new_object;
 }
 
-ModelObject* Model::add_object(const char *name, const char *path, const TriangleMesh &mesh)
+ModelObject*
+Model::add_object(const char *name, const char *path, const TriangleMesh &mesh)
 {
     ModelObject* new_object = new ModelObject(this);
     this->objects.push_back(new_object);
@@ -50,7 +57,8 @@ ModelObject* Model::add_object(const char *name, const char *path, const Triangl
     return new_object;
 }
 
-ModelObject* Model::add_object(const char *name, const char *path, TriangleMesh &&mesh)
+ModelObject*
+Model::add_object(const char *name, const char *path, TriangleMesh &&mesh)
 {
     ModelObject* new_object = new ModelObject(this);
     this->objects.push_back(new_object);
@@ -62,28 +70,32 @@ ModelObject* Model::add_object(const char *name, const char *path, TriangleMesh 
     return new_object;
 }
 
-ModelObject* Model::add_object(const ModelObject &other, bool copy_volumes)
+ModelObject*
+Model::add_object(const ModelObject &other, bool copy_volumes)
 {
     ModelObject* new_object = new ModelObject(this, other, copy_volumes);
     this->objects.push_back(new_object);
     return new_object;
 }
 
-void Model::delete_object(size_t idx)
+void
+Model::delete_object(size_t idx)
 {
     ModelObjectPtrs::iterator i = this->objects.begin() + idx;
     delete *i;
     this->objects.erase(i);
 }
 
-void Model::clear_objects()
+void
+Model::clear_objects()
 {
-    for (ModelObject *o : this->objects)
-        delete o;
-    this->objects.clear();
+    // int instead of size_t because it can be -1 when vector is empty
+    for (int i = this->objects.size()-1; i >= 0; --i)
+        this->delete_object(i);
 }
 
-void Model::delete_material(t_model_material_id material_id)
+void
+Model::delete_material(t_model_material_id material_id)
 {
     ModelMaterialMap::iterator i = this->materials.find(material_id);
     if (i != this->materials.end()) {
@@ -92,173 +104,227 @@ void Model::delete_material(t_model_material_id material_id)
     }
 }
 
-void Model::clear_materials()
+void
+Model::clear_materials()
 {
-    for (auto &m : this->materials)
-        delete m.second;
-    this->materials.clear();
+    while (!this->materials.empty())
+        this->delete_material( this->materials.begin()->first );
 }
 
-ModelMaterial* Model::add_material(t_model_material_id material_id)
+ModelMaterial*
+Model::add_material(t_model_material_id material_id)
 {
     ModelMaterial* material = this->get_material(material_id);
-    if (material == nullptr)
+    if (material == NULL) {
         material = this->materials[material_id] = new ModelMaterial(this);
+    }
     return material;
 }
 
-ModelMaterial* Model::add_material(t_model_material_id material_id, const ModelMaterial &other)
+ModelMaterial*
+Model::add_material(t_model_material_id material_id, const ModelMaterial &other)
 {
     // delete existing material if any
     ModelMaterial* material = this->get_material(material_id);
-    delete material;
+    if (material != NULL) {
+        delete material;
+    }
+    
     // set new material
     material = new ModelMaterial(this, other);
     this->materials[material_id] = material;
     return material;
 }
 
+ModelMaterial*
+Model::get_material(t_model_material_id material_id)
+{
+    ModelMaterialMap::iterator i = this->materials.find(material_id);
+    if (i == this->materials.end()) {
+        return NULL;
+    } else {
+        return i->second;
+    }
+}
+
+bool
+Model::has_objects_with_no_instances() const
+{
+    for (ModelObjectPtrs::const_iterator i = this->objects.begin();
+        i != this->objects.end(); ++i)
+    {
+        if ((*i)->instances.empty()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // makes sure all objects have at least one instance
-bool Model::add_default_instances()
+bool
+Model::add_default_instances()
 {
     // apply a default position to all objects not having one
-    for (ModelObject *o : this->objects)
-        if (o->instances.empty())
-            o->add_instance();
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        if ((*o)->instances.empty()) {
+            (*o)->add_instance();
+        }
+    }
     return true;
 }
 
 // this returns the bounding box of the *transformed* instances
-BoundingBoxf3 Model::bounding_box()
+BoundingBoxf3
+Model::bounding_box() const
 {
     BoundingBoxf3 bb;
-    for (ModelObject *o : this->objects)
-        bb.merge(o->bounding_box());
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        bb.merge((*o)->bounding_box());
+    }
     return bb;
 }
 
-void Model::center_instances_around_point(const Pointf &point)
+void
+Model::center_instances_around_point(const Pointf &point)
 {
-//    BoundingBoxf3 bb = this->bounding_box();
-    BoundingBoxf3 bb;
-    for (ModelObject *o : this->objects)
-        for (size_t i = 0; i < o->instances.size(); ++ i)
-            bb.merge(o->instance_bounding_box(i, false));
-
+    BoundingBoxf3 bb = this->bounding_box();
+    
     Sizef3 size = bb.size();
     coordf_t shift_x = -bb.min.x + point.x - size.x/2;
     coordf_t shift_y = -bb.min.y + point.y - size.y/2;
-    for (ModelObject *o : this->objects) {
-        for (ModelInstance *i : o->instances)
-            i->offset.translate(shift_x, shift_y);
-        o->invalidate_bounding_box();
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
+            (*i)->offset.translate(shift_x, shift_y);
+        }
+        (*o)->invalidate_bounding_box();
+    }
+}
+
+void
+Model::align_instances_to_origin()
+{
+    BoundingBoxf3 bb = this->bounding_box();
+    
+    Pointf new_center = (Pointf)bb.size();
+    new_center.translate(-new_center.x/2, -new_center.y/2);
+    this->center_instances_around_point(new_center);
+}
+
+void
+Model::translate(coordf_t x, coordf_t y, coordf_t z)
+{
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        (*o)->translate(x, y, z);
     }
 }
 
 // flattens everything to a single mesh
-TriangleMesh Model::mesh() const
+TriangleMesh
+Model::mesh() const
 {
     TriangleMesh mesh;
-    for (const ModelObject *o : this->objects)
-        mesh.merge(o->mesh());
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        mesh.merge((*o)->mesh());
+    }
     return mesh;
 }
 
-static bool _arrange(const Pointfs &sizes, coordf_t dist, const BoundingBoxf* bb, Pointfs &out)
+// flattens everything to a single mesh
+TriangleMesh
+Model::raw_mesh() const
+{
+    TriangleMesh mesh;
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        mesh.merge((*o)->raw_mesh());
+    }
+    return mesh;
+}
+
+bool
+Model::_arrange(const Pointfs &sizes, coordf_t dist, const BoundingBoxf* bb, Pointfs &out) const
 {
     // we supply unscaled data to arrange()
-    bool result = Slic3r::Geometry::arrange(
+    return Slic3r::Geometry::arrange(
         sizes.size(),               // number of parts
         BoundingBoxf(sizes).max,    // width and height of a single cell
         dist,                       // distance between cells
         bb,                         // bounding box of the area to fill
         out                         // output positions
     );
-
-    if (!result && bb != nullptr) {
-        // Try to arrange again ignoring bb
-        result = Slic3r::Geometry::arrange(
-            sizes.size(),               // number of parts
-            BoundingBoxf(sizes).max,    // width and height of a single cell
-            dist,                       // distance between cells
-            nullptr,                    // bounding box of the area to fill
-            out                         // output positions
-        );
-    }
-    
-    return result;
 }
 
 /*  arrange objects preserving their instance count
     but altering their instance positions */
-bool Model::arrange_objects(coordf_t dist, const BoundingBoxf* bb)
+bool
+Model::arrange_objects(coordf_t dist, const BoundingBoxf* bb)
 {
     // get the (transformed) size of each instance so that we take
     // into account their different transformations when packing
     Pointfs instance_sizes;
-    Pointfs instance_centers;
-    for (const ModelObject *o : this->objects)
-        for (size_t i = 0; i < o->instances.size(); ++ i) {
-            // an accurate snug bounding box around the transformed mesh.
-            BoundingBoxf3 bbox(o->instance_bounding_box(i, true));
-            instance_sizes.push_back(bbox.size());
-            instance_centers.push_back(bbox.center());
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        for (size_t i = 0; i < (*o)->instances.size(); ++i) {
+            instance_sizes.push_back((*o)->instance_bounding_box(i).size());
         }
-
+    }
+    
     Pointfs positions;
-    if (! _arrange(instance_sizes, dist, bb, positions))
+    if (! this->_arrange(instance_sizes, dist, bb, positions))
         return false;
     
-	size_t idx = 0;
-	for (ModelObject *o : this->objects) {
-        for (ModelInstance *i : o->instances) {
-            i->offset = positions[idx] - instance_centers[idx];
-            ++ idx;
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
+            (*i)->offset = positions.back();
+            positions.pop_back();
         }
-        o->invalidate_bounding_box();
+        (*o)->invalidate_bounding_box();
     }
     return true;
 }
 
-// Duplicate the entire model preserving instance relative positions.
-void Model::duplicate(size_t copies_num, coordf_t dist, const BoundingBoxf* bb)
+/*  duplicate the entire model preserving instance relative positions */
+void
+Model::duplicate(size_t copies_num, coordf_t dist, const BoundingBoxf* bb)
 {
     Pointfs model_sizes(copies_num-1, this->bounding_box().size());
     Pointfs positions;
-    if (! _arrange(model_sizes, dist, bb, positions))
+    if (! this->_arrange(model_sizes, dist, bb, positions))
         CONFESS("Cannot duplicate part as the resulting objects would not fit on the print bed.\n");
     
     // note that this will leave the object count unaltered
     
-    for (ModelObject *o : this->objects) {
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
         // make a copy of the pointers in order to avoid recursion when appending their copies
-        ModelInstancePtrs instances = o->instances;
-        for (const ModelInstance *i : instances) {
-            for (const Pointf &pos : positions) {
-                ModelInstance *instance = o->add_instance(*i);
-                instance->offset.translate(pos);
+        ModelInstancePtrs instances = (*o)->instances;
+        for (ModelInstancePtrs::const_iterator i = instances.begin(); i != instances.end(); ++i) {
+            for (Pointfs::const_iterator pos = positions.begin(); pos != positions.end(); ++pos) {
+                ModelInstance* instance = (*o)->add_instance(**i);
+                instance->offset.translate(*pos);
             }
         }
-        o->invalidate_bounding_box();
+        (*o)->invalidate_bounding_box();
     }
 }
 
 /*  this will append more instances to each object
     and then automatically rearrange everything */
-void Model::duplicate_objects(size_t copies_num, coordf_t dist, const BoundingBoxf* bb)
+void
+Model::duplicate_objects(size_t copies_num, coordf_t dist, const BoundingBoxf* bb)
 {
-    for (ModelObject *o : this->objects) {
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
         // make a copy of the pointers in order to avoid recursion when appending their copies
-        ModelInstancePtrs instances = o->instances;
-        for (const ModelInstance *i : instances)
-            for (size_t k = 2; k <= copies_num; ++ k)
-                o->add_instance(*i);
+        ModelInstancePtrs instances = (*o)->instances;
+        for (ModelInstancePtrs::const_iterator i = instances.begin(); i != instances.end(); ++i) {
+            for (size_t k = 2; k <= copies_num; ++k)
+                (*o)->add_instance(**i);
+        }
     }
     
     this->arrange_objects(dist, bb);
 }
 
-void Model::duplicate_objects_grid(size_t x, size_t y, coordf_t dist)
+void
+Model::duplicate_objects_grid(size_t x, size_t y, coordf_t dist)
 {
     if (this->objects.size() > 1) throw "Grid duplication is not supported with multiple objects";
     if (this->objects.empty()) throw "No objects!";
@@ -277,8 +343,26 @@ void Model::duplicate_objects_grid(size_t x, size_t y, coordf_t dist)
     }
 }
 
-ModelObject::ModelObject(Model *model, const ModelObject &other, bool copy_volumes) :  
-    name(other.name),
+ModelMaterial::ModelMaterial(Model *model) : model(model) {}
+ModelMaterial::ModelMaterial(Model *model, const ModelMaterial &other)
+    : attributes(other.attributes), config(other.config), model(model)
+{}
+
+void
+ModelMaterial::apply(const t_model_material_attributes &attributes)
+{
+    this->attributes.insert(attributes.begin(), attributes.end());
+}
+
+
+ModelObject::ModelObject(Model *model) : 
+    model(model), 
+    _bounding_box_valid(false),
+    layer_height_profile_valid(false)
+{}
+
+ModelObject::ModelObject(Model *model, const ModelObject &other, bool copy_volumes)
+:   name(other.name),
     input_file(other.input_file),
     instances(),
     volumes(),
@@ -287,9 +371,9 @@ ModelObject::ModelObject(Model *model, const ModelObject &other, bool copy_volum
     layer_height_profile(other.layer_height_profile),
     layer_height_profile_valid(other.layer_height_profile_valid),
     origin_translation(other.origin_translation),
-    m_bounding_box(other.m_bounding_box),
-    m_bounding_box_valid(other.m_bounding_box_valid),
-    m_model(model)
+    _bounding_box(other._bounding_box),
+    _bounding_box_valid(other._bounding_box_valid),
+    model(model)
 {
     if (copy_volumes) {
         this->volumes.reserve(other.volumes.size());
@@ -308,7 +392,8 @@ ModelObject& ModelObject::operator=(ModelObject other)
     return *this;
 }
 
-void ModelObject::swap(ModelObject &other)
+void
+ModelObject::swap(ModelObject &other)
 {
     std::swap(this->input_file,             other.input_file);
     std::swap(this->instances,              other.instances);
@@ -318,8 +403,8 @@ void ModelObject::swap(ModelObject &other)
     std::swap(this->layer_height_profile,   other.layer_height_profile);
     std::swap(this->layer_height_profile_valid,    other.layer_height_profile_valid);
     std::swap(this->origin_translation,     other.origin_translation);
-    std::swap(m_bounding_box,               other.m_bounding_box);
-    std::swap(m_bounding_box_valid,         other.m_bounding_box_valid);
+    std::swap(this->_bounding_box,          other._bounding_box);
+    std::swap(this->_bounding_box_valid,    other._bounding_box_valid);
 }
 
 ModelObject::~ModelObject()
@@ -328,7 +413,8 @@ ModelObject::~ModelObject()
     this->clear_instances();
 }
 
-ModelVolume* ModelObject::add_volume(const TriangleMesh &mesh)
+ModelVolume*
+ModelObject::add_volume(const TriangleMesh &mesh)
 {
     ModelVolume* v = new ModelVolume(this, mesh);
     this->volumes.push_back(v);
@@ -336,7 +422,8 @@ ModelVolume* ModelObject::add_volume(const TriangleMesh &mesh)
     return v;
 }
 
-ModelVolume* ModelObject::add_volume(TriangleMesh &&mesh)
+ModelVolume*
+ModelObject::add_volume(TriangleMesh &&mesh)
 {
     ModelVolume* v = new ModelVolume(this, std::move(mesh));
     this->volumes.push_back(v);
@@ -344,7 +431,8 @@ ModelVolume* ModelObject::add_volume(TriangleMesh &&mesh)
     return v;
 }
 
-ModelVolume* ModelObject::add_volume(const ModelVolume &other)
+ModelVolume*
+ModelObject::add_volume(const ModelVolume &other)
 {
     ModelVolume* v = new ModelVolume(this, other);
     this->volumes.push_back(v);
@@ -352,7 +440,8 @@ ModelVolume* ModelObject::add_volume(const ModelVolume &other)
     return v;
 }
 
-void ModelObject::delete_volume(size_t idx)
+void
+ModelObject::delete_volume(size_t idx)
 {
     ModelVolumePtrs::iterator i = this->volumes.begin() + idx;
     delete *i;
@@ -360,15 +449,16 @@ void ModelObject::delete_volume(size_t idx)
     this->invalidate_bounding_box();
 }
 
-void ModelObject::clear_volumes()
+void
+ModelObject::clear_volumes()
 {
-    for (ModelVolume *v : this->volumes)
-        delete v;
-    this->volumes.clear();
-    this->invalidate_bounding_box();
+    // int instead of size_t because it can be -1 when vector is empty
+    for (int i = this->volumes.size()-1; i >= 0; --i)
+        this->delete_volume(i);
 }
 
-ModelInstance* ModelObject::add_instance()
+ModelInstance*
+ModelObject::add_instance()
 {
     ModelInstance* i = new ModelInstance(this);
     this->instances.push_back(i);
@@ -376,7 +466,8 @@ ModelInstance* ModelObject::add_instance()
     return i;
 }
 
-ModelInstance* ModelObject::add_instance(const ModelInstance &other)
+ModelInstance*
+ModelObject::add_instance(const ModelInstance &other)
 {
     ModelInstance* i = new ModelInstance(this, other);
     this->instances.push_back(i);
@@ -384,7 +475,8 @@ ModelInstance* ModelObject::add_instance(const ModelInstance &other)
     return i;
 }
 
-void ModelObject::delete_instance(size_t idx)
+void
+ModelObject::delete_instance(size_t idx)
 {
     ModelInstancePtrs::iterator i = this->instances.begin() + idx;
     delete *i;
@@ -392,93 +484,108 @@ void ModelObject::delete_instance(size_t idx)
     this->invalidate_bounding_box();
 }
 
-void ModelObject::delete_last_instance()
+void
+ModelObject::delete_last_instance()
 {
     this->delete_instance(this->instances.size() - 1);
 }
 
-void ModelObject::clear_instances()
+void
+ModelObject::clear_instances()
 {
-    for (ModelInstance *i : this->instances)
-        delete i;
-    this->instances.clear();
-    this->invalidate_bounding_box();
+    for (size_t i = 0; i < this->instances.size(); ++i)
+        this->delete_instance(i);
 }
 
-// Returns the bounding box of the transformed instances.
-// This bounding box is approximate and not snug.
-BoundingBoxf3 ModelObject::bounding_box()
+// this returns the bounding box of the *transformed* instances
+BoundingBoxf3
+ModelObject::bounding_box()
 {
-    if (! m_bounding_box_valid) {
-        BoundingBoxf3 raw_bbox;
-        for (const ModelVolume *v : this->volumes)
-            if (! v->modifier)
-                raw_bbox.merge(v->mesh.bounding_box());
-        BoundingBoxf3 bb;
-        for (const ModelInstance *i : this->instances)
-            bb.merge(i->transform_bounding_box(raw_bbox));
-        m_bounding_box = bb;
-        m_bounding_box_valid = true;
+    if (!this->_bounding_box_valid) this->update_bounding_box();
+    return this->_bounding_box;
+}
+
+void
+ModelObject::invalidate_bounding_box()
+{
+    this->_bounding_box_valid = false;
+}
+
+void
+ModelObject::update_bounding_box()
+{
+//    this->_bounding_box = this->mesh().bounding_box();
+    BoundingBoxf3 raw_bbox;
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        if ((*v)->modifier) continue;
+        raw_bbox.merge((*v)->mesh.bounding_box());
     }
-    return m_bounding_box;
+    BoundingBoxf3 bb;
+    for (ModelInstancePtrs::const_iterator i = this->instances.begin(); i != this->instances.end(); ++i)
+        bb.merge((*i)->transform_bounding_box(raw_bbox));
+    this->_bounding_box = bb;
+    this->_bounding_box_valid = true;
 }
 
-// A mesh containing all transformed instances of this object.
-TriangleMesh ModelObject::mesh() const
+// flattens all volumes and instances into a single mesh
+TriangleMesh
+ModelObject::mesh() const
 {
     TriangleMesh mesh;
     TriangleMesh raw_mesh = this->raw_mesh();
-    for (const ModelInstance *i : this->instances) {
+    
+    for (ModelInstancePtrs::const_iterator i = this->instances.begin(); i != this->instances.end(); ++i) {
         TriangleMesh m = raw_mesh;
-        i->transform_mesh(&m);
+        (*i)->transform_mesh(&m);
         mesh.merge(m);
     }
     return mesh;
 }
 
-// Non-transformed (non-rotated, non-scaled, non-translated) sum of non-modifier object volumes.
-// Currently used by ModelObject::mesh(), to calculate the 2D envelope for 2D platter
-// and to display the object statistics at ModelObject::print_info().
-TriangleMesh ModelObject::raw_mesh() const
+TriangleMesh
+ModelObject::raw_mesh() const
 {
     TriangleMesh mesh;
-    for (const ModelVolume *v : this->volumes)
-        if (! v->modifier)
-            mesh.merge(v->mesh);
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        if ((*v)->modifier) continue;
+        mesh.merge((*v)->mesh);
+    }
     return mesh;
 }
 
-// A transformed snug bounding box around the non-modifier object volumes, without the translation applied.
-// This bounding box is only used for the actual slicing.
-BoundingBoxf3 ModelObject::raw_bounding_box() const
+BoundingBoxf3
+ModelObject::raw_bounding_box() const
 {
     BoundingBoxf3 bb;
-    for (const ModelVolume *v : this->volumes)
-        if (! v->modifier) {
-            if (this->instances.empty()) CONFESS("Can't call raw_bounding_box() with no instances");
-            bb.merge(this->instances.front()->transform_mesh_bounding_box(&v->mesh, true));
-        }
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        if ((*v)->modifier) continue;
+        if (this->instances.empty()) CONFESS("Can't call raw_bounding_box() with no instances");
+        bb.merge(this->instances.front()->transform_mesh_bounding_box(&(*v)->mesh, true));
+    }
     return bb;
 }
 
-// This returns an accurate snug bounding box of the transformed object instance, without the translation applied.
-BoundingBoxf3 ModelObject::instance_bounding_box(size_t instance_idx, bool dont_translate) const
+// this returns the bounding box of the *transformed* given instance
+BoundingBoxf3
+ModelObject::instance_bounding_box(size_t instance_idx) const
 {
     BoundingBoxf3 bb;
-    for (ModelVolume *v : this->volumes)
-        if (! v->modifier)
-            bb.merge(this->instances[instance_idx]->transform_mesh_bounding_box(&v->mesh, dont_translate));
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        if ((*v)->modifier) continue;
+        bb.merge(this->instances[instance_idx]->transform_mesh_bounding_box(&(*v)->mesh, true));
+    }
     return bb;
 }
 
-void ModelObject::center_around_origin()
+void
+ModelObject::center_around_origin()
 {
     // calculate the displacements needed to 
     // center this object around the origin
 	BoundingBoxf3 bb;
-	for (ModelVolume *v : this->volumes)
-        if (! v->modifier)
-			bb.merge(v->mesh.bounding_box());
+	for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v)
+		if (! (*v)->modifier)
+			bb.merge((*v)->mesh.bounding_box());
     
     // first align to origin on XYZ
     Vectorf3 vector(-bb.min.x, -bb.min.y, -bb.min.z);
@@ -492,77 +599,98 @@ void ModelObject::center_around_origin()
     this->origin_translation.translate(vector);
     
     if (!this->instances.empty()) {
-        for (ModelInstance *i : this->instances) {
+        for (ModelInstancePtrs::const_iterator i = this->instances.begin(); i != this->instances.end(); ++i) {
             // apply rotation and scaling to vector as well before translating instance,
             // in order to leave final position unaltered
             Vectorf3 v = vector.negative();
-            v.rotate(i->rotation, i->offset);
-            v.scale(i->scaling_factor);
-            i->offset.translate(v.x, v.y);
+            v.rotate((*i)->rotation, (*i)->offset);
+            v.scale((*i)->scaling_factor);
+            (*i)->offset.translate(v.x, v.y);
         }
         this->invalidate_bounding_box();
     }
 }
 
-void ModelObject::translate(coordf_t x, coordf_t y, coordf_t z)
+void
+ModelObject::translate(const Vectorf3 &vector)
 {
-    for (ModelVolume *v : this->volumes)
-        v->mesh.translate(float(x), float(y), float(z));
-    if (m_bounding_box_valid) 
-        m_bounding_box.translate(x, y, z);
+    this->translate(vector.x, vector.y, vector.z);
 }
 
-void ModelObject::scale(const Pointf3 &versor)
+void
+ModelObject::translate(coordf_t x, coordf_t y, coordf_t z)
 {
-    for (ModelVolume *v : this->volumes)
-        v->mesh.scale(versor);
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        (*v)->mesh.translate(x, y, z);
+    }
+    if (this->_bounding_box_valid) this->_bounding_box.translate(x, y, z);
+}
+
+void
+ModelObject::scale(const Pointf3 &versor)
+{
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        (*v)->mesh.scale(versor);
+    }
+    
     // reset origin translation since it doesn't make sense anymore
     this->origin_translation = Pointf3(0,0,0);
     this->invalidate_bounding_box();
 }
 
-void ModelObject::rotate(float angle, const Axis &axis)
+void
+ModelObject::rotate(float angle, const Axis &axis)
 {
-    for (ModelVolume *v : this->volumes)
-        v->mesh.rotate(angle, axis);
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        (*v)->mesh.rotate(angle, axis);
+    }
     this->origin_translation = Pointf3(0,0,0);
     this->invalidate_bounding_box();
 }
 
-void ModelObject::mirror(const Axis &axis)
+void
+ModelObject::mirror(const Axis &axis)
 {
-    for (ModelVolume *v : this->volumes)
-        v->mesh.mirror(axis);
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        (*v)->mesh.mirror(axis);
+    }
     this->origin_translation = Pointf3(0,0,0);
     this->invalidate_bounding_box();
 }
 
-size_t ModelObject::materials_count() const
+size_t
+ModelObject::materials_count() const
 {
     std::set<t_model_material_id> material_ids;
-    for (const ModelVolume *v : this->volumes)
-        material_ids.insert(v->material_id());
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        material_ids.insert((*v)->material_id());
+    }
     return material_ids.size();
 }
 
-size_t ModelObject::facets_count() const
+size_t
+ModelObject::facets_count() const
 {
     size_t num = 0;
-    for (const ModelVolume *v : this->volumes)
-        if (! v->modifier)
-            num += v->mesh.stl.stats.number_of_facets;
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        if ((*v)->modifier) continue;
+        num += (*v)->mesh.stl.stats.number_of_facets;
+    }
     return num;
 }
 
-bool ModelObject::needed_repair() const
+bool
+ModelObject::needed_repair() const
 {
-    for (const ModelVolume *v : this->volumes)
-        if (! v->modifier && v->mesh.needed_repair())
-            return true;
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        if ((*v)->modifier) continue;
+        if ((*v)->mesh.needed_repair()) return true;
+    }
     return false;
 }
 
-void ModelObject::cut(coordf_t z, Model* model) const
+void
+ModelObject::cut(coordf_t z, Model* model) const
 {
     // clone this one to duplicate instances, materials etc.
     ModelObject* upper = model->add_object(*this);
@@ -572,7 +700,8 @@ void ModelObject::cut(coordf_t z, Model* model) const
     upper->input_file = "";
     lower->input_file = "";
     
-    for (ModelVolume *volume : this->volumes) {
+    for (ModelVolumePtrs::const_iterator v = this->volumes.begin(); v != this->volumes.end(); ++v) {
+        ModelVolume* volume = *v;
         if (volume->modifier) {
             // don't cut modifiers
             upper->add_volume(*volume);
@@ -628,7 +757,8 @@ void ModelObject::cut(coordf_t z, Model* model) const
     }
 }
 
-void ModelObject::split(ModelObjectPtrs* new_objects)
+void
+ModelObject::split(ModelObjectPtrs* new_objects)
 {
     if (this->volumes.size() > 1) {
         // We can't split meshes if there's more than one volume, because
@@ -642,7 +772,7 @@ void ModelObject::split(ModelObjectPtrs* new_objects)
     for (TriangleMeshPtrs::iterator mesh = meshptrs.begin(); mesh != meshptrs.end(); ++mesh) {
         (*mesh)->repair();
         
-        ModelObject* new_object = m_model->add_object(*this, false);
+        ModelObject* new_object = this->model->add_object(*this, false);
         new_object->input_file  = "";
         ModelVolume* new_volume = new_object->add_volume(**mesh);
         new_volume->name        = volume->name;
@@ -657,7 +787,30 @@ void ModelObject::split(ModelObjectPtrs* new_objects)
     return;
 }
 
-void ModelVolume::material_id(t_model_material_id material_id)
+
+ModelVolume::ModelVolume(ModelObject* object, const TriangleMesh &mesh)
+:   mesh(mesh), modifier(false), object(object)
+{}
+
+ModelVolume::ModelVolume(ModelObject* object, TriangleMesh &&mesh)
+:   mesh(std::move(mesh)), modifier(false), object(object)
+{}
+
+ModelVolume::ModelVolume(ModelObject* object, const ModelVolume &other)
+:   name(other.name), mesh(other.mesh), config(other.config),
+    modifier(other.modifier), object(object)
+{
+    this->material_id(other.material_id());
+}
+
+t_model_material_id
+ModelVolume::material_id() const
+{
+    return this->_material_id;
+}
+
+void
+ModelVolume::material_id(t_model_material_id material_id)
 {
     this->_material_id = material_id;
     
@@ -665,18 +818,21 @@ void ModelVolume::material_id(t_model_material_id material_id)
     (void)this->object->get_model()->add_material(material_id);
 }
 
-ModelMaterial* ModelVolume::material() const
-{ 
+ModelMaterial*
+ModelVolume::material() const
+{
     return this->object->get_model()->get_material(this->_material_id);
 }
 
-void ModelVolume::set_material(t_model_material_id material_id, const ModelMaterial &material)
+void
+ModelVolume::set_material(t_model_material_id material_id, const ModelMaterial &material)
 {
     this->_material_id = material_id;
     (void)this->object->get_model()->add_material(material_id, material);
 }
 
-ModelMaterial* ModelVolume::assign_unique_material()
+ModelMaterial*
+ModelVolume::assign_unique_material()
 {
     Model* model = this->get_object()->get_model();
     
@@ -685,37 +841,17 @@ ModelMaterial* ModelVolume::assign_unique_material()
     return model->add_material(this->_material_id);
 }
 
-// Split this volume, append the result to the object owning this volume.
-// Return the number of volumes created from this one.
-// This is useful to assign different materials to different volumes of an object.
-size_t ModelVolume::split()
-{
-    TriangleMeshPtrs meshptrs = this->mesh.split();
-    if (meshptrs.size() <= 1) {
-        delete meshptrs.front();
-        return 1;
-    }
 
-    size_t idx = 0;
-    size_t ivolume = std::find(this->object->volumes.begin(), this->object->volumes.end(), this) - this->object->volumes.begin();
-    std::string name = this->name;
-    for (TriangleMesh *mesh : meshptrs) {
-        mesh->repair();
-        if (idx == 0)
-            this->mesh = std::move(*mesh);
-        else
-            this->object->volumes.insert(this->object->volumes.begin() + (++ ivolume), new ModelVolume(object, *this, std::move(*mesh)));
-        char str_idx[64];
-        sprintf(str_idx, "_%d", idx + 1);
-        this->object->volumes[ivolume]->name = name + str_idx;
-        delete mesh;
-        ++ idx;
-    }
-    
-    return idx;
-}
+ModelInstance::ModelInstance(ModelObject *object)
+:   rotation(0), scaling_factor(1), object(object)
+{}
 
-void ModelInstance::transform_mesh(TriangleMesh* mesh, bool dont_translate) const
+ModelInstance::ModelInstance(ModelObject *object, const ModelInstance &other)
+:   rotation(other.rotation), scaling_factor(other.scaling_factor), offset(other.offset), object(object)
+{}
+
+void
+ModelInstance::transform_mesh(TriangleMesh* mesh, bool dont_translate) const
 {
     mesh->rotate_z(this->rotation);                 // rotate around mesh origin
     mesh->scale(this->scaling_factor);              // scale around mesh origin
@@ -725,7 +861,7 @@ void ModelInstance::transform_mesh(TriangleMesh* mesh, bool dont_translate) cons
 
 BoundingBoxf3 ModelInstance::transform_mesh_bounding_box(const TriangleMesh* mesh, bool dont_translate) const
 {
-    // Rotate around mesh origin.
+    // rotate around mesh origin
     double c = cos(this->rotation);
     double s = sin(this->rotation);
     BoundingBoxf3 bbox;
@@ -737,25 +873,14 @@ BoundingBoxf3 ModelInstance::transform_mesh_bounding_box(const TriangleMesh* mes
             double yold = v.y;
             v.x = float(c * xold - s * yold);
             v.y = float(s * xold + c * yold);
+            v.x *= float(this->scaling_factor);
+            v.y *= float(this->scaling_factor);
+            v.z *= float(this->scaling_factor);
+            if (!dont_translate) {
+                v.x += this->offset.x;
+                v.y += this->offset.y;
+            }
             bbox.merge(Pointf3(v.x, v.y, v.z));
-        }
-    }
-    if (! empty(bbox)) {
-        // Scale the bounding box uniformly.
-        if (std::abs(this->scaling_factor - 1.) > EPSILON) {
-            bbox.min.x *= float(this->scaling_factor);
-            bbox.min.y *= float(this->scaling_factor);
-            bbox.min.z *= float(this->scaling_factor);
-            bbox.max.x *= float(this->scaling_factor);
-            bbox.max.y *= float(this->scaling_factor);
-            bbox.max.z *= float(this->scaling_factor);
-        }
-        // Translate the bounding box.
-        if (! dont_translate) {
-            bbox.min.x += float(this->offset.x);
-            bbox.min.y += float(this->offset.y);
-            bbox.max.x += float(this->offset.x);
-            bbox.max.y += float(this->offset.y);
         }
     }
     return bbox;
@@ -782,7 +907,7 @@ BoundingBoxf3 ModelInstance::transform_bounding_box(const BoundingBoxf3 &bbox, b
         v.x *= this->scaling_factor;
         v.y *= this->scaling_factor;
         v.z *= this->scaling_factor;
-        if (! dont_translate) {
+        if (!dont_translate) {
             v.x += this->offset.x;
             v.y += this->offset.y;
         }
@@ -791,7 +916,8 @@ BoundingBoxf3 ModelInstance::transform_bounding_box(const BoundingBoxf3 &bbox, b
     return out;
 }
 
-void ModelInstance::transform_polygon(Polygon* polygon) const
+void
+ModelInstance::transform_polygon(Polygon* polygon) const
 {
     polygon->rotate(this->rotation);                // rotate around polygon origin
     polygon->scale(this->scaling_factor);           // scale around polygon origin

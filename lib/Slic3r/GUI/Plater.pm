@@ -10,10 +10,10 @@ use List::Util qw(sum first max);
 use Slic3r::Geometry qw(X Y Z MIN MAX scale unscale deg2rad rad2deg);
 use LWP::UserAgent;
 use threads::shared qw(shared_clone);
-use Wx qw(:button :colour :cursor :dialog :filedialog :keycode :icon :font :id :listctrl :misc 
+use Wx qw(:button :cursor :dialog :filedialog :keycode :icon :font :id :listctrl :misc 
     :panel :sizer :toolbar :window wxTheApp :notebook :combobox wxNullBitmap);
 use Wx::Event qw(EVT_BUTTON EVT_TOGGLEBUTTON EVT_COMMAND EVT_KEY_DOWN EVT_LIST_ITEM_ACTIVATED 
-    EVT_LIST_ITEM_DESELECTED EVT_LIST_ITEM_SELECTED EVT_LEFT_DOWN EVT_MOUSE_EVENTS EVT_PAINT EVT_TOOL 
+    EVT_LIST_ITEM_DESELECTED EVT_LIST_ITEM_SELECTED EVT_MOUSE_EVENTS EVT_PAINT EVT_TOOL 
     EVT_CHOICE EVT_COMBOBOX EVT_TIMER EVT_NOTEBOOK_PAGE_CHANGED);
 use base 'Wx::Panel';
 
@@ -34,6 +34,7 @@ use constant TB_SETTINGS => &Wx::NewId;
 use constant TB_LAYER_EDITING => &Wx::NewId;
 
 # package variables to avoid passing lexicals to threads
+our $THUMBNAIL_DONE_EVENT    : shared = Wx::NewEventType;
 our $PROGRESS_BAR_EVENT      : shared = Wx::NewEventType;
 our $ERROR_EVENT             : shared = Wx::NewEventType;
 # Emitted from the worker thread when the G-code export is finished.
@@ -53,7 +54,7 @@ sub new {
         bed_shape complete_objects extruder_clearance_radius skirts skirt_distance brim_width variable_layer_height
         serial_port serial_speed octoprint_host octoprint_apikey
         nozzle_diameter single_extruder_multi_material 
-        wipe_tower wipe_tower_x wipe_tower_y wipe_tower_width wipe_tower_per_color_wipe extruder_colour filament_colour
+        wipe_tower wipe_tower_x wipe_tower_y wipe_tower_width wipe_tower_per_color_wipe 
     ));
     # C++ Slic3r::Model with Perl extensions in Slic3r/Model.pm
     $self->{model} = Slic3r::Model->new;
@@ -115,7 +116,8 @@ sub new {
         });
         $self->{canvas3D}->set_on_model_update(sub {
             if ($Slic3r::GUI::Settings->{_}{background_processing}) {
-                $self->schedule_background_process;
+                $self->{apply_config_timer}->Stop if defined $self->{apply_config_timer};
+                $self->async_apply_config();
             } else {
                 # Hide the print info box, it is no more valid.
                 $self->{"print_info_box_show"}->(0);
@@ -136,7 +138,7 @@ sub new {
     
     # Initialize 3D toolpaths preview
     if ($Slic3r::GUI::have_OpenGL) {
-        $self->{preview3D} = Slic3r::GUI::Plater::3DPreview->new($self->{preview_notebook}, $self->{print}, $self->{config});
+        $self->{preview3D} = Slic3r::GUI::Plater::3DPreview->new($self->{preview_notebook}, $self->{print});
         $self->{preview3D}->canvas->on_viewport_changed(sub {
             $self->{canvas3D}->set_viewport_from_scene($self->{preview3D}->canvas);
         });
@@ -151,9 +153,9 @@ sub new {
     }
     
     EVT_NOTEBOOK_PAGE_CHANGED($self, $self->{preview_notebook}, sub {
-        my $preview = $self->{preview_notebook}->GetCurrentPage;
-        $self->{preview3D}->load_print(1) if ($preview == $self->{preview3D});
-        $preview->OnActivate if $preview->can('OnActivate');
+        if ($self->{preview_notebook}->GetSelection == $self->{preview3D_page_idx}) {
+            $self->{preview3D}->load_print;
+        }
     });
     
     # toolbar for object manipulation
@@ -306,6 +308,14 @@ sub new {
         for grep defined($_),
             $self, $self->{canvas}, $self->{canvas3D}, $self->{preview3D}, $self->{list};
     
+    EVT_COMMAND($self, -1, $THUMBNAIL_DONE_EVENT, sub {
+        my ($self, $event) = @_;
+        my ($obj_idx) = @{$event->GetData};
+        return if !$self->{objects}[$obj_idx];  # object was deleted before thumbnail generation completed
+        
+        $self->on_thumbnail_made($obj_idx);
+    });
+    
     EVT_COMMAND($self, -1, $PROGRESS_BAR_EVENT, sub {
         my ($self, $event) = @_;
         my ($percent, $message) = @{$event->GetData};
@@ -348,7 +358,7 @@ sub new {
     
     {
         my $presets;
-        {
+        if ($self->GetFrame->{mode} eq 'expert') {
             $presets = $self->{presets_sizer} = Wx::FlexGridSizer->new(3, 2, 1, 2);
             $presets->AddGrowableCol(1, 1);
             $presets->SetFlexibleDirection(wxHORIZONTAL);
@@ -368,7 +378,6 @@ sub new {
                 my $text = Wx::StaticText->new($self, -1, "$group_labels{$group}:", wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
                 $text->SetFont($Slic3r::GUI::small_font);
                 my $choice = Wx::BitmapComboBox->new($self, -1, "", wxDefaultPosition, wxDefaultSize, [], wxCB_READONLY);
-                EVT_LEFT_DOWN($choice, sub { $self->filament_color_box_lmouse_down(0, @_); } );
                 $self->{preset_choosers}{$group} = [$choice];
                 $self->{preset_choosers_default_suppressed}{$group} = 0;
                 # setup the listener
@@ -515,12 +524,12 @@ sub _on_select_preset {
 		$Slic3r::GUI::Settings->{presets}{"filament_${_}"} = $choice->GetString($filament_presets[$_] - $default_suppressed)
 			for 1 .. $#filament_presets;
 		wxTheApp->save_settings;
-        $self->update_filament_colors_preview($choice);
-	} else {
-    	# call GetSelection() in scalar context as it's context-aware
-    	$self->{on_select_preset}->($group, scalar($choice->GetSelection) + $default_suppressed)
-    	    if $self->{on_select_preset};
-    }
+		return;
+	}
+	
+	# call GetSelection() in scalar context as it's context-aware
+	$self->{on_select_preset}->($group, scalar($choice->GetSelection) + $default_suppressed)
+	    if $self->{on_select_preset};
 	
 	# get new config and generate on_config_change() event for updating plater and other things
 	$self->on_config_change($self->GetFrame->config);
@@ -575,7 +584,6 @@ sub update_presets {
     my ($group, $presets, $default_suppressed, $selected, $is_dirty) = @_;
     
     my @choosers = @{ $self->{preset_choosers}{$group} };
-    my $choice_idx = 0;
     foreach my $choice (@choosers) {
         if ($group eq 'filament' && @choosers > 1) {
             # if we have more than one filament chooser, keep our selection
@@ -588,7 +596,17 @@ sub update_presets {
             next if ($preset->default && $default_suppressed);
             my $bitmap;
             if ($group eq 'filament') {
-                $bitmap = Wx::Bitmap->new($Slic3r::var->("spool.png"), wxBITMAP_TYPE_PNG);
+                my $config = $preset->config(['filament_colour']);
+                my $rgb_hex = $config->filament_colour->[0];
+                if ($preset->default) {
+                    $bitmap = Wx::Bitmap->new($Slic3r::var->("spool.png"), wxBITMAP_TYPE_PNG);
+                } else {
+                    $rgb_hex =~ s/^#//;
+                    my @rgb = unpack 'C*', pack 'H*', $rgb_hex;
+                    my $image = Wx::Image->new(16,16);
+                    $image->SetRGB(Wx::Rect->new(0,0,16,16), @rgb);
+                    $bitmap = Wx::Bitmap->new($image);
+                }
             } elsif ($group eq 'print') {
                 $bitmap = Wx::Bitmap->new($Slic3r::var->("cog.png"), wxBITMAP_TYPE_PNG);
             } elsif ($group eq 'printer') {
@@ -608,77 +626,9 @@ sub update_presets {
                 $choice->SetSelection($idx);
             }
         }
-        $choice_idx += 1;
     }
 
     $self->{preset_choosers_default_suppressed}{$group} = $default_suppressed;
-
-    wxTheApp->CallAfter(sub { $self->update_filament_colors_preview }) if $group eq 'filament' || $group eq 'printer';
-}
-
-# Update the color icon in front of each filament selection on the platter.
-# If the extruder has a preview color assigned, apply the extruder color to the active selection.
-# Always apply the filament color to the non-active selections.
-sub update_filament_colors_preview {
-    my ($self, $extruder_idx) = shift;
-
-    my @choosers = @{$self->{preset_choosers}{filament}};
-
-    if (ref $extruder_idx) {
-        # $extruder_idx is the chooser.
-        foreach my $chooser (@choosers) {
-            if ($extruder_idx == $chooser) {
-                $extruder_idx = $chooser;
-                last;
-            }
-        }
-    }
-
-    my @extruder_colors = @{$self->{config}->extruder_colour};
-
-    my @extruder_list;
-    if (defined $extruder_idx) {
-        @extruder_list = ($extruder_idx);
-    } else {
-        # Collect extruder indices.
-        @extruder_list = (0..$#extruder_colors);
-    }
-
-    my $filament_tab       = $self->GetFrame->{options_tabs}{filament};
-    my $presets            = $filament_tab->{presets};
-    my $default_suppressed = $filament_tab->{default_suppressed};
-
-    foreach my $extruder_idx (@extruder_list) {
-        my $chooser = $choosers[$extruder_idx];
-        my $extruder_color = $self->{config}->extruder_colour->[$extruder_idx];
-        my $preset_idx = 0;
-        my $selection_idx = $chooser->GetSelection;
-        foreach my $preset (@$presets) {
-            my $bitmap;
-            if ($preset->default) {
-                next if $default_suppressed;
-            } else {
-                # Assign an extruder color to the selected item if the extruder color is defined.
-                my $filament_rgb = $preset->config(['filament_colour'])->filament_colour->[0];
-                my $extruder_rgb = ($preset_idx == $selection_idx && $extruder_color =~ m/^#[[:xdigit:]]{6}/) ? $extruder_color : $filament_rgb;
-                $filament_rgb =~ s/^#//;
-                $extruder_rgb =~ s/^#//;
-                my $image = Wx::Image->new(24,16);
-                if ($filament_rgb ne $extruder_rgb) {
-                    my @rgb = unpack 'C*', pack 'H*', $extruder_rgb;
-                    $image->SetRGB(Wx::Rect->new(0,0,16,16), @rgb);
-                    @rgb = unpack 'C*', pack 'H*', $filament_rgb;
-                    $image->SetRGB(Wx::Rect->new(16,0,8,16), @rgb);
-                } else {
-                    my @rgb = unpack 'C*', pack 'H*', $filament_rgb;
-                    $image->SetRGB(Wx::Rect->new(0,0,24,16), @rgb);
-                }
-                $bitmap = Wx::Bitmap->new($image);
-            }
-            $chooser->SetItemBitmap($preset_idx, $bitmap) if $bitmap;
-            $preset_idx += 1;
-        }
-    }
 }
 
 # Return a vector of indices of filaments selected by the $self->{preset_choosers}{filament} combo boxes.
@@ -707,7 +657,7 @@ sub load_file {
     
     local $SIG{__WARN__} = Slic3r::GUI::warning_catcher($self);
     
-    my $model = eval { Slic3r::Model->read_from_file($input_file, 0) };
+    my $model = eval { Slic3r::Model->read_from_file($input_file) };
     Slic3r::GUI::show_error($self, $@) if $@;
     
     my @obj_idx = ();
@@ -794,7 +744,7 @@ sub load_model_objects {
         $self->{list}->SetItem($obj_idx, 1, $model_object->instances_count);
         $self->{list}->SetItem($obj_idx, 2, ($model_object->instances->[0]->scaling_factor * 100) . "%");
     
-        $self->reset_thumbnail($obj_idx);
+        $self->make_thumbnail($obj_idx);
     }
     $self->arrange if $need_arrange;
     $self->update;
@@ -893,9 +843,9 @@ sub increase {
 }
 
 sub decrease {
-    my ($self, $copies_asked) = @_;
+    my ($self, $copies) = @_;
     
-    my $copies = $copies_asked // 1;
+    $copies //= 1;
     $self->stop_background_process;
     
     my ($obj_idx, $object) = $self->selected_object;
@@ -906,13 +856,8 @@ sub decrease {
             $self->{print}->objects->[$obj_idx]->delete_last_copy;
         }
         $self->{list}->SetItem($obj_idx, 1, $model_object->instances_count);
-    } elsif (defined $copies_asked) {
-        # The "decrease" came from the "set number of copies" dialog.
-        $self->remove;
     } else {
-        # The "decrease" came from the "-" button. Don't allow the object to disappear.
-        $self->resume_background_process;
-        return;
+        $self->remove;
     }
     
     if ($self->{objects}[$obj_idx]) {
@@ -979,7 +924,10 @@ sub rotate {
     
     my $model_object = $self->{model}->objects->[$obj_idx];
     my $model_instance = $model_object->instances->[0];
-        
+    
+    # we need thumbnail to be computed before allowing rotation
+    return if !$object->thumbnail;
+    
     if (!defined $angle) {
         my $axis_name = $axis == X ? 'X' : $axis == Y ? 'Y' : 'Z';
         my $default = $axis == Z ? rad2deg($model_instance->rotation) : 0;
@@ -1004,9 +952,10 @@ sub rotate {
         
         # realign object to Z = 0
         $model_object->center_around_origin;
-        $self->reset_thumbnail($obj_idx);
+        $self->make_thumbnail($obj_idx);
     }
     
+    $model_object->update_bounding_box;
     # update print and start background processing
     $self->{print}->add_model_object($model_object, $obj_idx);
     
@@ -1031,10 +980,11 @@ sub mirror {
     }
     
     $model_object->mirror($axis);
+    $model_object->update_bounding_box;
     
     # realign object to Z = 0
     $model_object->center_around_origin;
-    $self->reset_thumbnail($obj_idx);
+    $self->make_thumbnail($obj_idx);
         
     # update print and start background processing
     $self->stop_background_process;
@@ -1053,6 +1003,9 @@ sub changescale {
     
     my $model_object = $self->{model}->objects->[$obj_idx];
     my $model_instance = $model_object->instances->[0];
+    
+    # we need thumbnail to be computed before allowing scaling
+    return if !$object->thumbnail;
     
     my $object_size = $model_object->bounding_box->size;
     my $bed_size = Slic3r::Polygon->new_scale(@{$self->{config}->bed_shape})->bounding_box->size;
@@ -1084,7 +1037,7 @@ sub changescale {
         #FIXME Scale the layer height profile when $axis == Z?
         #FIXME Scale the layer height ranges $axis == Z?
         # object was already aligned to Z = 0, so no need to realign it
-        $self->reset_thumbnail($obj_idx);
+        $self->make_thumbnail($obj_idx);
     } else {
         my $scale;
         if ($tosize) {
@@ -1110,6 +1063,7 @@ sub changescale {
         $_->set_scaling_factor($scale) for @{ $model_object->instances };
         $object->transform_thumbnail($self->{model}, $obj_idx);
     }
+    $model_object->update_bounding_box;
     
     # update print and start background processing
     $self->stop_background_process;
@@ -1130,7 +1084,6 @@ sub arrange {
     # ignore arrange failures on purpose: user has visual feedback and we don't need to warn him
     # when parts don't fit in print bed
     
-    # Force auto center of the aligned grid of of objects on the print bed.
     $self->update(1);
 }
 
@@ -1190,7 +1143,11 @@ sub schedule_background_process {
 # The timer is started by schedule_background_process(), 
 sub async_apply_config {
     my ($self) = @_;
-
+    
+    # reset preview canvases
+    $self->{toolpaths2D}->reload_print if $self->{toolpaths2D};
+    $self->{preview3D}->reload_print if $self->{preview3D};
+    
     # pause process thread before applying new config
     # since we don't want to touch data that is being used by the threads
     $self->pause_background_process;
@@ -1198,30 +1155,23 @@ sub async_apply_config {
     # apply new config
     my $invalidated = $self->{print}->apply_config($self->GetFrame->config);
 
-    # Just redraw the 3D canvas without reloading the scene.
 #    $self->{canvas3D}->Refresh if ($invalidated && $self->{canvas3D}->layer_editing_enabled);
     $self->{canvas3D}->Refresh if ($self->{canvas3D}->layer_editing_enabled);
 
     # Hide the slicing results if the current slicing status is no more valid.    
     $self->{"print_info_box_show"}->(0) if $invalidated;
 
-    if ($Slic3r::GUI::Settings->{_}{background_processing}) {    
-        if ($invalidated) {
-            # kill current thread if any
-            $self->stop_background_process;
-        } else {
-            $self->resume_background_process;
-        }
-        # schedule a new process thread in case it wasn't running
-        $self->start_background_process;
-    }
-
-    # Reset preview canvases. If the print has been invalidated, the preview canvases will be cleared.
-    # Otherwise they will be just refreshed.
+    return if !$Slic3r::GUI::Settings->{_}{background_processing};
+    
     if ($invalidated) {
-        $self->{toolpaths2D}->reload_print if $self->{toolpaths2D};
-        $self->{preview3D}->reload_print if $self->{preview3D};
+        # kill current thread if any
+        $self->stop_background_process;
+    } else {
+        $self->resume_background_process;
     }
+    
+    # schedule a new process thread in case it wasn't running
+    $self->start_background_process;
 }
 
 sub start_background_process {
@@ -1604,6 +1554,12 @@ sub reload_from_disk {
     }
     
     $self->remove($obj_idx);
+    
+    # Trigger thumbnail generation again, because the remove() method altered
+    # object indexes before background thumbnail generation called its completion
+    # event, so the on_thumbnail_made callback is called with the wrong $obj_idx.
+    # When porting to C++ we'll probably have cleaner ways to do this.
+    $self->make_thumbnail($_-1) for @new_obj_idx;
 }
 
 sub export_object_stl {
@@ -1651,9 +1607,36 @@ sub _get_export_file {
     return $output_file;
 }
 
-sub reset_thumbnail {
-    my ($self, $obj_idx) = @_;
-    $self->{objects}[$obj_idx]->thumbnail(undef);
+sub make_thumbnail {
+    my $self = shift;
+    my ($obj_idx) = @_;
+    
+    my $plater_object = $self->{objects}[$obj_idx];
+    $plater_object->thumbnail(Slic3r::ExPolygon::Collection->new);
+    my $cb = sub {
+        $plater_object->make_thumbnail($self->{model}, $obj_idx);
+        
+        if ($Slic3r::have_threads) {
+            Wx::PostEvent($self, Wx::PlThreadEvent->new(-1, $THUMBNAIL_DONE_EVENT, shared_clone([ $obj_idx ])));
+            Slic3r::thread_cleanup();
+            threads->exit;
+        } else {
+            $self->on_thumbnail_made($obj_idx);
+        }
+    };
+    
+    @_ = ();
+    $Slic3r::have_threads
+        ? threads->create(sub { $cb->(); Slic3r::thread_cleanup(); })->detach
+        : $cb->();
+}
+
+sub on_thumbnail_made {
+    my $self = shift;
+    my ($obj_idx) = @_;
+    
+    $self->{objects}[$obj_idx]->transform_thumbnail($self->{model}, $obj_idx);
+    $self->refresh_canvases;
 }
 
 # this method gets called whenever print center is changed or the objects' bounding box changes
@@ -1677,10 +1660,8 @@ sub update {
     } else {
         $self->resume_background_process;
     }
-
-    $self->{canvas}->reload_scene if $self->{canvas};
-    $self->{canvas3D}->reload_scene if $self->{canvas3D};
-    $self->{preview3D}->reload_print if $self->{preview3D};
+    
+    $self->refresh_canvases;
 }
 
 # When a number of extruders changes, the UI needs to be updated to show a single filament selection combo box per extruder.
@@ -1694,8 +1675,6 @@ sub on_extruders_change {
         
         # initialize new choice
         my $choice = Wx::BitmapComboBox->new($self, -1, "", wxDefaultPosition, wxDefaultSize, [@presets], wxCB_READONLY);
-        my $extruder_idx = scalar @$choices;
-        EVT_LEFT_DOWN($choice, sub { $self->filament_color_box_lmouse_down($extruder_idx, @_); } );
         push @$choices, $choice;
         
         # copy icons from first choice
@@ -1744,10 +1723,18 @@ sub on_config_change {
         } elsif ($opt_key =~ '^wipe_tower' || $opt_key eq 'single_extruder_multi_material') {
             $update_scheduled = 1;
         } elsif ($opt_key eq 'serial_port') {
-            $self->{btn_print}->Show($config->get('serial_port'));
+            if ($config->get('serial_port')) {
+                $self->{btn_print}->Show;
+            } else {
+                $self->{btn_print}->Hide;
+            }
             $self->Layout;
         } elsif ($opt_key eq 'octoprint_host') {
-            $self->{btn_send_gcode}->Show($config->get('octoprint_host'));
+            if ($config->get('octoprint_host')) {
+                $self->{btn_send_gcode}->Show;
+            } else {
+                $self->{btn_send_gcode}->Hide;
+            }
             $self->Layout;
         } elsif ($opt_key eq 'variable_layer_height') {
             if ($config->get('variable_layer_height') != 1) {
@@ -1769,10 +1756,6 @@ sub on_config_change {
                     $self->{"btn_layer_editing"}->Enable;
                 }
             }
-        } elsif ($opt_key eq 'extruder_colour') {
-            $update_scheduled = 1;
-            my $extruder_colors = $config->get('extruder_colour');
-            $self->{preview3D}->set_number_extruders(scalar(@{$extruder_colors}));
         }
     }
 
@@ -1790,9 +1773,7 @@ sub list_item_deselected {
     
     if ($self->{list}->GetFirstSelected == -1) {
         $self->select_object(undef);
-        $self->{canvas}->Refresh;
-        #FIXME VBOs are being refreshed just to change a selection color?
-        $self->{canvas3D}->reload_scene if $self->{canvas3D};
+        $self->refresh_canvases;
     }
 }
 
@@ -1802,9 +1783,7 @@ sub list_item_selected {
     
     my $obj_idx = $event->GetIndex;
     $self->select_object($obj_idx);
-    $self->{canvas}->Refresh;
-    #FIXME VBOs are being refreshed just to change a selection color?
-    $self->{canvas3D}->reload_scene if $self->{canvas3D};
+    $self->refresh_canvases;
 }
 
 sub list_item_activated {
@@ -1812,33 +1791,6 @@ sub list_item_activated {
     
     $obj_idx //= $event->GetIndex;
 	$self->object_settings_dialog($obj_idx);
-}
-
-# Called when clicked on the filament preset combo box.
-# When clicked on the icon, show the color picker.
-sub filament_color_box_lmouse_down
-{
-    my ($self, $extruder_idx, $combobox, $event) = @_;
-    my $pos = $event->GetLogicalPosition(Wx::ClientDC->new($combobox));
-    my( $x, $y ) = ( $pos->x, $pos->y );
-    if ($x > 24) {
-        # Let the combo box process the mouse click.
-        $event->Skip;
-    } else {
-        # Swallow the mouse click and open the color picker.
-        my $data = Wx::ColourData->new;
-        $data->SetChooseFull(1);
-        my $dialog = Wx::ColourDialog->new($self->GetFrame, $data);
-        if ($dialog->ShowModal == wxID_OK) {
-            my $cfg = Slic3r::Config->new;
-            my $colors = $self->GetFrame->config->get('extruder_colour');
-            $colors->[$extruder_idx] = $dialog->GetColourData->GetColour->GetAsString(wxC2S_HTML_SYNTAX);
-            $cfg->set('extruder_colour', $colors);
-            $self->GetFrame->{options_tabs}{printer}->load_config($cfg);
-            $self->update_filament_colors_preview($extruder_idx);
-        }
-        $dialog->Destroy();
-    }
 }
 
 sub object_cut_dialog {
@@ -1893,7 +1845,7 @@ sub object_settings_dialog {
     if ($dlg->PartsChanged) {
 	    # recenter and re-align to Z = 0
 	    $model_object->center_around_origin;
-        $self->reset_thumbnail($obj_idx);
+        $self->make_thumbnail($obj_idx);
     }
 	
 	# update print
@@ -1901,8 +1853,6 @@ sub object_settings_dialog {
 	    $self->stop_background_process;
         $self->{print}->reload_object($obj_idx);
         $self->schedule_background_process;
-        $self->{canvas}->reload_scene if $self->{canvas};
-        $self->{canvas3D}->reload_scene if $self->{canvas3D};
     } else {
         $self->resume_background_process;
     }
@@ -2016,6 +1966,14 @@ sub selected_object {
     my $obj_idx = first { $self->{objects}[$_]->selected } 0..$#{ $self->{objects} };
     return undef if !defined $obj_idx;
     return ($obj_idx, $self->{objects}[$obj_idx]),
+}
+
+sub refresh_canvases {
+    my ($self) = @_;
+    
+    $self->{canvas}->Refresh;
+    $self->{canvas3D}->reload_scene if $self->{canvas3D};
+    $self->{preview3D}->reload_print if $self->{preview3D};
 }
 
 sub validate_config {
@@ -2196,21 +2154,19 @@ sub make_thumbnail {
     # make method idempotent
     $self->thumbnail->clear;
     
-    # raw_mesh is the non-transformed (non-rotated, non-scaled, non-translated) sum of non-modifier object volumes.
     my $mesh = $model->objects->[$obj_idx]->raw_mesh;
-#FIXME The "correct" variant could be extremely slow.
-#    if ($mesh->facets_count <= 5000) {
-#        # remove polygons with area <= 1mm
-#        my $area_threshold = Slic3r::Geometry::scale 1;
-#        $self->thumbnail->append(
-#            grep $_->area >= $area_threshold,
-#            @{ $mesh->horizontal_projection },   # horizontal_projection returns scaled expolygons
-#        );
-#        $self->thumbnail->simplify(0.5);
-#    } else {
+    if ($mesh->facets_count <= 5000) {
+        # remove polygons with area <= 1mm
+        my $area_threshold = Slic3r::Geometry::scale 1;
+        $self->thumbnail->append(
+            grep $_->area >= $area_threshold,
+            @{ $mesh->horizontal_projection },   # horizontal_projection returns scaled expolygons
+        );
+        $self->thumbnail->simplify(0.5);
+    } else {
         my $convex_hull = Slic3r::ExPolygon->new($mesh->convex_hull);
         $self->thumbnail->append($convex_hull);
-#    }
+    }
     
     return $self->thumbnail;
 }

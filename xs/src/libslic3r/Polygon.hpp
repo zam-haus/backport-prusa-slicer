@@ -51,8 +51,6 @@ public:
     std::string wkt() const;
     Points concave_points(double angle = PI) const;
     Points convex_points(double angle = PI) const;
-    // Projection of a point onto the polygon.
-    Point point_projection(const Point &point) const;
 };
 
 extern BoundingBox get_extents(const Polygon &poly);
@@ -91,10 +89,8 @@ inline void        polygons_append(Polygons &dst, Polygons &&src)
 
 inline void polygons_rotate(Polygons &polys, double angle)
 {
-    const double cos_angle = cos(angle);
-    const double sin_angle = sin(angle);
-    for (Polygon &p : polys)
-        p.rotate(cos_angle, sin_angle);
+    for (Polygons::iterator p = polys.begin(); p != polys.end(); ++p)
+        p->rotate(angle);
 }
 
 inline Points to_points(const Polygon &poly)

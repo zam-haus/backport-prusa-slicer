@@ -26,23 +26,23 @@ extern bool unescape_strings_cstyle(const std::string &str, std::vector<std::str
 
 // A generic value of a configuration option.
 class ConfigOption {
-public:
+    public:
     virtual ~ConfigOption() {};
     virtual std::string serialize() const = 0;
-    virtual bool deserialize(const std::string &str, bool append = false) = 0;
+    virtual bool deserialize(std::string str) = 0;
     virtual void set(const ConfigOption &option) = 0;
     virtual int getInt() const { return 0; };
     virtual double getFloat() const { return 0; };
     virtual bool getBool() const { return false; };
     virtual void setInt(int /* val */) { };
-    bool operator==(const ConfigOption &rhs) { return this->serialize().compare(rhs.serialize()) == 0; }
-    bool operator!=(const ConfigOption &rhs) { return this->serialize().compare(rhs.serialize()) != 0; }
+    friend bool operator== (const ConfigOption &a, const ConfigOption &b);
+    friend bool operator!= (const ConfigOption &a, const ConfigOption &b);
 };
 
 // Value of a single valued option (bool, int, float, string, point, enum)
 template <class T>
 class ConfigOptionSingle : public ConfigOption {
-public:
+    public:
     T value;
     ConfigOptionSingle(T _value) : value(_value) {};
     operator T() const { return this->value; };
@@ -55,7 +55,7 @@ public:
 
 // Value of a vector valued option (bools, ints, floats, strings, points)
 class ConfigOptionVectorBase : public ConfigOption {
-public:
+    public:
     virtual ~ConfigOptionVectorBase() {};
     // Currently used only to initialize the PlaceholderParser.
     virtual std::vector<std::string> vserialize() const = 0;
@@ -65,7 +65,7 @@ public:
 template <class T>
 class ConfigOptionVector : public ConfigOptionVectorBase
 {
-public:
+    public:
     virtual ~ConfigOptionVector() {};
     std::vector<T> values;
     
@@ -82,7 +82,7 @@ public:
 
 class ConfigOptionFloat : public ConfigOptionSingle<double>
 {
-public:
+    public:
     ConfigOptionFloat() : ConfigOptionSingle<double>(0) {};
     ConfigOptionFloat(double _value) : ConfigOptionSingle<double>(_value) {};
     
@@ -94,7 +94,7 @@ public:
         return ss.str();
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         std::istringstream iss(str);
         iss >> this->value;
         return !iss.fail();
@@ -103,7 +103,8 @@ public:
 
 class ConfigOptionFloats : public ConfigOptionVector<double>
 {
-public:
+    public:
+    
     std::string serialize() const {
         std::ostringstream ss;
         for (std::vector<double>::const_iterator it = this->values.begin(); it != this->values.end(); ++it) {
@@ -124,9 +125,8 @@ public:
         return vv;
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
-        if (! append)
-            this->values.clear();
+    bool deserialize(std::string str) {
+        this->values.clear();
         std::istringstream is(str);
         std::string item_str;
         while (std::getline(is, item_str, ',')) {
@@ -141,7 +141,7 @@ public:
 
 class ConfigOptionInt : public ConfigOptionSingle<int>
 {
-public:
+    public:
     ConfigOptionInt() : ConfigOptionSingle<int>(0) {};
     ConfigOptionInt(double _value) : ConfigOptionSingle<int>(int(floor(_value + 0.5))) {};
     
@@ -154,7 +154,7 @@ public:
         return ss.str();
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         std::istringstream iss(str);
         iss >> this->value;
         return !iss.fail();
@@ -163,7 +163,8 @@ public:
 
 class ConfigOptionInts : public ConfigOptionVector<int>
 {
-public:
+    public:
+    
     std::string serialize() const {
         std::ostringstream ss;
         for (std::vector<int>::const_iterator it = this->values.begin(); it != this->values.end(); ++it) {
@@ -184,9 +185,8 @@ public:
         return vv;
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
-        if (! append)
-            this->values.clear();
+    bool deserialize(std::string str) {
+        this->values.clear();
         std::istringstream is(str);
         std::string item_str;
         while (std::getline(is, item_str, ',')) {
@@ -201,7 +201,7 @@ public:
 
 class ConfigOptionString : public ConfigOptionSingle<std::string>
 {
-public:
+    public:
     ConfigOptionString() : ConfigOptionSingle<std::string>("") {};
     ConfigOptionString(std::string _value) : ConfigOptionSingle<std::string>(_value) {};
     
@@ -209,7 +209,7 @@ public:
         return escape_string_cstyle(this->value);
     }
 
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         return unescape_string_cstyle(str, this->value);
     };
 };
@@ -217,7 +217,8 @@ public:
 // semicolon-separated strings
 class ConfigOptionStrings : public ConfigOptionVector<std::string>
 {
-public:
+    public:
+    
     std::string serialize() const {
         return escape_strings_cstyle(this->values);
     };
@@ -226,16 +227,14 @@ public:
         return this->values;
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
-        if (! append)
-            this->values.clear();
+    bool deserialize(std::string str) {
         return unescape_strings_cstyle(str, this->values);
     };
 };
 
 class ConfigOptionPercent : public ConfigOptionFloat
 {
-public:
+    public:
     ConfigOptionPercent() : ConfigOptionFloat(0) {};
     ConfigOptionPercent(double _value) : ConfigOptionFloat(_value) {};
     
@@ -251,7 +250,7 @@ public:
         return s;
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         // don't try to parse the trailing % since it's optional
         std::istringstream iss(str);
         iss >> this->value;
@@ -284,9 +283,8 @@ public:
         return vv;
     };
 
-    bool deserialize(const std::string &str, bool append = false) {
-        if (! append)
-            this->values.clear();
+    bool deserialize(std::string str) {
+        this->values.clear();
         std::istringstream is(str);
         std::string item_str;
         while (std::getline(is, item_str, ',')) {
@@ -302,7 +300,7 @@ public:
 
 class ConfigOptionFloatOrPercent : public ConfigOptionPercent
 {
-public:
+    public:
     bool percent;
     ConfigOptionFloatOrPercent() : ConfigOptionPercent(0), percent(false) {};
     ConfigOptionFloatOrPercent(double _value, bool _percent)
@@ -332,7 +330,7 @@ public:
         return s;
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         this->percent = str.find_first_of("%") != std::string::npos;
         std::istringstream iss(str);
         iss >> this->value;
@@ -342,7 +340,7 @@ public:
 
 class ConfigOptionPoint : public ConfigOptionSingle<Pointf>
 {
-public:
+    public:
     ConfigOptionPoint() : ConfigOptionSingle<Pointf>(Pointf(0,0)) {};
     ConfigOptionPoint(Pointf _value) : ConfigOptionSingle<Pointf>(_value) {};
     
@@ -354,7 +352,7 @@ public:
         return ss.str();
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         std::istringstream iss(str);
         iss >> this->value.x;
         iss.ignore(std::numeric_limits<std::streamsize>::max(), ',');
@@ -366,7 +364,8 @@ public:
 
 class ConfigOptionPoints : public ConfigOptionVector<Pointf>
 {
-public:
+    public:
+    
     std::string serialize() const {
         std::ostringstream ss;
         for (Pointfs::const_iterator it = this->values.begin(); it != this->values.end(); ++it) {
@@ -388,9 +387,8 @@ public:
         return vv;
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
-        if (! append)
-            this->values.clear();
+    bool deserialize(std::string str) {
+        this->values.clear();
         std::istringstream is(str);
         std::string point_str;
         while (std::getline(is, point_str, ',')) {
@@ -411,7 +409,7 @@ public:
 
 class ConfigOptionBool : public ConfigOptionSingle<bool>
 {
-public:
+    public:
     ConfigOptionBool() : ConfigOptionSingle<bool>(false) {};
     ConfigOptionBool(bool _value) : ConfigOptionSingle<bool>(_value) {};
     
@@ -421,7 +419,7 @@ public:
         return std::string(this->value ? "1" : "0");
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         this->value = (str.compare("1") == 0);
         return true;
     };
@@ -429,7 +427,8 @@ public:
 
 class ConfigOptionBools : public ConfigOptionVector<bool>
 {
-public:    
+    public:
+    
     std::string serialize() const {
         std::ostringstream ss;
         for (std::vector<bool>::const_iterator it = this->values.begin(); it != this->values.end(); ++it) {
@@ -449,9 +448,8 @@ public:
         return vv;
     };
     
-    bool deserialize(const std::string &str, bool append = false) {
-        if (! append)
-            this->values.clear();
+    bool deserialize(std::string str) {
+        this->values.clear();
         std::istringstream is(str);
         std::string item_str;
         while (std::getline(is, item_str, ',')) {
@@ -467,7 +465,7 @@ typedef std::map<std::string,int> t_config_enum_values;
 template <class T>
 class ConfigOptionEnum : public ConfigOptionSingle<T>
 {
-public:
+    public:
     // by default, use the first value (0) of the T enum type
     ConfigOptionEnum() : ConfigOptionSingle<T>(static_cast<T>(0)) {};
     ConfigOptionEnum(T _value) : ConfigOptionSingle<T>(_value) {};
@@ -480,7 +478,7 @@ public:
         return "";
     };
 
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         t_config_enum_values enum_keys_map = ConfigOptionEnum<T>::get_enum_values();
         if (enum_keys_map.count(str) == 0) return false;
         this->value = static_cast<T>(enum_keys_map[str]);
@@ -497,7 +495,7 @@ public:
 // In the StaticConfig, it is better to use the specialized ConfigOptionEnum<T> containers.
 class ConfigOptionEnumGeneric : public ConfigOptionInt
 {
-public:
+    public:
     const t_config_enum_values* keys_map;
     
     std::string serialize() const {
@@ -507,7 +505,7 @@ public:
         return "";
     };
 
-    bool deserialize(const std::string &str, bool append = false) {
+    bool deserialize(std::string str) {
         if (this->keys_map->count(str) == 0) return false;
         this->value = (*const_cast<t_config_enum_values*>(this->keys_map))[str];
         return true;
@@ -550,7 +548,7 @@ enum ConfigOptionType {
 // Definition of a configuration value for the purpose of GUI presentation, editing, value mapping and config file handling.
 class ConfigOptionDef
 {
-public:
+    public:
     // What type? bool, int, string etc.
     ConfigOptionType type;
     // Default value of this option. The default value object is owned by ConfigDef, it is released in its destructor.
@@ -629,70 +627,57 @@ typedef std::map<t_config_option_key,ConfigOptionDef> t_optiondef_map;
 // but it carries the defaults of the configuration values.
 class ConfigDef
 {
-public:
+    public:
     t_optiondef_map options;
-    ~ConfigDef() { for (auto &opt : this->options) delete opt.second.default_value; }
-    ConfigOptionDef* add(const t_config_option_key &opt_key, ConfigOptionType type) {
-        ConfigOptionDef* opt = &this->options[opt_key];
-        opt->type = type;
-        return opt;
-    }
-    const ConfigOptionDef* get(const t_config_option_key &opt_key) const {
-        t_optiondef_map::iterator it = const_cast<ConfigDef*>(this)->options.find(opt_key);
-        return (it == this->options.end()) ? nullptr : &it->second;
-    }
+    ~ConfigDef();
+    ConfigOptionDef* add(const t_config_option_key &opt_key, ConfigOptionType type);
+    const ConfigOptionDef* get(const t_config_option_key &opt_key) const;
 };
 
 // An abstract configuration store.
 class ConfigBase
 {
-public:
+    public:
     // Definition of configuration values for the purpose of GUI presentation, editing, value mapping and config file handling.
     // The configuration definition is static: It does not carry the actual configuration values,
     // but it carries the defaults of the configuration values.
     // ConfigBase does not own ConfigDef, it only references it.
     const ConfigDef* def;
     
-    ConfigBase(const ConfigDef *def = nullptr) : def(def) {};
+    ConfigBase() : def(NULL) {};
     virtual ~ConfigBase() {};
-    bool has(const t_config_option_key &opt_key) const { return this->option(opt_key) != nullptr; }
-    const ConfigOption* option(const t_config_option_key &opt_key) const
-        { return const_cast<ConfigBase*>(this)->option(opt_key, false); }
-    ConfigOption* option(const t_config_option_key &opt_key, bool create = false)
-        { return this->optptr(opt_key, create); }
+    bool has(const t_config_option_key &opt_key);
+    const ConfigOption* option(const t_config_option_key &opt_key) const;
+    ConfigOption* option(const t_config_option_key &opt_key, bool create = false);
     virtual ConfigOption* optptr(const t_config_option_key &opt_key, bool create = false) = 0;
     virtual t_config_option_keys keys() const = 0;
-    void apply(const ConfigBase &other, bool ignore_nonexistent = false) { this->apply(other, other.keys(), ignore_nonexistent); }
-    void apply(const ConfigBase &other, const t_config_option_keys &keys, bool ignore_nonexistent = false);
-    bool equals(const ConfigBase &other) const { return this->diff(other).empty(); }
-    t_config_option_keys diff(const ConfigBase &other) const;
+    void apply(const ConfigBase &other, bool ignore_nonexistent = false);
+    bool equals(ConfigBase &other);
+    t_config_option_keys diff(ConfigBase &other);
     std::string serialize(const t_config_option_key &opt_key) const;
-    bool set_deserialize(t_config_option_key opt_key, const std::string &str, bool append = false);
+    bool set_deserialize(const t_config_option_key &opt_key, std::string str);
 
     double get_abs_value(const t_config_option_key &opt_key) const;
     double get_abs_value(const t_config_option_key &opt_key, double ratio_over) const;
     void setenv_();
-    void load(const std::string &file);
-    void load_from_gcode(const std::string &file);
-    void save(const std::string &file) const;
 };
 
 // Configuration store with dynamic number of configuration values.
 // In Slic3r, the dynamic config is mostly used at the user interface layer.
 class DynamicConfig : public virtual ConfigBase
 {
-public:
+    public:
     DynamicConfig() {};
-    DynamicConfig(const DynamicConfig& other) : ConfigBase(other.def) { this->apply(other, false); }
-    DynamicConfig& operator= (DynamicConfig other) { this->swap(other); return *this; }
-    virtual ~DynamicConfig() { for (auto &opt : this->options) delete opt.second; }
-    void swap(DynamicConfig &other) { std::swap(this->def, other.def); std::swap(this->options, other.options); }
+    DynamicConfig(const DynamicConfig& other);
+    DynamicConfig& operator= (DynamicConfig other);
+    void swap(DynamicConfig &other);
+    virtual ~DynamicConfig();
     template<class T> T* opt(const t_config_option_key &opt_key, bool create = false);
     virtual ConfigOption* optptr(const t_config_option_key &opt_key, bool create = false);
     t_config_option_keys keys() const;
-    void erase(const t_config_option_key &opt_key) { this->options.erase(opt_key); }
-
-private:
+    void erase(const t_config_option_key &opt_key);
+    
+    private:
     typedef std::map<t_config_option_key,ConfigOption*> t_options_map;
     t_options_map options;
 };
@@ -702,7 +687,7 @@ private:
 // because the configuration values could be accessed directly.
 class StaticConfig : public virtual ConfigBase
 {
-public:
+    public:
     StaticConfig() : ConfigBase() {};
     // Gets list of config option names for each config option of this->def, which has a static counter-part defined by the derived object
     // and which could be resolved by this->optptr(key) call.
@@ -712,9 +697,6 @@ public:
     // The derived class has to implement optptr to resolve a static configuration value.
     // virtual ConfigOption* optptr(const t_config_option_key &opt_key, bool create = false) = 0;
 };
-
-/// Specialization of std::exception to indicate that an unknown config option has been encountered.
-class UnknownOptionException : public std::exception {};
 
 }
 

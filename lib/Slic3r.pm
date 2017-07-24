@@ -91,9 +91,11 @@ use constant LOOP_CLIPPING_LENGTH_OVER_NOZZLE_DIAMETER => 0.15;
 # use constant SCALED_RESOLUTION      => RESOLUTION / SCALING_FACTOR;
 use constant INFILL_OVERLAP_OVER_SPACING  => 0.3;
 
-# Keep track of threads we created. Perl worker threads shall not create further threads.
-my @threads = ();
+# Keep track of threads we created. Each thread keeps its own list of threads it spwaned.
+my @my_threads = ();
+my @threads : shared = ();
 my $pause_sema = Thread::Semaphore->new;
+my $parallel_sema;
 my $paused = 0;
 
 # Set the logging level at the Slic3r XS module.
@@ -102,11 +104,19 @@ set_logging_level($Slic3r::loglevel);
 
 sub spawn_thread {
     my ($cb) = @_;
+    
+    my $parent_tid = threads->tid;
+    lock @threads;
+    
     @_ = ();
     my $thread = threads->create(sub {
-        Slic3r::debugf "Starting thread %d...\n", threads->tid;
+        @my_threads = ();
+        
+        Slic3r::debugf "Starting thread %d (parent: %d)...\n", threads->tid, $parent_tid;
         local $SIG{'KILL'} = sub {
             Slic3r::debugf "Exiting thread %d...\n", threads->tid;
+            $parallel_sema->up if $parallel_sema;
+            kill_all_threads();
             Slic3r::thread_cleanup();
             threads->exit();
         };
@@ -116,6 +126,7 @@ sub spawn_thread {
         };
         $cb->();
     });
+    push @my_threads, $thread->tid;
     push @threads, $thread->tid;
     return $thread;
 }
@@ -132,6 +143,13 @@ sub spawn_thread {
 # object in a thread, make sure the main thread still holds a
 # reference so that it won't be destroyed in thread.
 sub thread_cleanup {
+    return if !$Slic3r::have_threads;
+    
+    if (threads->tid == 0) {
+        warn "Calling thread_cleanup() from main thread\n";
+        return;
+    }
+
     # prevent destruction of shared objects
     no warnings 'redefine';
     *Slic3r::BridgeDetector::DESTROY        = sub {};
@@ -151,6 +169,9 @@ sub thread_cleanup {
     *Slic3r::ExtrusionPath::Collection::DESTROY = sub {};
     *Slic3r::ExtrusionSimulator::DESTROY    = sub {};
     *Slic3r::Flow::DESTROY                  = sub {};
+# Fillers are only being allocated in worker threads, which are not going to be forked.
+# Therefore the Filler instances shall be released at the end of the thread.
+#    *Slic3r::Filler::DESTROY                = sub {};
     *Slic3r::GCode::DESTROY                 = sub {};
     *Slic3r::GCode::PlaceholderParser::DESTROY = sub {};
     *Slic3r::GCode::Sender::DESTROY         = sub {};
@@ -179,37 +200,44 @@ sub thread_cleanup {
     return undef;  # this prevents a "Scalars leaked" warning
 }
 
-sub _get_running_threads {
-    return grep defined($_), map threads->object($_), @threads;
+sub get_running_threads {
+    return grep defined($_), map threads->object($_), @_;
 }
 
 sub kill_all_threads {
-    # Send SIGKILL to all the running threads to let them die.
-    foreach my $thread (_get_running_threads) {
-        Slic3r::debugf "Thread %d killing %d...\n", threads->tid, $thread->tid;
-        $thread->kill('KILL');
+    # if we're the main thread, we send SIGKILL to all the running threads
+    if (threads->tid == 0) {
+        lock @threads;
+        foreach my $thread (get_running_threads(@threads)) {
+            Slic3r::debugf "Thread %d killing %d...\n", threads->tid, $thread->tid;
+            $thread->kill('KILL');
+        }
+        
+        # unlock semaphore before we block on wait
+        # otherwise we'd get a deadlock if threads were paused
+        resume_all_threads();
     }
-    # unlock semaphore before we block on wait
-    # otherwise we'd get a deadlock if threads were paused
-    resume_all_threads();
+    
     # in any thread we wait for our children
-    foreach my $thread (_get_running_threads) {
+    foreach my $thread (get_running_threads(@my_threads)) {
         Slic3r::debugf "  Thread %d waiting for %d...\n", threads->tid, $thread->tid;
         $thread->join;  # block until threads are killed
         Slic3r::debugf "    Thread %d finished waiting for %d...\n", threads->tid, $thread->tid;
     }
-    @threads = ();
+    @my_threads = ();
 }
 
 sub pause_all_threads {
     return if $paused;
+    lock @threads;
     $paused = 1;
     $pause_sema->down;
-    $_->kill('STOP') for _get_running_threads;
+    $_->kill('STOP') for get_running_threads(@threads);
 }
 
 sub resume_all_threads {
     return unless $paused;
+    lock @threads;
     $paused = 0;
     $pause_sema->up;
 }

@@ -1,4 +1,5 @@
 # The "Expert" tab at the right of the main tabbed window.
+# The "Expert" is enabled by File->Preferences dialog.
 
 # This file implements following packages:
 #   Slic3r::GUI::Tab;
@@ -455,21 +456,17 @@ sub load_config_file {
     my $i = first { $self->{presets}[$_]{file} eq $file && $self->{presets}[$_]{external} } 1..$#{$self->{presets}};
     if (!$i) {
         my $preset_name = basename($file);  # keep the .ini suffix
-        my $preset_new = Slic3r::GUI::Tab::Preset->new(
+        push @{$self->{presets}}, Slic3r::GUI::Tab::Preset->new(
             file        => $file,
             name        => $preset_name,
             external    => 1,
         );
-        # Try to load the config file before it is entered into the list. If the loading fails, an undef is returned.
-        return undef if ! defined $preset_new->config;
-        push @{$self->{presets}}, $preset_new;
         $self->{presets_choice}->Append($preset_name);
         $i = $#{$self->{presets}};
     }
     $self->{presets_choice}->SetSelection($i - $self->{default_suppressed});
     $self->on_select_preset;
     $self->_on_presets_changed;
-    return 1;
 }
 
 sub load_config {
@@ -844,70 +841,19 @@ sub _update {
             . "- no ensure_vertical_shell_thickness\n"
             . "\nShall I adjust those settings in order to enable Spiral Vase?",
             'Spiral Vase', wxICON_WARNING | wxYES | wxNO);
-        my $new_conf = Slic3r::Config->new;
         if ($dialog->ShowModal() == wxID_YES) {
+            my $new_conf = Slic3r::Config->new;
             $new_conf->set("perimeters", 1);
             $new_conf->set("top_solid_layers", 0);
             $new_conf->set("fill_density", 0);
             $new_conf->set("support_material", 0);
             $new_conf->set("ensure_vertical_shell_thickness", 0);
+            $self->load_config($new_conf);
         } else {
+            my $new_conf = Slic3r::Config->new;
             $new_conf->set("spiral_vase", 0);
+            $self->load_config($new_conf);
         }
-        $self->load_config($new_conf);
-    }
-
-    if ($config->wipe_tower && 
-        ($config->first_layer_height != 0.2 || $config->layer_height < 0.15 || $config->layer_height > 0.35)) {
-        my $dialog = Wx::MessageDialog->new($self,
-            "The Wipe Tower currently supports only:\n"
-            . "- first layer height 0.2mm\n"
-            . "- layer height from 0.15mm to 0.35mm\n"
-            . "\nShall I adjust those settings in order to enable the Wipe Tower?",
-            'Wipe Tower', wxICON_WARNING | wxYES | wxNO);
-        my $new_conf = Slic3r::Config->new;
-        if ($dialog->ShowModal() == wxID_YES) {
-            $new_conf->set("first_layer_height", 0.2);
-            $new_conf->set("layer_height", 0.15) if  $config->layer_height < 0.15;
-            $new_conf->set("layer_height", 0.35) if  $config->layer_height > 0.35;
-        } else {
-            $new_conf->set("wipe_tower", 0);
-        }
-        $self->load_config($new_conf);
-    }
-
-    if ($config->wipe_tower && $config->support_material && $config->support_material_contact_distance > 0. && 
-        ($config->support_material_extruder != 0 || $config->support_material_interface_extruder != 0)) {
-        my $dialog = Wx::MessageDialog->new($self,
-            "The Wipe Tower currently supports the non-soluble supports only\n"
-            . "if they are printed with the current extruder without triggering a tool change.\n"
-            . "(both support_material_extruder and support_material_interface_extruder need to be set to 0).\n"
-            . "\nShall I adjust those settings in order to enable the Wipe Tower?",
-            'Wipe Tower', wxICON_WARNING | wxYES | wxNO);
-        my $new_conf = Slic3r::Config->new;
-        if ($dialog->ShowModal() == wxID_YES) {
-            $new_conf->set("support_material_extruder", 0);
-            $new_conf->set("support_material_interface_extruder", 0);
-        } else {
-            $new_conf->set("wipe_tower", 0);
-        }
-        $self->load_config($new_conf);
-    }
-
-    if ($config->wipe_tower && $config->support_material && $config->support_material_contact_distance == 0 && 
-        ! $config->support_material_synchronize_layers) {
-        my $dialog = Wx::MessageDialog->new($self,
-            "For the Wipe Tower to work with the soluble supports, the support layers\n"
-            . "need to be synchronized with the object layers.\n"
-            . "\nShall I synchronize support layers in order to enable the Wipe Tower?",
-            'Wipe Tower', wxICON_WARNING | wxYES | wxNO);
-        my $new_conf = Slic3r::Config->new;
-        if ($dialog->ShowModal() == wxID_YES) {
-            $new_conf->set("support_material_synchronize_layers", 1);
-        } else {
-            $new_conf->set("wipe_tower", 0);
-        }
-        $self->load_config($new_conf);
     }
 
     if ($keys_modified->{'layer_height'}) {
@@ -1047,7 +993,6 @@ sub build {
         fan_always_on cooling
         min_fan_speed max_fan_speed bridge_fan_speed disable_fan_first_layers
         fan_below_layer_time slowdown_below_layer_time min_print_speed
-        start_filament_gcode end_filament_gcode
     ));
     $self->{config}->set('filament_settings_id', '');
     
@@ -1140,28 +1085,6 @@ sub build {
     }
 
     {
-        my $page = $self->add_options_page('Custom G-code', 'cog.png');
-        {
-            my $optgroup = $page->new_optgroup('Start G-code',
-                label_width => 0,
-            );
-            my $option = $optgroup->get_option('start_filament_gcode', 0);
-            $option->full_width(1);
-            $option->height(150);
-            $optgroup->append_single_option_line($option);
-        }
-        {
-            my $optgroup = $page->new_optgroup('End G-code',
-                label_width => 0,
-            );
-            my $option = $optgroup->get_option('end_filament_gcode', 0);
-            $option->full_width(1);
-            $option->height(150);
-            $optgroup->append_single_option_line($option);
-        }
-    }
-    
-    {
         my $page = $self->add_options_page('Notes', 'note.png');
         {
             my $optgroup = $page->new_optgroup('Notes',
@@ -1236,12 +1159,12 @@ sub build {
         serial_port serial_speed
         octoprint_host octoprint_apikey
         use_firmware_retraction
-        use_volumetric_e variable_layer_height
+        use_volumetric_e set_and_wait_temperatures variable_layer_height
         single_extruder_multi_material start_gcode end_gcode before_layer_gcode layer_gcode toolchange_gcode
         nozzle_diameter extruder_offset
         retract_length retract_lift retract_speed deretract_speed retract_before_wipe retract_restart_extra retract_before_travel retract_layer_change wipe
         retract_length_toolchange retract_restart_extra_toolchange
-        extruder_colour printer_notes
+        printer_notes
     ));
     $self->{config}->set('printer_settings_id', '');
     
@@ -1443,6 +1366,7 @@ sub build {
             $optgroup->append_single_option_line('use_firmware_retraction');
             $optgroup->append_single_option_line('use_volumetric_e');
             $optgroup->append_single_option_line('variable_layer_height');
+            $optgroup->append_single_option_line('set_and_wait_temperatures');
         }
     }
     {
@@ -1531,7 +1455,7 @@ sub _extruder_options {
     qw(nozzle_diameter min_layer_height max_layer_height extruder_offset 
        retract_length retract_lift retract_lift_above retract_lift_below retract_speed deretract_speed 
        retract_before_wipe retract_restart_extra retract_before_travel wipe
-       retract_layer_change retract_length_toolchange retract_restart_extra_toolchange extruder_colour) }
+       retract_layer_change retract_length_toolchange retract_restart_extra_toolchange) }
 
 sub _build_extruder_pages {
     my $self = shift;
@@ -1589,10 +1513,6 @@ sub _build_extruder_pages {
             my $optgroup = $page->new_optgroup('Retraction when tool is disabled (advanced settings for multi-extruder setups)');
             $optgroup->append_single_option_line($_, $extruder_idx)
                 for qw(retract_length_toolchange retract_restart_extra_toolchange);
-        }
-        {
-            my $optgroup = $page->new_optgroup('Preview');
-            $optgroup->append_single_option_line('extruder_colour', $extruder_idx);
         }
     }
     
@@ -1714,15 +1634,13 @@ sub on_preset_loaded {
 
 sub load_config_file {
     my $self = shift;
-    if ($self->SUPER::load_config_file(@_)) {
-        Slic3r::GUI::warning_catcher($self)->(
-            "Your configuration was imported. However, Slic3r is currently only able to import settings "
-            . "for the first defined filament. We recommend you don't use exported configuration files "
-            . "for multi-extruder setups and rely on the built-in preset management system instead.")
-            if @{ $self->{config}->nozzle_diameter } > 1;
-        return 1;
-    }
-    return undef;
+    $self->SUPER::load_config_file(@_);
+    
+    Slic3r::GUI::warning_catcher($self)->(
+        "Your configuration was imported. However, Slic3r is currently only able to import settings "
+        . "for the first defined filament. We recommend you don't use exported configuration files "
+        . "for multi-extruder setups and rely on the built-in preset management system instead.")
+        if @{ $self->{config}->nozzle_diameter } > 1;
 }
 
 package Slic3r::GUI::Tab::Page;
@@ -1846,9 +1764,7 @@ sub get_name {
 
 package Slic3r::GUI::Tab::Preset;
 use Moo;
-use List::Util qw(any);
 
-# The preset represents a "default" set of properties.
 has 'default'   => (is => 'ro', default => sub { 0 });
 has 'external'  => (is => 'ro', default => sub { 0 });
 has 'name'      => (is => 'rw', required => 1);
@@ -1868,24 +1784,9 @@ sub config {
         
         # apply preset values on top of defaults
         my $config = Slic3r::Config->new_from_defaults(@$keys);
-        my $external_config = eval { Slic3r::Config->load($self->file); };
-        if ($@) {
-            Slic3r::GUI::show_error(undef, $@);
-            return undef;
-        }
+        my $external_config = Slic3r::Config->load($self->file);
         $config->set($_, $external_config->get($_))
             for grep $external_config->has($_), @$keys;
-
-        if (any { $_ eq 'nozzle_diameter' } @$keys) {
-            # Loaded the Printer settings. Verify, that all extruder dependent values have enough values.
-            my $nozzle_diameter     = $config->nozzle_diameter;
-            my $num_extruders       = scalar(@{$nozzle_diameter});
-            foreach my $key (qw(deretract_speed extruder_colour retract_before_wipe)) {
-                my $vec = $config->get($key);
-                push @{$vec}, ($vec->[0]) x ($num_extruders - @{$vec});
-                $config->set($key, $vec);
-            }
-        }
         
         return $config;
     }
