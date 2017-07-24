@@ -100,15 +100,9 @@ sub merge {
 sub load {
     my $class = shift;
     my ($file) = @_;
-
-    if ($file =~ /\.gcode$/i || $file =~ /\.g$/i) {
-        my $config = $class->new;        
-        $config->_load_from_gcode($file);
-        return $config;
-    } else {
-        my $ini = __PACKAGE__->read_ini($file);
-        return $class->load_ini_hash($ini->{_});
-    }
+    
+    my $ini = __PACKAGE__->read_ini($file);
+    return $class->load_ini_hash($ini->{_});
 }
 
 # Deserialize a perl hash into the underlying C++ Slic3r::DynamicConfig class,

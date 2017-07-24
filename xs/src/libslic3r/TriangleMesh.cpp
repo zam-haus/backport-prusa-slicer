@@ -78,11 +78,28 @@ TriangleMesh::TriangleMesh(const Pointf3s &points, const std::vector<Point3>& fa
     stl_get_size(&stl);
 }
 
-TriangleMesh::TriangleMesh(const TriangleMesh &other) :
-    repaired(false)
+TriangleMesh::TriangleMesh(const TriangleMesh &other)
+    : stl(other.stl), repaired(other.repaired)
 {
-    stl_initialize(&this->stl);
-    *this = other;
+    this->stl.heads = NULL;
+    this->stl.tail  = NULL;
+    this->stl.error = other.stl.error;
+    if (other.stl.facet_start != NULL) {
+        this->stl.facet_start = (stl_facet*)calloc(other.stl.stats.number_of_facets, sizeof(stl_facet));
+        std::copy(other.stl.facet_start, other.stl.facet_start + other.stl.stats.number_of_facets, this->stl.facet_start);
+    }
+    if (other.stl.neighbors_start != NULL) {
+        this->stl.neighbors_start = (stl_neighbors*)calloc(other.stl.stats.number_of_facets, sizeof(stl_neighbors));
+        std::copy(other.stl.neighbors_start, other.stl.neighbors_start + other.stl.stats.number_of_facets, this->stl.neighbors_start);
+    }
+    if (other.stl.v_indices != NULL) {
+        this->stl.v_indices = (v_indices_struct*)calloc(other.stl.stats.number_of_facets, sizeof(v_indices_struct));
+        std::copy(other.stl.v_indices, other.stl.v_indices + other.stl.stats.number_of_facets, this->stl.v_indices);
+    }
+    if (other.stl.v_shared != NULL) {
+        this->stl.v_shared = (stl_vertex*)calloc(other.stl.stats.shared_vertices, sizeof(stl_vertex));
+        std::copy(other.stl.v_shared, other.stl.v_shared + other.stl.stats.shared_vertices, this->stl.v_shared);
+    }
 }
 
 TriangleMesh::TriangleMesh(TriangleMesh &&other) : 
@@ -92,30 +109,9 @@ TriangleMesh::TriangleMesh(TriangleMesh &&other) :
     this->swap(other);
 }
 
-TriangleMesh& TriangleMesh::operator=(const TriangleMesh &other)
+TriangleMesh& TriangleMesh::operator= (TriangleMesh other)
 {
-    stl_close(&this->stl);
-    this->stl       = other.stl;
-    this->repaired  = other.repaired;
-    this->stl.heads = nullptr;
-    this->stl.tail  = nullptr;
-    this->stl.error = other.stl.error;
-    if (other.stl.facet_start != nullptr) {
-        this->stl.facet_start = (stl_facet*)calloc(other.stl.stats.number_of_facets, sizeof(stl_facet));
-        std::copy(other.stl.facet_start, other.stl.facet_start + other.stl.stats.number_of_facets, this->stl.facet_start);
-    }
-    if (other.stl.neighbors_start != nullptr) {
-        this->stl.neighbors_start = (stl_neighbors*)calloc(other.stl.stats.number_of_facets, sizeof(stl_neighbors));
-        std::copy(other.stl.neighbors_start, other.stl.neighbors_start + other.stl.stats.number_of_facets, this->stl.neighbors_start);
-    }
-    if (other.stl.v_indices != nullptr) {
-        this->stl.v_indices = (v_indices_struct*)calloc(other.stl.stats.number_of_facets, sizeof(v_indices_struct));
-        std::copy(other.stl.v_indices, other.stl.v_indices + other.stl.stats.number_of_facets, this->stl.v_indices);
-    }
-    if (other.stl.v_shared != nullptr) {
-        this->stl.v_shared = (stl_vertex*)calloc(other.stl.stats.shared_vertices, sizeof(stl_vertex));
-        std::copy(other.stl.v_shared, other.stl.v_shared + other.stl.stats.shared_vertices, this->stl.v_shared);
-    }
+    this->swap(other);
     return *this;
 }
 
@@ -431,7 +427,7 @@ TriangleMesh::split() const
     if (!this->repaired) CONFESS("split() requires repair()");
     
     // loop while we have remaining facets
-    for (;;) {
+    while (1) {
         // get the first facet
         std::queue<int> facet_queue;
         std::deque<int> facets;
@@ -496,9 +492,9 @@ TriangleMesh::merge(const TriangleMesh &mesh)
     stl_get_size(&this->stl);
 }
 
-// Calculate projection of the mesh into the XY plane, in scaled coordinates.
-//FIXME This could be extremely slow! Use it for tiny meshes only!
-ExPolygons TriangleMesh::horizontal_projection() const
+/* this will return scaled ExPolygons */
+ExPolygons
+TriangleMesh::horizontal_projection() const
 {
     Polygons pp;
     pp.reserve(this->stl.stats.number_of_facets);
@@ -506,25 +502,26 @@ ExPolygons TriangleMesh::horizontal_projection() const
         stl_facet* facet = &this->stl.facet_start[i];
         Polygon p;
         p.points.resize(3);
-        p.points[0] = Point::new_scale(facet->vertex[0].x, facet->vertex[0].y);
-        p.points[1] = Point::new_scale(facet->vertex[1].x, facet->vertex[1].y);
-        p.points[2] = Point::new_scale(facet->vertex[2].x, facet->vertex[2].y);
+        p.points[0] = Point(facet->vertex[0].x / SCALING_FACTOR, facet->vertex[0].y / SCALING_FACTOR);
+        p.points[1] = Point(facet->vertex[1].x / SCALING_FACTOR, facet->vertex[1].y / SCALING_FACTOR);
+        p.points[2] = Point(facet->vertex[2].x / SCALING_FACTOR, facet->vertex[2].y / SCALING_FACTOR);
         p.make_counter_clockwise();  // do this after scaling, as winding order might change while doing that
         pp.push_back(p);
     }
     
     // the offset factor was tuned using groovemount.stl
-    return union_ex(offset(pp, scale_(0.01)), true);
+    return union_ex(offset(pp, 0.01 / SCALING_FACTOR), true);
 }
 
-Polygon TriangleMesh::convex_hull()
+Polygon
+TriangleMesh::convex_hull()
 {
     this->require_shared_vertices();
     Points pp;
     pp.reserve(this->stl.stats.shared_vertices);
-    for (int i = 0; i < this->stl.stats.shared_vertices; ++ i) {
+    for (int i = 0; i < this->stl.stats.shared_vertices; i++) {
         stl_vertex* v = &this->stl.v_shared[i];
-        pp.emplace_back(Point::new_scale(v->x, v->y));
+        pp.push_back(Point(v->x / SCALING_FACTOR, v->y / SCALING_FACTOR));
     }
     return Slic3r::Geometry::convex_hull(pp);
 }

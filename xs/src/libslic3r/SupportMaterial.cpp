@@ -162,14 +162,12 @@ PrintObjectSupportMaterial::PrintObjectSupportMaterial(const PrintObject *object
 
     // Evaluate the XY gap between the object outer perimeters and the support structures.
     coordf_t external_perimeter_width = 0.;
-    for (size_t region_id = 0; region_id < object->region_volumes.size(); ++ region_id) {
-        if (! object->region_volumes[region_id].empty()) {
-            const PrintRegionConfig &config = object->print()->get_region(region_id)->config;
-            coordf_t width = config.external_perimeter_extrusion_width.get_abs_value(slicing_params.layer_height);
-            if (width <= 0.)
-                width = m_print_config->nozzle_diameter.get_at(config.perimeter_extruder-1);
-            external_perimeter_width = std::max(external_perimeter_width, width);
-        }
+    for (std::map<size_t,std::vector<int>>::const_iterator it_region = object->region_volumes.begin(); it_region != object->region_volumes.end(); ++ it_region) {
+        const PrintRegionConfig &config = object->print()->get_region(it_region->first)->config;
+        coordf_t width = config.external_perimeter_extrusion_width.get_abs_value(slicing_params.layer_height);
+        if (width <= 0.)
+            width = m_print_config->nozzle_diameter.get_at(config.perimeter_extruder-1);
+        external_perimeter_width = std::max(external_perimeter_width, width);
     }
     m_gap_xy = m_object_config->support_material_xy_spacing.get_abs_value(external_perimeter_width);
 
@@ -466,33 +464,19 @@ Polygons collect_slices_outer(const Layer &layer)
 class SupportGridPattern
 {
 public:
-    SupportGridPattern(
-        const Polygons &support_polygons, 
-        const Polygons &trimming_polygons, 
-        coordf_t        support_spacing, 
-        coordf_t        support_angle) :
-        m_support_polygons(&support_polygons), m_trimming_polygons(&trimming_polygons),
-        m_support_spacing(support_spacing), m_support_angle(support_angle)
+    SupportGridPattern(const Polygons &support_polygons, const Polygons &trimming_polygons, coordf_t support_spacing) :
+        m_support_polygons(support_polygons), m_trimming_polygons(trimming_polygons), m_support_spacing(support_spacing)
     {
-        if (m_support_angle != 0.) {
-            // Create a copy of the rotated contours.
-            m_support_polygons_rotated  = support_polygons;
-            m_trimming_polygons_rotated = trimming_polygons;
-            m_support_polygons  = &m_support_polygons_rotated;
-            m_trimming_polygons = &m_trimming_polygons_rotated;
-            polygons_rotate(m_support_polygons_rotated, - support_angle);
-            polygons_rotate(m_trimming_polygons_rotated, - support_angle);
-        }
         // Create an EdgeGrid, initialize it with projection, initialize signed distance field.
         coord_t grid_resolution = coord_t(scale_(m_support_spacing));
-        BoundingBox bbox = get_extents(*m_support_polygons);
+        BoundingBox bbox = get_extents(m_support_polygons);
         bbox.offset(20);
         bbox.align_to_grid(grid_resolution);
         m_grid.set_bbox(bbox);
-        m_grid.create(*m_support_polygons, grid_resolution);
+        m_grid.create(m_support_polygons, grid_resolution);
         m_grid.calculate_sdf();
         // Extract a bounding contour from the grid, trim by the object.
-        m_island_samples = island_samples(*m_support_polygons);
+        m_island_samples = island_samples(m_support_polygons);
     }
 
     // Extract polygons from the grid, offsetted by offset_in_grid,
@@ -504,7 +488,7 @@ public:
         // Generate islands, so each island may be tested for overlap with m_island_samples.
         ExPolygons islands = diff_ex(
             m_grid.contours_simplified(offset_in_grid),
-            *m_trimming_polygons, false);
+            m_trimming_polygons, false);
 
         // Extract polygons, which contain some of the m_island_samples.
         Polygons out;
@@ -550,7 +534,7 @@ public:
     #ifdef SLIC3R_DEBUG
         static int iRun = 0;
         ++iRun;
-        BoundingBox bbox = get_extents(*m_trimming_polygons);
+        BoundingBox bbox = get_extents(m_trimming_polygons);
         if (! islands.empty())
             bbox.merge(get_extents(islands));
         if (!out.empty())
@@ -558,17 +542,15 @@ public:
         SVG svg(debug_out_path("extract_support_from_grid_trimmed-%d.svg", iRun).c_str(), bbox);
         svg.draw(islands, "red", 0.5f);
         svg.draw(union_ex(out), "green", 0.5f);
-        svg.draw(union_ex(*m_support_polygons), "blue", 0.5f);
+        svg.draw(union_ex(m_support_polygons), "blue", 0.5f);
         svg.draw_outline(islands, "red", "red", scale_(0.05));
         svg.draw_outline(union_ex(out), "green", "green", scale_(0.05));
-        svg.draw_outline(union_ex(*m_support_polygons), "blue", "blue", scale_(0.05));
+        svg.draw_outline(union_ex(m_support_polygons), "blue", "blue", scale_(0.05));
         for (const Point &pt : m_island_samples)
             svg.draw(pt, "black", coord_t(scale_(0.15)));
         svg.Close();
     #endif /* SLIC3R_DEBUG */
 
-        if (m_support_angle != 0.)
-            polygons_rotate(out, m_support_angle);
         return out;
     }
 
@@ -625,13 +607,8 @@ private:
         return island_samples(union_ex(polygons));
     }
 
-    const Polygons         *m_support_polygons;
-    const Polygons         *m_trimming_polygons;
-    Polygons                m_support_polygons_rotated;
-    Polygons                m_trimming_polygons_rotated;
-    // Angle in radians, by which the whole support is rotated.
-    coordf_t                m_support_angle;
-    // X spacing of the support lines parallel with the Y axis.
+    const Polygons         &m_support_polygons;
+    const Polygons         &m_trimming_polygons;
     coordf_t                m_support_spacing;
 
     Slic3r::EdgeGrid::Grid  m_grid;
@@ -891,7 +868,7 @@ PrintObjectSupportMaterial::MyLayersPtr PrintObjectSupportMaterial::top_contact_
                             // Interface layer will be synchronized with the object.
                             assert(layer_id > 0);
                             new_layer.height = object.layers[layer_id - 1]->height;
-                            new_layer.bottom_z = (layer_id == 1) ? m_slicing_params.object_print_z_min : object.layers[layer_id - 2]->print_z;
+                            new_layer.bottom_z = new_layer.print_z - new_layer.height;
                         }
                     } else {
                         // Contact layer will be printed with a normal flow, but
@@ -937,8 +914,7 @@ PrintObjectSupportMaterial::MyLayersPtr PrintObjectSupportMaterial::top_contact_
                         // Trimming polygons, to trim the stretched support islands.
                         slices_margin_cached,
                         // How much to offset the extracted contour outside of the grid.
-                        m_object_config->support_material_spacing.value + m_support_material_flow.spacing(),
-                        Geometry::deg2rad(double(m_object_config->support_material_angle)));
+                        m_object_config->support_material_spacing.value + m_support_material_flow.spacing());
                     // 1) infill polygons, expand them by half the extrusion width + a tiny bit of extra.
                     new_layer.polygons = support_grid_pattern.extract_support(m_support_material_flow.scaled_spacing()/2 + 5);
                     // 2) Contact polygons will be projected down. To keep the interface and base layers to grow, return a contour a tiny bit smaller than the grid cells.
@@ -1044,11 +1020,11 @@ PrintObjectSupportMaterial::MyLayersPtr PrintObjectSupportMaterial::bottom_conta
                             // top shapes so this can be done here
                             layer_new.height  = m_slicing_params.soluble_interface ? 
                                 // Align the interface layer with the object's layer height.
-                                object.layers[layer_id + 1]->height :
+                                object.get_layer(layer_id + 1)->height :
                                 // Place a bridge flow interface layer over the top surface.
                                 m_support_material_interface_flow.nozzle_diameter;
-                            layer_new.print_z = m_slicing_params.soluble_interface ? object.layers[layer_id + 1]->print_z :
-                                layer.print_z + layer_new.height + m_object_config->support_material_contact_distance.value;
+                            layer_new.print_z = layer.print_z + layer_new.height + 
+                                (m_slicing_params.soluble_interface ? 0. : m_object_config->support_material_contact_distance.value);
                             layer_new.bottom_z = layer.print_z;
                             layer_new.idx_object_layer_below = layer_id;
                             layer_new.bridging = ! m_slicing_params.soluble_interface;
@@ -1144,8 +1120,7 @@ PrintObjectSupportMaterial::MyLayersPtr PrintObjectSupportMaterial::bottom_conta
                     // Trimming polygons, to trim the stretched support islands.
                     trimming,
                     // How much to offset the extracted contour outside of the grid.
-                    m_object_config->support_material_spacing.value + m_support_material_flow.spacing(),
-                    Geometry::deg2rad(double(m_object_config->support_material_angle)));
+                    m_object_config->support_material_spacing.value + m_support_material_flow.spacing());
                 tbb::task_group task_group_inner;
                 // 1) Cache the slice of a support volume. The support volume is expanded by 1/2 of support material flow spacing
                 // to allow a placement of suppot zig-zag snake along the grid lines.
@@ -1382,20 +1357,12 @@ PrintObjectSupportMaterial::MyLayersPtr PrintObjectSupportMaterial::raft_and_int
             // Find the first object layer, which has its print_z in this support Z range.
             while (idx_layer_object < object.layers.size() && object.layers[idx_layer_object]->print_z < extr1z + EPSILON)
                 ++ idx_layer_object;
-            if (idx_layer_object == 0 && extr1z == m_slicing_params.raft_interface_top_z) {
-                // Insert one base support layer below the object.
-                MyLayer &layer_new = layer_allocate(layer_storage, sltIntermediate);
-                layer_new.print_z  = m_slicing_params.object_print_z_min;
-                layer_new.bottom_z = m_slicing_params.raft_interface_top_z;
-                layer_new.height   = layer_new.print_z - layer_new.bottom_z;
-                intermediate_layers.push_back(&layer_new);
-            }
             // Emit all intermediate support layers synchronized with object layers up to extr2z.
             for (; idx_layer_object < object.layers.size() && object.layers[idx_layer_object]->print_z < extr2z + EPSILON; ++ idx_layer_object) {
                 MyLayer &layer_new = layer_allocate(layer_storage, sltIntermediate);
                 layer_new.print_z  = object.layers[idx_layer_object]->print_z;
                 layer_new.height   = object.layers[idx_layer_object]->height;
-                layer_new.bottom_z = (idx_layer_object > 0) ? object.layers[idx_layer_object - 1]->print_z : (layer_new.print_z - layer_new.height);
+                layer_new.bottom_z = layer_new.print_z - layer_new.height;
                 assert(intermediate_layers.empty() || intermediate_layers.back()->print_z < layer_new.print_z + EPSILON);
                 intermediate_layers.push_back(&layer_new);
             }
@@ -2461,8 +2428,8 @@ void PrintObjectSupportMaterial::generate_toolpaths(
     LoopInterfaceProcessor loop_interface_processor(1.5 * m_support_material_interface_flow.scaled_width());
     loop_interface_processor.n_contact_loops = this->has_contact_loops() ? 1 : 0;
 
-    float    base_angle         = Geometry::deg2rad(float(m_object_config->support_material_angle));
-    float    interface_angle    = Geometry::deg2rad(float(m_object_config->support_material_angle + 90));
+    float    base_angle         = float(Geometry::deg2rad(m_object_config->support_material_angle));
+    float    interface_angle    = float(Geometry::deg2rad(m_object_config->support_material_angle + 90.));
     coordf_t interface_spacing  = m_object_config->support_material_interface_spacing.value + m_support_material_interface_flow.spacing();
     coordf_t interface_density  = std::min(1., m_support_material_interface_flow.spacing() / interface_spacing);
     coordf_t support_spacing    = m_object_config->support_material_spacing.value + m_support_material_flow.spacing();
@@ -2754,7 +2721,7 @@ void PrintObjectSupportMaterial::generate_toolpaths(
                 if (base_layer.layer->bottom_z < EPSILON) {
                     // Base flange (the 1st layer).
                     filler = filler_interface.get();
-                    filler->angle = Geometry::deg2rad(float(m_object_config->support_material_angle + 90));
+                    filler->angle = Geometry::deg2rad(float(m_object_config->support_material_angle) + 90.f);
                     density = 0.5f;
                     flow = m_first_layer_flow;
                     // use the proper spacing for first layer as we don't need to align
