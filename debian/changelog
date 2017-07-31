@@ -1,3 +1,9 @@
+slic3r-prusa (1.36.2+dfsg-1) unstable; urgency=medium
+
+  * [db314bf] New upstream version 1.36.2+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 31 Jul 2017 21:26:36 +0800
+
 slic3r-prusa (1.36.0+dfsg-1) unstable; urgency=medium
 
   * [35f30b1] New upstream version 1.36.0+dfsg
