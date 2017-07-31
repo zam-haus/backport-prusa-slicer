@@ -10,10 +10,10 @@ use List::Util qw(sum first max);
 use Slic3r::Geometry qw(X Y Z MIN MAX scale unscale deg2rad rad2deg);
 use LWP::UserAgent;
 use threads::shared qw(shared_clone);
-use Wx qw(:button :cursor :dialog :filedialog :keycode :icon :font :id :listctrl :misc 
+use Wx qw(:button :colour :cursor :dialog :filedialog :keycode :icon :font :id :listctrl :misc 
     :panel :sizer :toolbar :window wxTheApp :notebook :combobox wxNullBitmap);
 use Wx::Event qw(EVT_BUTTON EVT_TOGGLEBUTTON EVT_COMMAND EVT_KEY_DOWN EVT_LIST_ITEM_ACTIVATED 
-    EVT_LIST_ITEM_DESELECTED EVT_LIST_ITEM_SELECTED EVT_MOUSE_EVENTS EVT_PAINT EVT_TOOL 
+    EVT_LIST_ITEM_DESELECTED EVT_LIST_ITEM_SELECTED EVT_LEFT_DOWN EVT_MOUSE_EVENTS EVT_PAINT EVT_TOOL 
     EVT_CHOICE EVT_COMBOBOX EVT_TIMER EVT_NOTEBOOK_PAGE_CHANGED);
 use base 'Wx::Panel';
 
@@ -54,7 +54,7 @@ sub new {
         bed_shape complete_objects extruder_clearance_radius skirts skirt_distance brim_width variable_layer_height
         serial_port serial_speed octoprint_host octoprint_apikey
         nozzle_diameter single_extruder_multi_material 
-        wipe_tower wipe_tower_x wipe_tower_y wipe_tower_width wipe_tower_per_color_wipe 
+        wipe_tower wipe_tower_x wipe_tower_y wipe_tower_width wipe_tower_per_color_wipe extruder_colour filament_colour
     ));
     # C++ Slic3r::Model with Perl extensions in Slic3r/Model.pm
     $self->{model} = Slic3r::Model->new;
@@ -138,7 +138,7 @@ sub new {
     
     # Initialize 3D toolpaths preview
     if ($Slic3r::GUI::have_OpenGL) {
-        $self->{preview3D} = Slic3r::GUI::Plater::3DPreview->new($self->{preview_notebook}, $self->{print});
+        $self->{preview3D} = Slic3r::GUI::Plater::3DPreview->new($self->{preview_notebook}, $self->{print}, $self->{config});
         $self->{preview3D}->canvas->on_viewport_changed(sub {
             $self->{canvas3D}->set_viewport_from_scene($self->{preview3D}->canvas);
         });
@@ -153,9 +153,9 @@ sub new {
     }
     
     EVT_NOTEBOOK_PAGE_CHANGED($self, $self->{preview_notebook}, sub {
-        if ($self->{preview_notebook}->GetSelection == $self->{preview3D_page_idx}) {
-            $self->{preview3D}->load_print;
-        }
+        my $preview = $self->{preview_notebook}->GetCurrentPage;
+        $self->{preview3D}->load_print(1) if ($preview == $self->{preview3D});
+        $preview->OnActivate if $preview->can('OnActivate');
     });
     
     # toolbar for object manipulation
@@ -378,6 +378,7 @@ sub new {
                 my $text = Wx::StaticText->new($self, -1, "$group_labels{$group}:", wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT);
                 $text->SetFont($Slic3r::GUI::small_font);
                 my $choice = Wx::BitmapComboBox->new($self, -1, "", wxDefaultPosition, wxDefaultSize, [], wxCB_READONLY);
+                EVT_LEFT_DOWN($choice, sub { $self->filament_color_box_lmouse_down(0, @_); } );
                 $self->{preset_choosers}{$group} = [$choice];
                 $self->{preset_choosers_default_suppressed}{$group} = 0;
                 # setup the listener
@@ -524,12 +525,12 @@ sub _on_select_preset {
 		$Slic3r::GUI::Settings->{presets}{"filament_${_}"} = $choice->GetString($filament_presets[$_] - $default_suppressed)
 			for 1 .. $#filament_presets;
 		wxTheApp->save_settings;
-		return;
-	}
-	
-	# call GetSelection() in scalar context as it's context-aware
-	$self->{on_select_preset}->($group, scalar($choice->GetSelection) + $default_suppressed)
-	    if $self->{on_select_preset};
+        $self->update_filament_colors_preview($choice);
+	} else {
+    	# call GetSelection() in scalar context as it's context-aware
+    	$self->{on_select_preset}->($group, scalar($choice->GetSelection) + $default_suppressed)
+    	    if $self->{on_select_preset};
+    }
 	
 	# get new config and generate on_config_change() event for updating plater and other things
 	$self->on_config_change($self->GetFrame->config);
@@ -584,6 +585,7 @@ sub update_presets {
     my ($group, $presets, $default_suppressed, $selected, $is_dirty) = @_;
     
     my @choosers = @{ $self->{preset_choosers}{$group} };
+    my $choice_idx = 0;
     foreach my $choice (@choosers) {
         if ($group eq 'filament' && @choosers > 1) {
             # if we have more than one filament chooser, keep our selection
@@ -596,17 +598,7 @@ sub update_presets {
             next if ($preset->default && $default_suppressed);
             my $bitmap;
             if ($group eq 'filament') {
-                my $config = $preset->config(['filament_colour']);
-                my $rgb_hex = $config->filament_colour->[0];
-                if ($preset->default) {
-                    $bitmap = Wx::Bitmap->new($Slic3r::var->("spool.png"), wxBITMAP_TYPE_PNG);
-                } else {
-                    $rgb_hex =~ s/^#//;
-                    my @rgb = unpack 'C*', pack 'H*', $rgb_hex;
-                    my $image = Wx::Image->new(16,16);
-                    $image->SetRGB(Wx::Rect->new(0,0,16,16), @rgb);
-                    $bitmap = Wx::Bitmap->new($image);
-                }
+                $bitmap = Wx::Bitmap->new($Slic3r::var->("spool.png"), wxBITMAP_TYPE_PNG);
             } elsif ($group eq 'print') {
                 $bitmap = Wx::Bitmap->new($Slic3r::var->("cog.png"), wxBITMAP_TYPE_PNG);
             } elsif ($group eq 'printer') {
@@ -626,9 +618,77 @@ sub update_presets {
                 $choice->SetSelection($idx);
             }
         }
+        $choice_idx += 1;
     }
 
     $self->{preset_choosers_default_suppressed}{$group} = $default_suppressed;
+
+    wxTheApp->CallAfter(sub { $self->update_filament_colors_preview }) if $group eq 'filament' || $group eq 'printer';
+}
+
+# Update the color icon in front of each filament selection on the platter.
+# If the extruder has a preview color assigned, apply the extruder color to the active selection.
+# Always apply the filament color to the non-active selections.
+sub update_filament_colors_preview {
+    my ($self, $extruder_idx) = shift;
+
+    my @choosers = @{$self->{preset_choosers}{filament}};
+
+    if (ref $extruder_idx) {
+        # $extruder_idx is the chooser.
+        foreach my $chooser (@choosers) {
+            if ($extruder_idx == $chooser) {
+                $extruder_idx = $chooser;
+                last;
+            }
+        }
+    }
+
+    my @extruder_colors = @{$self->{config}->extruder_colour};
+
+    my @extruder_list;
+    if (defined $extruder_idx) {
+        @extruder_list = ($extruder_idx);
+    } else {
+        # Collect extruder indices.
+        @extruder_list = (0..$#extruder_colors);
+    }
+
+    my $filament_tab       = $self->GetFrame->{options_tabs}{filament};
+    my $presets            = $filament_tab->{presets};
+    my $default_suppressed = $filament_tab->{default_suppressed};
+
+    foreach my $extruder_idx (@extruder_list) {
+        my $chooser = $choosers[$extruder_idx];
+        my $extruder_color = $self->{config}->extruder_colour->[$extruder_idx];
+        my $preset_idx = 0;
+        my $selection_idx = $chooser->GetSelection;
+        foreach my $preset (@$presets) {
+            my $bitmap;
+            if ($preset->default) {
+                next if $default_suppressed;
+            } else {
+                # Assign an extruder color to the selected item if the extruder color is defined.
+                my $filament_rgb = $preset->config(['filament_colour'])->filament_colour->[0];
+                my $extruder_rgb = ($preset_idx == $selection_idx && $extruder_color =~ m/^#[[:xdigit:]]{6}/) ? $extruder_color : $filament_rgb;
+                $filament_rgb =~ s/^#//;
+                $extruder_rgb =~ s/^#//;
+                my $image = Wx::Image->new(24,16);
+                if ($filament_rgb ne $extruder_rgb) {
+                    my @rgb = unpack 'C*', pack 'H*', $extruder_rgb;
+                    $image->SetRGB(Wx::Rect->new(0,0,16,16), @rgb);
+                    @rgb = unpack 'C*', pack 'H*', $filament_rgb;
+                    $image->SetRGB(Wx::Rect->new(16,0,8,16), @rgb);
+                } else {
+                    my @rgb = unpack 'C*', pack 'H*', $filament_rgb;
+                    $image->SetRGB(Wx::Rect->new(0,0,24,16), @rgb);
+                }
+                $bitmap = Wx::Bitmap->new($image);
+            }
+            $chooser->SetItemBitmap($preset_idx, $bitmap) if $bitmap;
+            $preset_idx += 1;
+        }
+    }
 }
 
 # Return a vector of indices of filaments selected by the $self->{preset_choosers}{filament} combo boxes.
@@ -843,9 +903,9 @@ sub increase {
 }
 
 sub decrease {
-    my ($self, $copies) = @_;
+    my ($self, $copies_asked) = @_;
     
-    $copies //= 1;
+    my $copies = $copies_asked // 1;
     $self->stop_background_process;
     
     my ($obj_idx, $object) = $self->selected_object;
@@ -856,8 +916,13 @@ sub decrease {
             $self->{print}->objects->[$obj_idx]->delete_last_copy;
         }
         $self->{list}->SetItem($obj_idx, 1, $model_object->instances_count);
-    } else {
+    } elsif (defined $copies_asked) {
+        # The "decrease" came from the "set number of copies" dialog.
         $self->remove;
+    } else {
+        # The "decrease" came from the "-" button. Don't allow the object to disappear.
+        $self->resume_background_process;
+        return;
     }
     
     if ($self->{objects}[$obj_idx]) {
@@ -1143,11 +1208,7 @@ sub schedule_background_process {
 # The timer is started by schedule_background_process(), 
 sub async_apply_config {
     my ($self) = @_;
-    
-    # reset preview canvases
-    $self->{toolpaths2D}->reload_print if $self->{toolpaths2D};
-    $self->{preview3D}->reload_print if $self->{preview3D};
-    
+
     # pause process thread before applying new config
     # since we don't want to touch data that is being used by the threads
     $self->pause_background_process;
@@ -1155,23 +1216,30 @@ sub async_apply_config {
     # apply new config
     my $invalidated = $self->{print}->apply_config($self->GetFrame->config);
 
+    # Just redraw the 3D canvas without reloading the scene.
 #    $self->{canvas3D}->Refresh if ($invalidated && $self->{canvas3D}->layer_editing_enabled);
     $self->{canvas3D}->Refresh if ($self->{canvas3D}->layer_editing_enabled);
 
     # Hide the slicing results if the current slicing status is no more valid.    
     $self->{"print_info_box_show"}->(0) if $invalidated;
 
-    return if !$Slic3r::GUI::Settings->{_}{background_processing};
-    
-    if ($invalidated) {
-        # kill current thread if any
-        $self->stop_background_process;
-    } else {
-        $self->resume_background_process;
+    if ($Slic3r::GUI::Settings->{_}{background_processing}) {    
+        if ($invalidated) {
+            # kill current thread if any
+            $self->stop_background_process;
+        } else {
+            $self->resume_background_process;
+        }
+        # schedule a new process thread in case it wasn't running
+        $self->start_background_process;
     }
-    
-    # schedule a new process thread in case it wasn't running
-    $self->start_background_process;
+
+    # Reset preview canvases. If the print has been invalidated, the preview canvases will be cleared.
+    # Otherwise they will be just refreshed.
+    if ($invalidated) {
+        $self->{toolpaths2D}->reload_print if $self->{toolpaths2D};
+        $self->{preview3D}->reload_print if $self->{preview3D};
+    }
 }
 
 sub start_background_process {
@@ -1636,7 +1704,7 @@ sub on_thumbnail_made {
     my ($obj_idx) = @_;
     
     $self->{objects}[$obj_idx]->transform_thumbnail($self->{model}, $obj_idx);
-    $self->refresh_canvases;
+    $self->{canvas}->Refresh;
 }
 
 # this method gets called whenever print center is changed or the objects' bounding box changes
@@ -1661,7 +1729,8 @@ sub update {
         $self->resume_background_process;
     }
     
-    $self->refresh_canvases;
+    $self->{canvas3D}->reload_scene if $self->{canvas3D};
+    $self->{preview3D}->reload_print if $self->{preview3D};
 }
 
 # When a number of extruders changes, the UI needs to be updated to show a single filament selection combo box per extruder.
@@ -1675,6 +1744,8 @@ sub on_extruders_change {
         
         # initialize new choice
         my $choice = Wx::BitmapComboBox->new($self, -1, "", wxDefaultPosition, wxDefaultSize, [@presets], wxCB_READONLY);
+        my $extruder_idx = scalar @$choices;
+        EVT_LEFT_DOWN($choice, sub { $self->filament_color_box_lmouse_down($extruder_idx, @_); } );
         push @$choices, $choice;
         
         # copy icons from first choice
@@ -1723,18 +1794,10 @@ sub on_config_change {
         } elsif ($opt_key =~ '^wipe_tower' || $opt_key eq 'single_extruder_multi_material') {
             $update_scheduled = 1;
         } elsif ($opt_key eq 'serial_port') {
-            if ($config->get('serial_port')) {
-                $self->{btn_print}->Show;
-            } else {
-                $self->{btn_print}->Hide;
-            }
+            $self->{btn_print}->Show($config->get('serial_port'));
             $self->Layout;
         } elsif ($opt_key eq 'octoprint_host') {
-            if ($config->get('octoprint_host')) {
-                $self->{btn_send_gcode}->Show;
-            } else {
-                $self->{btn_send_gcode}->Hide;
-            }
+            $self->{btn_send_gcode}->Show($config->get('octoprint_host'));
             $self->Layout;
         } elsif ($opt_key eq 'variable_layer_height') {
             if ($config->get('variable_layer_height') != 1) {
@@ -1756,6 +1819,10 @@ sub on_config_change {
                     $self->{"btn_layer_editing"}->Enable;
                 }
             }
+        } elsif ($opt_key eq 'extruder_colour') {
+            $update_scheduled = 1;
+            my $extruder_colors = $config->get('extruder_colour');
+            $self->{preview3D}->set_number_extruders(scalar(@{$extruder_colors}));
         }
     }
 
@@ -1773,7 +1840,9 @@ sub list_item_deselected {
     
     if ($self->{list}->GetFirstSelected == -1) {
         $self->select_object(undef);
-        $self->refresh_canvases;
+        $self->{canvas}->Refresh;
+        #FIXME VBOs are being refreshed just to change a selection color?
+        $self->{canvas3D}->reload_scene if $self->{canvas3D};
     }
 }
 
@@ -1783,7 +1852,9 @@ sub list_item_selected {
     
     my $obj_idx = $event->GetIndex;
     $self->select_object($obj_idx);
-    $self->refresh_canvases;
+    $self->{canvas}->Refresh;
+    #FIXME VBOs are being refreshed just to change a selection color?
+    $self->{canvas3D}->reload_scene if $self->{canvas3D};
 }
 
 sub list_item_activated {
@@ -1791,6 +1862,33 @@ sub list_item_activated {
     
     $obj_idx //= $event->GetIndex;
 	$self->object_settings_dialog($obj_idx);
+}
+
+# Called when clicked on the filament preset combo box.
+# When clicked on the icon, show the color picker.
+sub filament_color_box_lmouse_down
+{
+    my ($self, $extruder_idx, $combobox, $event) = @_;
+    my $pos = $event->GetLogicalPosition(Wx::ClientDC->new($combobox));
+    my( $x, $y ) = ( $pos->x, $pos->y );
+    if ($x > 24) {
+        # Let the combo box process the mouse click.
+        $event->Skip;
+    } else {
+        # Swallow the mouse click and open the color picker.
+        my $data = Wx::ColourData->new;
+        $data->SetChooseFull(1);
+        my $dialog = Wx::ColourDialog->new($self->GetFrame, $data);
+        if ($dialog->ShowModal == wxID_OK) {
+            my $cfg = Slic3r::Config->new;
+            my $colors = $self->GetFrame->config->get('extruder_colour');
+            $colors->[$extruder_idx] = $dialog->GetColourData->GetColour->GetAsString(wxC2S_HTML_SYNTAX);
+            $cfg->set('extruder_colour', $colors);
+            $self->GetFrame->{options_tabs}{printer}->load_config($cfg);
+            $self->update_filament_colors_preview($extruder_idx);
+        }
+        $dialog->Destroy();
+    }
 }
 
 sub object_cut_dialog {
@@ -1853,6 +1951,7 @@ sub object_settings_dialog {
 	    $self->stop_background_process;
         $self->{print}->reload_object($obj_idx);
         $self->schedule_background_process;
+        $self->{canvas3D}->reload_scene if $self->{canvas3D};
     } else {
         $self->resume_background_process;
     }
@@ -1966,14 +2065,6 @@ sub selected_object {
     my $obj_idx = first { $self->{objects}[$_]->selected } 0..$#{ $self->{objects} };
     return undef if !defined $obj_idx;
     return ($obj_idx, $self->{objects}[$obj_idx]),
-}
-
-sub refresh_canvases {
-    my ($self) = @_;
-    
-    $self->{canvas}->Refresh;
-    $self->{canvas3D}->reload_scene if $self->{canvas3D};
-    $self->{preview3D}->reload_print if $self->{preview3D};
 }
 
 sub validate_config {
