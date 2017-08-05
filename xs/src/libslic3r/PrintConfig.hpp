@@ -145,13 +145,6 @@ class DynamicPrintConfig : public PrintConfigBase, public DynamicConfig
     void normalize();
 };
 
-template<typename CONFIG>
-void normalize_and_apply_config(CONFIG &dst, const DynamicPrintConfig &src)
-{
-    DynamicPrintConfig src_normalized = src;
-    src_normalized.normalize();
-    dst.apply(src_normalized, true);
-}
 
 class StaticPrintConfig : public PrintConfigBase, public StaticConfig
 {
@@ -162,7 +155,7 @@ class StaticPrintConfig : public PrintConfigBase, public StaticConfig
 // This object is mapped to Perl as Slic3r::Config::PrintObject.
 class PrintObjectConfig : public virtual StaticPrintConfig
 {
-public:
+    public:
     ConfigOptionBool                clip_multipart_objects;
     ConfigOptionBool                dont_support_bridges;
     ConfigOptionFloatOrPercent      extrusion_width;
@@ -326,7 +319,6 @@ public:
     ConfigOptionString              before_layer_gcode;
     ConfigOptionFloats              deretract_speed;
     ConfigOptionString              end_gcode;
-    ConfigOptionStrings             end_filament_gcode;
     ConfigOptionString              extrusion_axis;
     ConfigOptionFloats              extrusion_multiplier;
     ConfigOptionFloats              filament_diameter;
@@ -352,7 +344,6 @@ public:
     ConfigOptionFloats              retract_restart_extra_toolchange;
     ConfigOptionFloats              retract_speed;
     ConfigOptionString              start_gcode;
-    ConfigOptionStrings             start_filament_gcode;
     ConfigOptionBool                single_extruder_multi_material;
     ConfigOptionString              toolchange_gcode;
     ConfigOptionFloat               travel_speed;
@@ -371,7 +362,6 @@ public:
         OPT_PTR(before_layer_gcode);
         OPT_PTR(deretract_speed);
         OPT_PTR(end_gcode);
-        OPT_PTR(end_filament_gcode);
         OPT_PTR(extrusion_axis);
         OPT_PTR(extrusion_multiplier);
         OPT_PTR(filament_diameter);
@@ -398,7 +388,6 @@ public:
         OPT_PTR(retract_speed);
         OPT_PTR(single_extruder_multi_material);
         OPT_PTR(start_gcode);
-        OPT_PTR(start_filament_gcode);
         OPT_PTR(toolchange_gcode);
         OPT_PTR(travel_speed);
         OPT_PTR(use_firmware_retraction);
@@ -424,7 +413,7 @@ public:
 // This object is mapped to Perl as Slic3r::Config::Print.
 class PrintConfig : public GCodeConfig
 {
-public:
+    public:
     ConfigOptionBool                avoid_crossing_perimeters;
     ConfigOptionPoints              bed_shape;
     ConfigOptionInt                 bed_temperature;
@@ -438,7 +427,6 @@ public:
     ConfigOptionFloat               duplicate_distance;
     ConfigOptionFloat               extruder_clearance_height;
     ConfigOptionFloat               extruder_clearance_radius;
-    ConfigOptionStrings             extruder_colour;
     ConfigOptionPoints              extruder_offset;
     ConfigOptionBool                fan_always_on;
     ConfigOptionInt                 fan_below_layer_time;
@@ -503,7 +491,6 @@ public:
         OPT_PTR(duplicate_distance);
         OPT_PTR(extruder_clearance_height);
         OPT_PTR(extruder_clearance_radius);
-        OPT_PTR(extruder_colour);
         OPT_PTR(extruder_offset);
         OPT_PTR(fan_always_on);
         OPT_PTR(fan_below_layer_time);
@@ -559,7 +546,7 @@ public:
 
 class HostConfig : public virtual StaticPrintConfig
 {
-public:
+    public:
     ConfigOptionString              octoprint_host;
     ConfigOptionString              octoprint_apikey;
     ConfigOptionString              serial_port;

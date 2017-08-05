@@ -423,10 +423,8 @@ sub get_value {
 
 sub _string_to_colour {
     my ($self, $string) = @_;
-
+    
     $string =~ s/^#//;
-    # If the color is in an invalid format, set it to white.
-    $string = 'FFFFFF' if ($string !~ m/^[[:xdigit:]]{6}/);
     return Wx::Colour->new(unpack 'C*', pack 'H*', $string);
 }
 

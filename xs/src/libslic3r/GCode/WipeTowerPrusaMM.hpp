@@ -39,13 +39,11 @@ public:
 	// y			-- y coordinates of wipe tower in mm ( left bottom corner )
 	// width		-- width of wipe tower in mm ( default 60 mm - leave as it is )
 	// wipe_area	-- space available for one toolchange in mm
-	WipeTowerPrusaMM(float x, float y, float width, float wipe_area, unsigned int initial_tool) :
+	WipeTowerPrusaMM(float x, float y, float width, float wipe_area) :
 		m_wipe_tower_pos(x, y),
 		m_wipe_tower_width(width),
 		m_wipe_area(wipe_area),
-		m_z_pos(0.f),
-		m_current_tool(initial_tool)
- 	{
+		m_z_pos(0.f) {
 		for (size_t i = 0; i < 4; ++ i) {
 			// Extruder specific parameters.
 			m_material[i] = PLA;
@@ -53,7 +51,6 @@ public:
 			m_first_layer_temperature[i] = 0;
 		}
 	}
-
 	virtual ~WipeTowerPrusaMM() {}
 
 	// _retract - retract value in mm
@@ -84,7 +81,6 @@ public:
 		bool   is_last_layer)
 	{
 		m_z_pos 				= print_z;
-		m_layer_height			= layer_height;
 		m_max_color_changes 	= max_tool_changes;
 		m_is_first_layer 		= is_first_layer;
 		m_is_last_layer			= is_last_layer;
@@ -109,24 +105,24 @@ public:
 	}
 
 	// Return the wipe tower position.
-	virtual const xy& 		 position() const { return m_wipe_tower_pos; }
+	virtual const xy& 				   position() const { return m_wipe_tower_pos; }
 	// Return the wipe tower width.
-	virtual float     		 width()    const { return m_wipe_tower_width; }
+	virtual float     				   width()    const { return m_wipe_tower_width; }
 	// The wipe tower is finished, there should be no more tool changes or wipe tower prints.
-	virtual bool 	  		 finished() const { return m_max_color_changes == 0; }
+	virtual bool 	  				   finished() const { return m_max_color_changes == 0; }
 
 	// Returns gcode for a toolchange and a final print head position.
 	// On the first layer, extrude a brim around the future wipe tower first.
-	virtual ToolChangeResult tool_change(int new_tool, bool last_in_layer, Purpose purpose);
+	virtual std::pair<std::string, xy> tool_change(int new_tool, Purpose purpose);
 
 	// Close the current wipe tower layer with a perimeter and possibly fill the unfilled space with a zig-zag.
 	// Call this method only if layer_finished() is false.
-	virtual ToolChangeResult finish_layer(Purpose purpose);
+	virtual std::pair<std::string, xy> finish_layer(Purpose purpose);
 
 	// Is the current layer finished? A layer is finished if either the wipe tower is finished, or
 	// the wipe tower has been completely covered by the tool change extrusions,
 	// or the rest of the tower has been filled by a sparse infill with the finish_layer() method.
-	virtual bool 			 layer_finished() const
+	virtual bool 					   layer_finished() const
 		{ return m_idx_tool_change_in_layer == m_max_color_changes; }
 
 private:
@@ -147,8 +143,6 @@ private:
 	float  			m_wipe_area;
 	// Current Z position.
 	float  			m_z_pos 			= 0.f;
-	// Current layer height.
-	float           m_layer_height      = 0.f;
 	// Maximum number of color changes per layer.
 	size_t 			m_max_color_changes = 0;
 	// Is this the 1st layer of the print? If so, print the brim around the waste tower.
@@ -178,7 +172,7 @@ private:
 	unsigned int 	m_idx_tool_change_in_layer = 0;
 	// A fill-in direction (positive Y, negative Y) alternates with each layer.
 	wipe_shape   	m_current_shape = SHAPE_NORMAL;
-	unsigned int 	m_current_tool  = 0;
+	material_type 	m_current_material = PLA;
 	// Current y position at the wipe tower.
 	float 		 	m_current_wipe_start_y = 0.f;
 
@@ -216,7 +210,7 @@ private:
 	// Returns gcode for wipe tower brim
 	// sideOnly			-- set to false -- experimental, draw brim on sides of wipe tower 
 	// offset			-- set to 0		-- experimental, offset to replace brim in front / rear of wipe tower
-	ToolChangeResult toolchange_Brim(Purpose purpose, bool sideOnly = false, float y_offset = 0.f);
+	std::pair<std::string, WipeTower::xy> toolchange_Brim(Purpose purpose, bool sideOnly = false, float y_offset = 0.f);
 
 	void toolchange_Unload(
 		PrusaMultiMaterial::Writer &writer,
