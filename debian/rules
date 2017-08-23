@@ -45,3 +45,6 @@ override_dh_auto_install:
 	# Install zsh completion
 	mkdir -p $(CURDIR)/debian/slic3r-prusa/usr/share/zsh/vendor-completions
 	cp utils/zsh/functions/_slic3r $(CURDIR)/debian/slic3r-prusa/usr/share/zsh/vendor-completions/_slic3r-prusa
+
+override_dh_perl:
+	dh_perl /usr/lib/slic3r-prusa
