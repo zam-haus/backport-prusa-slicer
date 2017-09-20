@@ -37,9 +37,6 @@ public:
     Polylines unsupported_edges(double angle = -1) const;
     
 private:
-    // Suppress warning "assignment operator could not be generated"
-    BridgeDetector& operator=(const BridgeDetector &);
-
     void initialize();
 
     struct BridgeDirection {
