@@ -30,7 +30,7 @@ Print::~Print()
 void
 Print::clear_objects()
 {
-    for (int i = int(this->objects.size())-1; i >= 0; --i)
+    for (int i = this->objects.size()-1; i >= 0; --i)
         this->delete_object(i);
 
     this->clear_regions();
@@ -148,13 +148,11 @@ Print::invalidate_state_by_config_options(const std::vector<t_config_option_key>
             || *opt_key == "fan_always_on"
             || *opt_key == "fan_below_layer_time"
             || *opt_key == "filament_diameter"
-            || *opt_key == "filament_notes"
-            || *opt_key == "filament_type"
-            || *opt_key == "filament_soluble"
             || *opt_key == "first_layer_acceleration"
             || *opt_key == "first_layer_bed_temperature"
             || *opt_key == "first_layer_speed"
             || *opt_key == "first_layer_temperature"
+            || *opt_key == "gcode_arcs"
             || *opt_key == "gcode_comments"
             || *opt_key == "gcode_flavor"
             || *opt_key == "infill_acceleration"
@@ -168,8 +166,8 @@ Print::invalidate_state_by_config_options(const std::vector<t_config_option_key>
             || *opt_key == "output_filename_format"
             || *opt_key == "perimeter_acceleration"
             || *opt_key == "post_process"
+            || *opt_key == "pressure_advance"
             || *opt_key == "retract_before_travel"
-            || *opt_key == "retract_before_wipe"
             || *opt_key == "retract_layer_change"
             || *opt_key == "retract_length"
             || *opt_key == "retract_length_toolchange"
@@ -179,8 +177,6 @@ Print::invalidate_state_by_config_options(const std::vector<t_config_option_key>
             || *opt_key == "retract_restart_extra"
             || *opt_key == "retract_restart_extra_toolchange"
             || *opt_key == "retract_speed"
-            || *opt_key == "deretract_speed"
-            || *opt_key == "single_extruder_multi_material"
             || *opt_key == "slowdown_below_layer_time"
             || *opt_key == "spiral_vase"
             || *opt_key == "standby_temperature_delta"
@@ -192,11 +188,6 @@ Print::invalidate_state_by_config_options(const std::vector<t_config_option_key>
             || *opt_key == "use_firmware_retraction"
             || *opt_key == "use_relative_e_distances"
             || *opt_key == "wipe"
-            || *opt_key == "wipe_tower"
-            || *opt_key == "wipe_tower_x"
-            || *opt_key == "wipe_tower_y"
-            || *opt_key == "wipe_tower_width"
-            || *opt_key == "wipe_tower_per_color_wipe"
             || *opt_key == "z_offset"
             || *opt_key == "max_volumetric_extrusion_rate_slope_negative"
             || *opt_key == "max_volumetric_extrusion_rate_slope_positive") {
@@ -266,62 +257,70 @@ Print::step_done(PrintObjectStep step) const
 }
 
 // returns 0-based indices of used extruders
-std::vector<unsigned int> Print::object_extruders() const
+std::set<size_t>
+Print::object_extruders() const
 {
-    std::vector<unsigned int> extruders;
+    std::set<size_t> extruders;
     
     FOREACH_REGION(this, region) {
         // these checks reflect the same logic used in the GUI for enabling/disabling
         // extruder selection fields
         if ((*region)->config.perimeters.value > 0 || this->config.brim_width.value > 0)
-            extruders.push_back((*region)->config.perimeter_extruder - 1);
+            extruders.insert((*region)->config.perimeter_extruder - 1);
+        
         if ((*region)->config.fill_density.value > 0)
-            extruders.push_back((*region)->config.infill_extruder - 1);
+            extruders.insert((*region)->config.infill_extruder - 1);
+        
         if ((*region)->config.top_solid_layers.value > 0 || (*region)->config.bottom_solid_layers.value > 0)
-            extruders.push_back((*region)->config.solid_infill_extruder - 1);
+            extruders.insert((*region)->config.solid_infill_extruder - 1);
     }
     
-    sort_remove_duplicates(extruders);
     return extruders;
 }
 
 // returns 0-based indices of used extruders
-std::vector<unsigned int> Print::support_material_extruders() const
+std::set<size_t>
+Print::support_material_extruders() const
 {
-    std::vector<unsigned int> extruders;
+    std::set<size_t> extruders;
     bool support_uses_current_extruder = false;
 
-    for (PrintObject *object : this->objects) {
-        if (object->has_support_material()) {
-            if (object->config.support_material_extruder == 0)
+    FOREACH_OBJECT(this, object) {
+        if ((*object)->has_support_material()) {
+            if ((*object)->config.support_material_extruder == 0)
                 support_uses_current_extruder = true;
             else
-                extruders.push_back(object->config.support_material_extruder - 1);
-            if (object->config.support_material_interface_extruder == 0)
+                extruders.insert((*object)->config.support_material_extruder - 1);
+            if ((*object)->config.support_material_interface_extruder == 0)
                 support_uses_current_extruder = true;
             else
-                extruders.push_back(object->config.support_material_interface_extruder - 1);
+                extruders.insert((*object)->config.support_material_interface_extruder - 1);
         }
     }
 
-    if (support_uses_current_extruder)
+    if (support_uses_current_extruder) {
         // Add all object extruders to the support extruders as it is not know which one will be used to print supports.
-        append(extruders, this->object_extruders());
+        std::set<size_t> object_extruders = this->object_extruders();
+        extruders.insert(object_extruders.begin(), object_extruders.end());
+    }
     
-    sort_remove_duplicates(extruders);
     return extruders;
 }
 
 // returns 0-based indices of used extruders
-std::vector<unsigned int> Print::extruders() const
+std::set<size_t>
+Print::extruders() const
 {
-    std::vector<unsigned int> extruders = this->object_extruders();
-    append(extruders, this->support_material_extruders());
-    sort_remove_duplicates(extruders);
+    std::set<size_t> extruders = this->object_extruders();
+    
+    std::set<size_t> s_extruders = this->support_material_extruders();
+    extruders.insert(s_extruders.begin(), s_extruders.end());
+    
     return extruders;
 }
 
-void Print::_simplify_slices(double distance)
+void
+Print::_simplify_slices(double distance)
 {
     FOREACH_OBJECT(this, object) {
         FOREACH_LAYER(*object, layer) {
@@ -333,17 +332,23 @@ void Print::_simplify_slices(double distance)
     }
 }
 
-double Print::max_allowed_layer_height() const
+double
+Print::max_allowed_layer_height() const
 {
-    double nozzle_diameter_max = 0.;
-    for (unsigned int extruder_id : this->extruders())
-        nozzle_diameter_max = std::max(nozzle_diameter_max, this->config.nozzle_diameter.get_at(extruder_id));
-    return nozzle_diameter_max;
+    std::vector<double> nozzle_diameter;
+    
+    std::set<size_t> extruders = this->extruders();
+    for (std::set<size_t>::const_iterator e = extruders.begin(); e != extruders.end(); ++e) {
+        nozzle_diameter.push_back(this->config.nozzle_diameter.get_at(*e));
+    }
+    
+    return *std::max_element(nozzle_diameter.begin(), nozzle_diameter.end());
 }
 
 /*  Caller is responsible for supplying models whose objects don't collide
     and have explicit instance positions */
-void Print::add_model_object(ModelObject* model_object, int idx)
+void
+Print::add_model_object(ModelObject* model_object, int idx)
 {
     DynamicPrintConfig object_config = model_object->config;  // clone
     object_config.normalize();
@@ -614,9 +619,9 @@ Print::validate() const
                 convex_hull = offset(convex_hull, scale_(this->config.extruder_clearance_radius.value)/2, jtRound, scale_(0.1)).front();
                 
                 // now we check that no instance of convex_hull intersects any of the previously checked object instances
-                for (const Point &copy : object->_shifted_copies) {
+                for (Points::const_iterator copy = object->_shifted_copies.begin(); copy != object->_shifted_copies.end(); ++copy) {
                     Polygon p = convex_hull;
-                    p.translate(copy);
+                    p.translate(*copy);
                     if (! intersection(a, p).empty())
                         return "Some objects are too close; your extruder will collide with them.";
                     polygons_append(a, p);
@@ -651,13 +656,13 @@ Print::validate() const
     
     {
         // find the smallest nozzle diameter
-        std::vector<unsigned int> extruders = this->extruders();
+        std::set<size_t> extruders = this->extruders();
         if (extruders.empty())
             return "The supplied settings will cause an empty print.";
         
-        std::vector<double> nozzle_diameters;
-        for (unsigned int extruder_id : extruders)
-            nozzle_diameters.push_back(this->config.nozzle_diameter.get_at(extruder_id));
+        std::set<double> nozzle_diameters;
+        for (std::set<size_t>::iterator it = extruders.begin(); it != extruders.end(); ++it)
+            nozzle_diameters.insert(this->config.nozzle_diameter.get_at(*it));
         double min_nozzle_diameter = *std::min_element(nozzle_diameters.begin(), nozzle_diameters.end());
         
         FOREACH_OBJECT(this, i_object) {
@@ -897,6 +902,8 @@ void Print::_make_skirt()
             if (layer->print_z > skirt_height_z)
                 break;
             for (const ExtrusionEntity *extrusion_entity : layer->support_fills.entities)
+                append(object_points, extrusion_entity->as_polyline().points);
+            for (const ExtrusionEntity *extrusion_entity : layer->support_interface_fills.entities)
                 append(object_points, extrusion_entity->as_polyline().points);
         }
         // Repeat points for each object copy.

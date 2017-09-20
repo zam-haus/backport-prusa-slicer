@@ -42,10 +42,6 @@ enum SeamPosition {
     spRandom, spNearest, spAligned, spRear
 };
 
-enum FilamentType {
-    ftPLA, ftABS, ftPET, ftHIPS, ftFLEX, ftSCAFF, ftEDGE, ftNGEN, ftPVA
-};
-
 template<> inline t_config_enum_values ConfigOptionEnum<GCodeFlavor>::get_enum_values() {
     t_config_enum_values keys_map;
     keys_map["reprap"]          = gcfRepRap;
@@ -92,20 +88,6 @@ template<> inline t_config_enum_values ConfigOptionEnum<SeamPosition>::get_enum_
     keys_map["nearest"]             = spNearest;
     keys_map["aligned"]             = spAligned;
     keys_map["rear"]                = spRear;
-    return keys_map;
-}
-
-template<> inline t_config_enum_values ConfigOptionEnum<FilamentType>::get_enum_values() {
-    t_config_enum_values keys_map;
-    keys_map["PLA"]             = ftPLA;
-    keys_map["ABS"]             = ftABS;
-    keys_map["PET"]             = ftPET;
-    keys_map["HIPS"]            = ftHIPS;
-    keys_map["FLEX"]            = ftFLEX;
-    keys_map["SCAFF"]           = ftSCAFF;
-    keys_map["EDGE"]            = ftEDGE;
-    keys_map["NGEN"]            = ftNGEN;
-    keys_map["PVA"]             = ftPVA;
     return keys_map;
 }
 
@@ -315,16 +297,13 @@ class PrintRegionConfig : public virtual StaticPrintConfig
 // This object is mapped to Perl as Slic3r::Config::GCode.
 class GCodeConfig : public virtual StaticPrintConfig
 {
-public:
+    public:
     ConfigOptionString              before_layer_gcode;
-    ConfigOptionFloats              deretract_speed;
     ConfigOptionString              end_gcode;
     ConfigOptionString              extrusion_axis;
     ConfigOptionFloats              extrusion_multiplier;
     ConfigOptionFloats              filament_diameter;
     ConfigOptionFloats              filament_density;
-    ConfigOptionStrings             filament_type;
-    ConfigOptionBools               filament_soluble;
     ConfigOptionFloats              filament_cost;
     ConfigOptionFloats              filament_max_volumetric_speed;
     ConfigOptionBool                gcode_comments;
@@ -334,7 +313,7 @@ public:
     ConfigOptionFloat               max_volumetric_speed;
     ConfigOptionFloat               max_volumetric_extrusion_rate_slope_positive;
     ConfigOptionFloat               max_volumetric_extrusion_rate_slope_negative;
-    ConfigOptionPercents            retract_before_wipe;
+    ConfigOptionFloat               pressure_advance;
     ConfigOptionFloats              retract_length;
     ConfigOptionFloats              retract_length_toolchange;
     ConfigOptionFloats              retract_lift;
@@ -344,13 +323,11 @@ public:
     ConfigOptionFloats              retract_restart_extra_toolchange;
     ConfigOptionFloats              retract_speed;
     ConfigOptionString              start_gcode;
-    ConfigOptionBool                single_extruder_multi_material;
     ConfigOptionString              toolchange_gcode;
     ConfigOptionFloat               travel_speed;
     ConfigOptionBool                use_firmware_retraction;
     ConfigOptionBool                use_relative_e_distances;
     ConfigOptionBool                use_volumetric_e;
-    ConfigOptionBool                set_and_wait_temperatures;
     ConfigOptionBool                variable_layer_height;
     
     GCodeConfig(bool initialize = true) : StaticPrintConfig() {
@@ -360,14 +337,11 @@ public:
     
     virtual ConfigOption* optptr(const t_config_option_key &opt_key, bool create = false) {
         OPT_PTR(before_layer_gcode);
-        OPT_PTR(deretract_speed);
         OPT_PTR(end_gcode);
         OPT_PTR(extrusion_axis);
         OPT_PTR(extrusion_multiplier);
         OPT_PTR(filament_diameter);
         OPT_PTR(filament_density);
-        OPT_PTR(filament_type);
-        OPT_PTR(filament_soluble);
         OPT_PTR(filament_cost);
         OPT_PTR(filament_max_volumetric_speed);
         OPT_PTR(gcode_comments);
@@ -377,7 +351,7 @@ public:
         OPT_PTR(max_volumetric_speed);
         OPT_PTR(max_volumetric_extrusion_rate_slope_positive);
         OPT_PTR(max_volumetric_extrusion_rate_slope_negative);
-        OPT_PTR(retract_before_wipe);
+        OPT_PTR(pressure_advance);
         OPT_PTR(retract_length);
         OPT_PTR(retract_length_toolchange);
         OPT_PTR(retract_lift);
@@ -386,14 +360,12 @@ public:
         OPT_PTR(retract_restart_extra);
         OPT_PTR(retract_restart_extra_toolchange);
         OPT_PTR(retract_speed);
-        OPT_PTR(single_extruder_multi_material);
         OPT_PTR(start_gcode);
         OPT_PTR(toolchange_gcode);
         OPT_PTR(travel_speed);
         OPT_PTR(use_firmware_retraction);
         OPT_PTR(use_relative_e_distances);
         OPT_PTR(use_volumetric_e);
-        OPT_PTR(set_and_wait_temperatures);
         OPT_PTR(variable_layer_height);
         return NULL;
     };
@@ -437,6 +409,7 @@ class PrintConfig : public GCodeConfig
     ConfigOptionFloatOrPercent      first_layer_extrusion_width;
     ConfigOptionFloatOrPercent      first_layer_speed;
     ConfigOptionInts                first_layer_temperature;
+    ConfigOptionBool                gcode_arcs;
     ConfigOptionFloat               infill_acceleration;
     ConfigOptionBool                infill_first;
     ConfigOptionInt                 max_fan_speed;
@@ -452,7 +425,6 @@ class PrintConfig : public GCodeConfig
     ConfigOptionString              output_filename_format;
     ConfigOptionFloat               perimeter_acceleration;
     ConfigOptionStrings             post_process;
-    ConfigOptionString              printer_notes;
     ConfigOptionFloat               resolution;
     ConfigOptionFloats              retract_before_travel;
     ConfigOptionBools               retract_layer_change;
@@ -465,11 +437,6 @@ class PrintConfig : public GCodeConfig
     ConfigOptionInts                temperature;
     ConfigOptionInt                 threads;
     ConfigOptionBools               wipe;
-    ConfigOptionBool                wipe_tower;
-    ConfigOptionFloat               wipe_tower_x;
-    ConfigOptionFloat               wipe_tower_y;
-    ConfigOptionFloat               wipe_tower_width;
-    ConfigOptionFloat               wipe_tower_per_color_wipe;
     ConfigOptionFloat               z_offset;
     
     PrintConfig(bool initialize = true) : GCodeConfig(false) {
@@ -501,6 +468,7 @@ class PrintConfig : public GCodeConfig
         OPT_PTR(first_layer_extrusion_width);
         OPT_PTR(first_layer_speed);
         OPT_PTR(first_layer_temperature);
+        OPT_PTR(gcode_arcs);
         OPT_PTR(infill_acceleration);
         OPT_PTR(infill_first);
         OPT_PTR(max_fan_speed);
@@ -516,7 +484,6 @@ class PrintConfig : public GCodeConfig
         OPT_PTR(output_filename_format);
         OPT_PTR(perimeter_acceleration);
         OPT_PTR(post_process);
-        OPT_PTR(printer_notes);
         OPT_PTR(resolution);
         OPT_PTR(retract_before_travel);
         OPT_PTR(retract_layer_change);
@@ -529,11 +496,6 @@ class PrintConfig : public GCodeConfig
         OPT_PTR(temperature);
         OPT_PTR(threads);
         OPT_PTR(wipe);
-        OPT_PTR(wipe_tower);
-        OPT_PTR(wipe_tower_x);
-        OPT_PTR(wipe_tower_y);
-        OPT_PTR(wipe_tower_width);
-        OPT_PTR(wipe_tower_per_color_wipe);
         OPT_PTR(z_offset);
         
         // look in parent class
