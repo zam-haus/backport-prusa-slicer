@@ -8,10 +8,12 @@ plan tests => 27;
 BEGIN {
     use FindBin;
     use lib "$FindBin::Bin/../lib";
+    use local::lib "$FindBin::Bin/../local-lib";
 }
 
 use List::Util qw(first);
 use Slic3r;
+use Slic3r::Flow ':roles';
 use Slic3r::Geometry qw(epsilon scale);
 use Slic3r::Geometry::Clipper qw(diff);
 use Slic3r::Test;
@@ -23,7 +25,14 @@ use Slic3r::Test;
     
     my $test = sub {
         my $print = Slic3r::Test::init_print('20mm_cube', config => $config);
-        my $flow = $print->print->objects->[0]->support_material_flow;
+        my $object_config = $print->print->objects->[0]->config;
+        my $flow = Slic3r::Flow->new_from_width(
+            width               => $object_config->support_material_extrusion_width || $object_config->extrusion_width,
+            role                => FLOW_ROLE_SUPPORT_MATERIAL,
+            nozzle_diameter     => $print->config->nozzle_diameter->[$object_config->support_material_extruder-1] // $print->config->nozzle_diameter->[0],
+            layer_height        => $object_config->layer_height,
+            bridge_flow_ratio   => 0,
+        );
         my $support = Slic3r::Print::SupportMaterial->new(
             object_config       => $print->print->objects->[0]->config,
             print_config        => $print->print->config,
@@ -106,7 +115,7 @@ use Slic3r::Test;
     $config->set('support_material_extrusion_width', 0.6);
     $config->set('first_layer_extrusion_width', '100%');
     $config->set('bridge_speed', 99);
-    $config->set('cooling', 0);                 # prevent speed alteration
+    $config->set('cooling', [ 0 ]);             # prevent speed alteration
     $config->set('first_layer_speed', '100%');  # prevent speed alteration
     $config->set('start_gcode', '');            # prevent any unexpected Z move
     my $print = Slic3r::Test::init_print('20mm_cube', config => $config);
@@ -189,7 +198,7 @@ use Slic3r::Test;
     $config->set('support_material', 1);
     $config->set('top_solid_layers', 0); # so that we don't have the internal bridge over infill
     $config->set('bridge_speed', 99);
-    $config->set('cooling', 0);
+    $config->set('cooling', [ 0 ]);
     $config->set('first_layer_speed', '100%');
     
     my $test = sub {

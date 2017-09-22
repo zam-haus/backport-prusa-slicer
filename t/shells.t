@@ -5,6 +5,7 @@ use warnings;
 BEGIN {
     use FindBin;
     use lib "$FindBin::Bin/../lib";
+    use local::lib "$FindBin::Bin/../local-lib";
 }
 
 use List::Util qw(first sum);
@@ -20,7 +21,7 @@ use Slic3r::Test;
     $config->set('top_solid_infill_speed', 99);
     $config->set('bridge_speed', 72);
     $config->set('first_layer_speed', '100%');
-    $config->set('cooling', 0);
+    $config->set('cooling', [ 0 ]);
     
     my $test = sub {
         my ($conf) = @_;
@@ -86,7 +87,7 @@ use Slic3r::Test;
     $config->set('first_layer_height', '100%');
     $config->set('bottom_solid_layers', 0);
     $config->set('top_solid_layers', 3);
-    $config->set('cooling', 0);
+    $config->set('cooling', [ 0 ]);
     $config->set('bridge_speed', 99);
     $config->set('solid_infill_speed', 99);
     $config->set('top_solid_infill_speed', 99);
@@ -115,7 +116,7 @@ use Slic3r::Test;
     # discarded instead of grown
     $config->set('perimeters', 1);
     $config->set('fill_density', 0);
-    $config->set('cooling', 0);                 # prevent speed alteration
+    $config->set('cooling', [ 0 ]);             # prevent speed alteration
     $config->set('first_layer_speed', '100%');  # prevent speed alteration
     $config->set('layer_height', 0.4);
     $config->set('first_layer_height', '100%');
@@ -138,7 +139,7 @@ use Slic3r::Test;
 {
     my $config = Slic3r::Config->new_from_defaults;
     $config->set('perimeters', 3);
-    $config->set('cooling', 0);                 # prevent speed alteration
+    $config->set('cooling', [ 0 ]);             # prevent speed alteration
     $config->set('first_layer_speed', '100%');  # prevent speed alteration
     $config->set('layer_height', 0.4);
     $config->set('first_layer_height', '100%');

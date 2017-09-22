@@ -29,8 +29,7 @@
 
     std::vector<double> color()
         %code%{ RETVAL.reserve(4); RETVAL.push_back(THIS->color[0]); RETVAL.push_back(THIS->color[1]); RETVAL.push_back(THIS->color[2]); RETVAL.push_back(THIS->color[3]); %};
-    int                 composite_id()
-        %code%{ RETVAL = THIS->composite_id; %};
+
     int                 select_group_id()
         %code%{ RETVAL = THIS->select_group_id; %};
     int                 drag_group_id()
@@ -77,6 +76,8 @@
 
     std::vector<int> load_object(ModelObject *object, int obj_idx, std::vector<int> instance_idxs, std::string color_by, std::string select_by, std::string drag_by, bool use_VBOs);
 
+    int load_wipe_tower_preview(int obj_idx, float pos_x, float pos_y, float width, float depth, float height, bool use_VBOs);
+
     void erase()
         %code{% THIS->clear(); %};
 
@@ -89,6 +90,30 @@
     void render_legacy() const;
     void finalize_geometry(bool use_VBOs);
     void release_geometry();
+
+    bool move_volume_up(int idx)
+        %code%{ 
+            if (idx > 0 && idx < int(THIS->volumes.size())) {
+                std::swap(THIS->volumes[idx-1], THIS->volumes[idx]);
+                std::swap(THIS->volumes[idx-1]->composite_id,    THIS->volumes[idx]->composite_id);
+                std::swap(THIS->volumes[idx-1]->select_group_id, THIS->volumes[idx]->select_group_id);
+                std::swap(THIS->volumes[idx-1]->drag_group_id,   THIS->volumes[idx]->drag_group_id);
+                RETVAL = true;
+            } else
+                RETVAL = false;
+        %};
+    bool move_volume_down(int idx)
+        %code%{ 
+            if (idx >= 0 && idx + 1 < int(THIS->volumes.size())) {
+                std::swap(THIS->volumes[idx+1], THIS->volumes[idx]);
+                std::swap(THIS->volumes[idx+1]->composite_id,    THIS->volumes[idx]->composite_id);
+                std::swap(THIS->volumes[idx+1]->select_group_id, THIS->volumes[idx]->select_group_id);
+                std::swap(THIS->volumes[idx+1]->drag_group_id,   THIS->volumes[idx]->drag_group_id);
+                RETVAL = true;
+            } else
+                RETVAL = false;
+        %};
+
 %{
 
 SV*
@@ -117,19 +142,30 @@ _glew_init()
         _3DScene::_glew_init();
 
 void
-_load_print_toolpaths(print, volumes, use_VBOs)
+_load_print_toolpaths(print, volumes, tool_colors, use_VBOs)
         Print               *print;
         GLVolumeCollection  *volumes;
+        std::vector<std::string> tool_colors;
         int                  use_VBOs;
     CODE:
-        _3DScene::_load_print_toolpaths(print, volumes, use_VBOs != 0);
+        _3DScene::_load_print_toolpaths(print, volumes, tool_colors, use_VBOs != 0);
 
 void 
-_load_print_object_toolpaths(print_object, volumes, use_VBOs)
+_load_print_object_toolpaths(print_object, volumes, tool_colors, use_VBOs)
         PrintObject        *print_object;
         GLVolumeCollection *volumes;
+        std::vector<std::string> tool_colors;
         int                 use_VBOs;
     CODE:
-        _3DScene::_load_print_object_toolpaths(print_object, volumes, use_VBOs != 0);
+        _3DScene::_load_print_object_toolpaths(print_object, volumes, tool_colors, use_VBOs != 0);
+
+void
+_load_wipe_tower_toolpaths(print, volumes, tool_colors, use_VBOs)
+        Print               *print;
+        GLVolumeCollection  *volumes;
+        std::vector<std::string> tool_colors;
+        int                  use_VBOs;
+    CODE:
+        _3DScene::_load_wipe_tower_toolpaths(print, volumes, tool_colors, use_VBOs != 0);
 
 %}

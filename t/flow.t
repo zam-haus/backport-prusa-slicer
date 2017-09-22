@@ -5,6 +5,7 @@ use warnings;
 BEGIN {
     use FindBin;
     use lib "$FindBin::Bin/../lib";
+    use local::lib "$FindBin::Bin/../local-lib";
 }
 
 use List::Util qw(first sum);
@@ -43,7 +44,7 @@ use Slic3r::Test;
     my $config = Slic3r::Config->new_from_defaults;
     $config->set('bridge_speed', 99);
     $config->set('bridge_flow_ratio', 1);
-    $config->set('cooling', 0);                 # to prevent speeds from being altered
+    $config->set('cooling', [ 0 ]);             # to prevent speeds from being altered
     $config->set('first_layer_speed', '100%');  # to prevent speeds from being altered
     
     my $test = sub {

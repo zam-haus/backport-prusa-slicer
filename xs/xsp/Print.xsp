@@ -19,6 +19,7 @@ _constant()
     STEP_SUPPORTMATERIAL    = posSupportMaterial
     STEP_SKIRT              = psSkirt
     STEP_BRIM               = psBrim
+    STEP_WIPE_TOWER         = psWipeTower
   PROTOTYPE:
   CODE:
     RETVAL = ix;
@@ -63,13 +64,6 @@ _constant()
     Ref<Point3> size()
         %code%{ RETVAL = &THIS->size; %};
     Clone<BoundingBox> bounding_box();
-    Ref<Point> _copies_shift()
-        %code%{ RETVAL = &THIS->_copies_shift; %};
-    
-    bool typed_slices()
-        %code%{ RETVAL = THIS->typed_slices; %};
-    void set_typed_slices(bool value)
-        %code%{ THIS->typed_slices = value; %};
     
     Points _shifted_copies()
         %code%{ RETVAL = THIS->_shifted_copies; %};
@@ -93,17 +87,12 @@ _constant()
     Ref<Layer> get_layer(int idx);
     Ref<Layer> add_layer(int id, coordf_t height, coordf_t print_z,
         coordf_t slice_z);
-    void delete_layer(int idx);
 
     size_t support_layer_count();
     void clear_support_layers();
     Ref<SupportLayer> get_support_layer(int idx);
     Ref<SupportLayer> add_support_layer(int id, coordf_t height, coordf_t print_z);
-    void delete_support_layer(int idx);
-    
-    bool invalidate_state_by_config_options(std::vector<std::string> opt_keys);
-    bool invalidate_step(PrintObjectStep step);
-    bool invalidate_all_steps();
+
     bool step_done(PrintObjectStep step)
         %code%{ RETVAL = THIS->state.is_done(step); %};
     void set_step_done(PrintObjectStep step)
@@ -114,10 +103,9 @@ _constant()
     void _slice();
     std::string _fix_slicing_errors();
     void _simplify_slices(double distance);
+    void _prepare_infill();
     void detect_surfaces_type();
     void process_external_surfaces();
-    void discover_vertical_shells();
-    void bridge_over_infill();
     void _make_perimeters();
     void _infill();
     void _generate_support_material();
@@ -183,9 +171,6 @@ _constant()
     size_t region_count()
         %code%{ RETVAL = THIS->regions.size(); %};
     
-    bool invalidate_state_by_config_options(std::vector<std::string> opt_keys);
-    bool invalidate_step(PrintStep step);
-    bool invalidate_all_steps();
     bool step_done(PrintStep step)
         %code%{ RETVAL = THIS->state.is_done(step); %};
     bool object_step_done(PrintObjectStep step)
@@ -195,30 +180,6 @@ _constant()
     void set_step_started(PrintStep step)
         %code%{ THIS->state.set_started(step); %};
     
-    std::vector<int> object_extruders()
-        %code%{
-            std::set<size_t> extruders = THIS->object_extruders();
-            RETVAL.reserve(extruders.size());
-            for (std::set<size_t>::const_iterator e = extruders.begin(); e != extruders.end(); ++e) {
-                RETVAL.push_back(*e);
-            }
-        %};
-    std::vector<int> support_material_extruders()
-        %code%{
-            std::set<size_t> extruders = THIS->support_material_extruders();
-            RETVAL.reserve(extruders.size());
-            for (std::set<size_t>::const_iterator e = extruders.begin(); e != extruders.end(); ++e) {
-                RETVAL.push_back(*e);
-            }
-        %};
-    std::vector<int> extruders()
-        %code%{
-            std::set<size_t> extruders = THIS->extruders();
-            RETVAL.reserve(extruders.size());
-            for (std::set<size_t>::const_iterator e = extruders.begin(); e != extruders.end(); ++e) {
-                RETVAL.push_back(*e);
-            }
-        %};
     void clear_filament_stats()
         %code%{
             THIS->filament_stats.clear();
@@ -253,6 +214,7 @@ _constant()
         %code%{ RETVAL = THIS->apply_config(*config); %};
     bool has_infinite_skirt();
     bool has_skirt();
+    std::vector<unsigned int> extruders() const;
     std::string _validate()
         %code%{ RETVAL = THIS->validate(); %};
     Clone<BoundingBox> bounding_box();
@@ -262,6 +224,12 @@ _constant()
     Clone<Flow> skirt_flow();
 
     void _make_skirt();
+    void _make_brim();
+
+    bool has_wipe_tower();
+    void _clear_wipe_tower();
+    void _make_wipe_tower();
+
 %{
 
 double

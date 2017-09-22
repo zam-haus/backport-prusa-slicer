@@ -49,6 +49,7 @@
 #include <functional>
 #include <assert.h>
 #include <Shiny/Shiny.h>
+#include <libslic3r/Int128.hpp>
 
 namespace ClipperLib {
 
@@ -128,150 +129,6 @@ bool PolyNode::IsHole() const
   }
   return result;
 }  
-//------------------------------------------------------------------------------
-
-#ifndef use_int32
-
-//------------------------------------------------------------------------------
-// Int128 class (enables safe math on signed 64bit integers)
-// eg Int128 val1((long64)9223372036854775807); //ie 2^63 -1
-//    Int128 val2((long64)9223372036854775807);
-//    Int128 val3 = val1 * val2;
-//    val3.AsString => "85070591730234615847396907784232501249" (8.5e+37)
-//------------------------------------------------------------------------------
-
-class Int128
-{
-  public:
-    ulong64 lo;
-    long64 hi;
-
-    Int128(long64 _lo = 0)
-    {
-      lo = (ulong64)_lo;   
-      if (_lo < 0)  hi = -1; else hi = 0; 
-    }
-
-
-    Int128(const Int128 &val): lo(val.lo), hi(val.hi){}
-
-    Int128(const long64& _hi, const ulong64& _lo): lo(_lo), hi(_hi){}
-    
-    Int128& operator = (const long64 &val)
-    {
-      lo = (ulong64)val;
-      if (val < 0) hi = -1; else hi = 0;
-      return *this;
-    }
-
-    bool operator == (const Int128 &val) const
-      {return (hi == val.hi && lo == val.lo);}
-
-    bool operator != (const Int128 &val) const
-      { return !(*this == val);}
-
-    bool operator > (const Int128 &val) const
-    {
-      if (hi != val.hi)
-        return hi > val.hi;
-      else
-        return lo > val.lo;
-    }
-
-    bool operator < (const Int128 &val) const
-    {
-      if (hi != val.hi)
-        return hi < val.hi;
-      else
-        return lo < val.lo;
-    }
-
-    bool operator >= (const Int128 &val) const
-      { return !(*this < val);}
-
-    bool operator <= (const Int128 &val) const
-      { return !(*this > val);}
-
-    Int128& operator += (const Int128 &rhs)
-    {
-      hi += rhs.hi;
-      lo += rhs.lo;
-      if (lo < rhs.lo) hi++;
-      return *this;
-    }
-
-    Int128 operator + (const Int128 &rhs) const
-    {
-      Int128 result(*this);
-      result+= rhs;
-      return result;
-    }
-
-    Int128& operator -= (const Int128 &rhs)
-    {
-      *this += -rhs;
-      return *this;
-    }
-
-    Int128 operator - (const Int128 &rhs) const
-    {
-      Int128 result(*this);
-      result -= rhs;
-      return result;
-    }
-
-    Int128 operator-() const //unary negation
-    {
-      if (lo == 0)
-        return Int128(-hi, 0);
-      else
-        return Int128(~hi, ~lo + 1);
-    }
-
-    operator double() const
-    {
-      const double shift64 = 18446744073709551616.0; //2^64
-      if (hi < 0)
-      {
-        if (lo == 0) return (double)hi * shift64;
-        else return -(double)(~lo + ~hi * shift64);
-      }
-      else
-        return (double)(lo + hi * shift64);
-    }
-
-};
-//------------------------------------------------------------------------------
-
-inline Int128 Int128Mul (long64 lhs, long64 rhs)
-{
-  bool negate = (lhs < 0) != (rhs < 0);
-
-  if (lhs < 0) lhs = -lhs;
-  ulong64 int1Hi = ulong64(lhs) >> 32;
-  ulong64 int1Lo = ulong64(lhs & 0xFFFFFFFF);
-
-  if (rhs < 0) rhs = -rhs;
-  ulong64 int2Hi = ulong64(rhs) >> 32;
-  ulong64 int2Lo = ulong64(rhs & 0xFFFFFFFF);
-
-  //because the high (sign) bits in both int1Hi & int2Hi have been zeroed,
-  //there's no risk of 64 bit overflow in the following assignment
-  //(ie: $7FFFFFFF*$FFFFFFFF + $7FFFFFFF*$FFFFFFFF < 64bits)
-  ulong64 a = int1Hi * int2Hi;
-  ulong64 b = int1Lo * int2Lo;
-  //Result = A shl 64 + C shl 32 + B ...
-  ulong64 c = int1Hi * int2Lo + int1Lo * int2Hi;
-
-  Int128 tmp;
-  tmp.hi = long64(a + (c >> 32));
-  tmp.lo = long64(c << 32);
-  tmp.lo += long64(b);
-  if (tmp.lo < b) tmp.hi++;
-  if (negate) tmp = -tmp;
-  return tmp;
-};
-#endif
 
 //------------------------------------------------------------------------------
 // Miscellaneous global functions
@@ -330,11 +187,8 @@ int PointInPolygon(const IntPoint &pt, const Path &path)
   for(size_t i = 1; i <= cnt; ++i)
   {
     IntPoint ipNext = (i == cnt ? path[0] : path[i]);
-    if (ipNext.Y == pt.Y)
-    {
-        if ((ipNext.X == pt.X) || (ip.Y == pt.Y && 
-          ((ipNext.X > pt.X) == (ip.X < pt.X)))) return -1;
-    }
+    if (ipNext.Y == pt.Y && ((ipNext.X == pt.X) || (ip.Y == pt.Y && ((ipNext.X > pt.X) == (ip.X < pt.X)))))
+      return -1;
     if ((ip.Y < pt.Y) != (ipNext.Y < pt.Y))
     {
       if (ip.X >= pt.X)
@@ -342,8 +196,7 @@ int PointInPolygon(const IntPoint &pt, const Path &path)
         if (ipNext.X > pt.X) result = 1 - result;
         else
         {
-          double d = (double)(ip.X - pt.X) * (ipNext.Y - pt.Y) - 
-            (double)(ipNext.X - pt.X) * (ip.Y - pt.Y);
+          double d = (double)(ip.X - pt.X) * (ipNext.Y - pt.Y) - (double)(ipNext.X - pt.X) * (ip.Y - pt.Y);
           if (!d) return -1;
           if ((d > 0) == (ipNext.Y > ip.Y)) result = 1 - result;
         }
@@ -351,8 +204,7 @@ int PointInPolygon(const IntPoint &pt, const Path &path)
       {
         if (ipNext.X > pt.X)
         {
-          double d = (double)(ip.X - pt.X) * (ipNext.Y - pt.Y) - 
-            (double)(ipNext.X - pt.X) * (ip.Y - pt.Y);
+          double d = (double)(ip.X - pt.X) * (ipNext.Y - pt.Y) - (double)(ipNext.X - pt.X) * (ip.Y - pt.Y);
           if (!d) return -1;
           if ((d > 0) == (ipNext.Y > ip.Y)) result = 1 - result;
         }
@@ -384,8 +236,7 @@ int PointInPolygon (const IntPoint &pt, OutPt *op)
         if (op->Next->Pt.X > pt.X) result = 1 - result;
         else
         {
-          double d = (double)(op->Pt.X - pt.X) * (op->Next->Pt.Y - pt.Y) - 
-            (double)(op->Next->Pt.X - pt.X) * (op->Pt.Y - pt.Y);
+          double d = (double)(op->Pt.X - pt.X) * (op->Next->Pt.Y - pt.Y) - (double)(op->Next->Pt.X - pt.X) * (op->Pt.Y - pt.Y);
           if (!d) return -1;
           if ((d > 0) == (op->Next->Pt.Y > op->Pt.Y)) result = 1 - result;
         }
@@ -393,8 +244,7 @@ int PointInPolygon (const IntPoint &pt, OutPt *op)
       {
         if (op->Next->Pt.X > pt.X)
         {
-          double d = (double)(op->Pt.X - pt.X) * (op->Next->Pt.Y - pt.Y) - 
-            (double)(op->Next->Pt.X - pt.X) * (op->Pt.Y - pt.Y);
+          double d = (double)(op->Pt.X - pt.X) * (op->Next->Pt.Y - pt.Y) - (double)(op->Next->Pt.X - pt.X) * (op->Pt.Y - pt.Y);
           if (!d) return -1;
           if ((d > 0) == (op->Next->Pt.Y > op->Pt.Y)) result = 1 - result;
         }
@@ -423,39 +273,22 @@ bool Poly2ContainsPoly1(OutPt *OutPt1, OutPt *OutPt2)
 }
 //----------------------------------------------------------------------
 
+inline bool SlopesEqual(const cInt dx1, const cInt dy1, const cInt dx2, const cInt dy2, bool UseFullInt64Range) {
+  return (UseFullInt64Range) ?
+    // |dx1| < 2^63, |dx2| < 2^63 etc,
+    Int128::sign_determinant_2x2_filtered(dx1, dy1, dx2, dy2) == 0 :
+//    Int128::sign_determinant_2x2(dx1, dy1, dx2, dy2) == 0 :
+    // |dx1| < 2^31, |dx2| < 2^31 etc,
+    // therefore the following computation could be done with 64bit arithmetics. 
+    dy1 * dx2 == dx1 * dy2;
+}
 inline bool SlopesEqual(const TEdge &e1, const TEdge &e2, bool UseFullInt64Range)
-{
-#ifndef use_int32
-  if (UseFullInt64Range)
-    return Int128Mul(e1.Delta.Y, e2.Delta.X) == Int128Mul(e1.Delta.X, e2.Delta.Y);
-  else 
-#endif
-    return e1.Delta.Y * e2.Delta.X == e1.Delta.X * e2.Delta.Y;
-}
-//------------------------------------------------------------------------------
+  { return SlopesEqual(e1.Delta.X, e1.Delta.Y, e2.Delta.X, e2.Delta.Y, UseFullInt64Range); }
+inline bool SlopesEqual(const IntPoint &pt1, const IntPoint &pt2, const IntPoint &pt3, bool UseFullInt64Range)
+  { return SlopesEqual(pt1.X-pt2.X, pt1.Y-pt2.Y, pt2.X-pt3.X, pt2.Y-pt3.Y, UseFullInt64Range); }
+inline bool SlopesEqual(const IntPoint &pt1, const IntPoint &pt2, const IntPoint &pt3, const IntPoint &pt4, bool UseFullInt64Range)
+  { return SlopesEqual(pt1.X-pt2.X, pt1.Y-pt2.Y, pt3.X-pt4.X, pt3.Y-pt4.Y, UseFullInt64Range); }
 
-inline bool SlopesEqual(const IntPoint &pt1, const IntPoint &pt2,
-  const IntPoint &pt3, bool UseFullInt64Range)
-{
-#ifndef use_int32
-  if (UseFullInt64Range)
-    return Int128Mul(pt1.Y-pt2.Y, pt2.X-pt3.X) == Int128Mul(pt1.X-pt2.X, pt2.Y-pt3.Y);
-  else 
-#endif
-    return (pt1.Y-pt2.Y)*(pt2.X-pt3.X) == (pt1.X-pt2.X)*(pt2.Y-pt3.Y);
-}
-//------------------------------------------------------------------------------
-
-inline bool SlopesEqual(const IntPoint &pt1, const IntPoint &pt2,
-  const IntPoint &pt3, const IntPoint &pt4, bool UseFullInt64Range)
-{
-#ifndef use_int32
-  if (UseFullInt64Range)
-    return Int128Mul(pt1.Y-pt2.Y, pt3.X-pt4.X) == Int128Mul(pt1.X-pt2.X, pt3.Y-pt4.Y);
-  else 
-#endif
-    return (pt1.Y-pt2.Y)*(pt3.X-pt4.X) == (pt1.X-pt2.X)*(pt3.Y-pt4.Y);
-}
 //------------------------------------------------------------------------------
 
 inline bool IsHorizontal(TEdge &e)
@@ -473,8 +306,9 @@ inline double GetDx(const IntPoint &pt1, const IntPoint &pt2)
 
 inline cInt TopX(TEdge &edge, const cInt currentY)
 {
-  return ( currentY == edge.Top.Y ) ?
-    edge.Top.X : edge.Bot.X + Round(edge.Dx *(currentY - edge.Bot.Y));
+  return (currentY == edge.Top.Y) ?
+    edge.Top.X : 
+    edge.Bot.X + Round(edge.Dx *(currentY - edge.Bot.Y));
 }
 //------------------------------------------------------------------------------
 
@@ -519,10 +353,9 @@ void IntersectPoint(TEdge &Edge1, TEdge &Edge2, IntPoint &ip)
     b2 = Edge2.Bot.X - Edge2.Bot.Y * Edge2.Dx;
     double q = (b2-b1) / (Edge1.Dx - Edge2.Dx);
     ip.Y = Round(q);
-    if (std::fabs(Edge1.Dx) < std::fabs(Edge2.Dx))
-      ip.X = Round(Edge1.Dx * q + b1);
-    else 
-      ip.X = Round(Edge2.Dx * q + b2);
+    ip.X = (std::fabs(Edge1.Dx) < std::fabs(Edge2.Dx)) ? 
+      Round(Edge1.Dx * q + b1) :
+      Round(Edge2.Dx * q + b2);
   }
 
   if (ip.Y < Edge1.Top.Y || ip.Y < Edge2.Top.Y) 

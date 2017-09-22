@@ -10,9 +10,9 @@ use List::Util qw(min max first sum);
 use Slic3r::ExtrusionLoop ':roles';
 use Slic3r::ExtrusionPath ':roles';
 use Slic3r::Flow ':roles';
-use Slic3r::Geometry qw(X Y Z X1 Y1 X2 Y2 MIN MAX PI scale unscale convex_hull);
+use Slic3r::Geometry qw(X Y unscale);
 use Slic3r::Geometry::Clipper qw(diff_ex union_ex intersection_ex intersection offset
-    offset2 union union_pt_chained JT_ROUND JT_SQUARE);
+    union JT_ROUND JT_SQUARE);
 use Slic3r::Print::State ':steps';
 
 our $status_cb;
@@ -44,6 +44,7 @@ sub process {
     $_->generate_support_material for @{$self->objects};
     $self->make_skirt;
     $self->make_brim;  # must come after make_skirt
+    $self->make_wipe_tower;
     
     # time to make some statistics
     if (0) {
@@ -63,6 +64,7 @@ sub process {
     Slic3r::trace(3, "Slicing process finished.")
 }
 
+# G-code export process, running at a background thread.
 sub export_gcode {
     my $self = shift;
     my %params = @_;
@@ -73,38 +75,9 @@ sub export_gcode {
     # output everything to a G-code file
     my $output_file = $self->output_filepath($params{output_file} // '');
     $self->status_cb->(90, "Exporting G-code" . ($output_file ? " to $output_file" : ""));
-    
-    {
-        # open output gcode file if we weren't supplied a file-handle
-        my ($fh, $tempfile);
-        if ($params{output_fh}) {
-            $fh = $params{output_fh};
-        } else {
-            $tempfile = "$output_file.tmp";
-            Slic3r::open(\$fh, ">", $tempfile)
-                or die "Failed to open $tempfile for writing\n";
-    
-            # enable UTF-8 output since user might have entered Unicode characters in fields like notes
-            binmode $fh, ':utf8';
-        }
 
-        Slic3r::Print::GCode->new(
-            print   => $self,
-            fh      => $fh,
-        )->export;
-
-        # close our gcode file
-        close $fh;
-        if ($tempfile) {
-            my $i;
-            for ($i = 0; $i < 5; $i += 1)  {
-                last if (rename Slic3r::encode_path($tempfile), Slic3r::encode_path($output_file));
-                # Wait for 1/4 seconds and try to rename once again.
-                select(undef, undef, undef, 0.25);
-            }
-            Slic3r::debugf "Failed to remove the output G-code file from $tempfile to $output_file. Is $tempfile locked?\n" if ($i == 5);
-        } 
-    }
+    die "G-code export to " . $output_file . " failed\n" 
+        if ! Slic3r::GCode->new->do_export($self, $output_file);
     
     # run post-processing scripts
     if (@{$self->config->post_process}) {
@@ -131,7 +104,7 @@ sub export_svg {
     my $fh = $params{output_fh};
     if (!$fh) {
         my $output_file = $self->output_filepath($params{output_file});
-        $output_file =~ s/\.gcode$/.svg/i;
+        $output_file =~ s/\.[gG][cC][oO][dD][eE]$/.svg/;
         Slic3r::open(\$fh, ">", $output_file) or die "Failed to open $output_file for writing\n";
         print "Exporting to $output_file..." unless $params{quiet};
     }
@@ -224,19 +197,13 @@ sub make_skirt {
     $_->generate_support_material for @{$self->objects};
     
     return if $self->step_done(STEP_SKIRT);
-    $self->set_step_started(STEP_SKIRT);
-    
-    # since this method must be idempotent, we clear skirt paths *before*
-    # checking whether we need to generate them
-    $self->skirt->clear;
-    
-    if (!$self->has_skirt) {
-        $self->set_step_done(STEP_SKIRT);
-        return;
-    }
 
-    $self->status_cb->(88, "Generating skirt");
-    $self->_make_skirt();
+    $self->set_step_started(STEP_SKIRT);
+    $self->skirt->clear;    
+    if ($self->has_skirt) {
+        $self->status_cb->(88, "Generating skirt");
+        $self->_make_skirt();
+    }
     $self->set_step_done(STEP_SKIRT);
 }
 
@@ -250,66 +217,38 @@ sub make_brim {
     $self->make_skirt;
     
     return if $self->step_done(STEP_BRIM);
+
     $self->set_step_started(STEP_BRIM);
-    
     # since this method must be idempotent, we clear brim paths *before*
     # checking whether we need to generate them
     $self->brim->clear;
-    
-    if ($self->config->brim_width == 0) {
-        $self->set_step_done(STEP_BRIM);
-        return;
+    if ($self->config->brim_width > 0) {
+        $self->status_cb->(88, "Generating brim");
+        $self->_make_brim;
     }
-    $self->status_cb->(88, "Generating brim");
-    
-    # brim is only printed on first layer and uses perimeter extruder
-    my $first_layer_height = $self->skirt_first_layer_height;
-    my $flow = $self->brim_flow;
-    my $mm3_per_mm = $flow->mm3_per_mm;
-    
-    my $grow_distance = $flow->scaled_width / 2;
-    my @islands = (); # array of polygons
-    foreach my $obj_idx (0 .. ($self->object_count - 1)) {
-        my $object = $self->objects->[$obj_idx];
-        my $layer0 = $object->get_layer(0);
-        my @object_islands = (
-            (map $_->contour, @{$layer0->slices}),
-        );
-        if (@{ $object->support_layers }) {
-            my $support_layer0 = $object->support_layers->[0];
-            push @object_islands,
-                (map @{$_->polyline->grow($grow_distance)}, @{$support_layer0->support_fills})
-                if $support_layer0->support_fills;
-            push @object_islands,
-                (map @{$_->polyline->grow($grow_distance)}, @{$support_layer0->support_interface_fills})
-                if $support_layer0->support_interface_fills;
-        }
-        foreach my $copy (@{$object->_shifted_copies}) {
-            push @islands, map { $_->translate(@$copy); $_ } map $_->clone, @object_islands;
-        }
-    }
-    
-    my @loops = ();
-    my $num_loops = sprintf "%.0f", $self->config->brim_width / $flow->width;
-    for my $i (reverse 1 .. $num_loops) {
-        # JT_SQUARE ensures no vertex is outside the given offset distance
-        # -0.5 because islands are not represented by their centerlines
-        # (first offset more, then step back - reverse order than the one used for 
-        # perimeters because here we're offsetting outwards)
-        push @loops, @{offset2(\@islands, ($i + 0.5) * $flow->scaled_spacing, -1.0 * $flow->scaled_spacing, JT_SQUARE)};
-    }
-    
-    $self->brim->append(map Slic3r::ExtrusionLoop->new_from_paths(
-        Slic3r::ExtrusionPath->new(
-            polyline        => Slic3r::Polygon->new(@$_)->split_at_first_point,
-            role            => EXTR_ROLE_SKIRT,
-            mm3_per_mm      => $mm3_per_mm,
-            width           => $flow->width,
-            height          => $first_layer_height,
-        ),
-    ), reverse @{union_pt_chained(\@loops)});
-    
+
     $self->set_step_done(STEP_BRIM);
+}
+
+sub make_wipe_tower {
+    my $self = shift;
+    
+    # prerequisites
+    $_->make_perimeters for @{$self->objects};
+    $_->infill for @{$self->objects};
+    $_->generate_support_material for @{$self->objects};
+    $self->make_skirt;
+    $self->make_brim;
+    
+    return if $self->step_done(STEP_WIPE_TOWER);
+    
+    $self->set_step_started(STEP_WIPE_TOWER);
+    $self->_clear_wipe_tower;
+    if ($self->has_wipe_tower) {
+#       $self->status_cb->(95, "Generating wipe tower");
+        $self->_make_wipe_tower;
+    }
+    $self->set_step_done(STEP_WIPE_TOWER);
 }
 
 # Wrapper around the C++ Slic3r::Print::validate()

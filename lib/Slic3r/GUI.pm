@@ -28,19 +28,16 @@ use Slic3r::GUI::Plater::LambdaObjectDialog;
 use Slic3r::GUI::Plater::OverrideSettingsPanel;
 use Slic3r::GUI::Preferences;
 use Slic3r::GUI::ProgressStatusBar;
-use Slic3r::GUI::Projector;
 use Slic3r::GUI::OptionsGroup;
 use Slic3r::GUI::OptionsGroup::Field;
-use Slic3r::GUI::SimpleTab;
 use Slic3r::GUI::SystemInfo;
 use Slic3r::GUI::Tab;
 
 our $have_OpenGL = eval "use Slic3r::GUI::3DScene; 1";
 our $have_LWP    = eval "use LWP::UserAgent; 1";
 
-use Wx 0.9901 qw(:bitmap :dialog :icon :id :misc :systemsettings :toplevelwindow
-    :filedialog :font);
-use Wx::Event qw(EVT_IDLE EVT_COMMAND);
+use Wx 0.9901 qw(:bitmap :dialog :icon :id :misc :systemsettings :toplevelwindow :filedialog :font);
+use Wx::Event qw(EVT_IDLE EVT_COMMAND EVT_MENU);
 use base 'Wx::App';
 
 use constant FILE_WILDCARDS => {
@@ -59,14 +56,11 @@ our $datadir;
 # If set, the "Controller" tab for the control of the printer over serial line and the serial port settings are hidden.
 our $no_controller;
 our $no_plater;
-our $mode;
 our $autosave;
 our @cb;
 
 our $Settings = {
     _ => {
-        # Simple mode is very limited, rather start with the expert mode.
-        mode => 'expert',
         version_check => 1,
         autocenter => 1,
         # Disable background processing by default as it is not stable.
@@ -79,17 +73,16 @@ our $Settings = {
     },
 };
 
-our $have_button_icons = &Wx::wxVERSION_STRING =~ m" (?:2\.9\.[1-9]|3\.)";
 our $small_font = Wx::SystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-$small_font->SetPointSize(11) if !&Wx::wxMSW;
+$small_font->SetPointSize(11) if &Wx::wxMAC;
 our $small_bold_font = Wx::SystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-$small_bold_font->SetPointSize(11) if !&Wx::wxMSW;
+$small_bold_font->SetPointSize(11) if &Wx::wxMAC;
 $small_bold_font->SetWeight(wxFONTWEIGHT_BOLD);
 our $medium_font = Wx::SystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
 $medium_font->SetPointSize(12);
 our $grey = Wx::Colour->new(200,200,200);
 
-our $VERSION_CHECK_EVENT : shared = Wx::NewEventType;
+#our $VERSION_CHECK_EVENT : shared = Wx::NewEventType;
 
 our $DLP_projection_screen;
 
@@ -97,7 +90,7 @@ sub OnInit {
     my ($self) = @_;
     
     $self->SetAppName('Slic3r');
-    $self->SetAppDisplayName('Slic3r Prusa Edition') if (Wx::wxVERSION >= 3.000000);
+    $self->SetAppDisplayName('Slic3r Prusa Edition');
     Slic3r::debugf "wxWidgets version %s, Wx version %s\n", &Wx::wxVERSION_STRING, $Wx::VERSION;
     
     $self->{notifier} = Slic3r::GUI::Notifier->new;
@@ -106,7 +99,7 @@ sub OnInit {
     # Unix: ~/.Slic3r
     # Windows: "C:\Users\username\AppData\Roaming\Slic3r" or "C:\Documents and Settings\username\Application Data\Slic3r"
     # Mac: "~/Library/Application Support/Slic3r"
-    $datadir ||= Slic3r::decode_path(Wx::StandardPaths::Get->GetUserDataDir);
+    $datadir ||= Wx::StandardPaths::Get->GetUserDataDir;
     my $enc_datadir = Slic3r::encode_path($datadir);
     Slic3r::debugf "Data directory: %s\n", $datadir;
     
@@ -128,7 +121,6 @@ sub OnInit {
         my $ini = eval { Slic3r::Config->read_ini("$datadir/slic3r.ini") };
         $Settings = $ini if $ini;
         $last_version = $Settings->{_}{version};
-        $Settings->{_}{mode} ||= 'expert';
         $Settings->{_}{autocenter} //= 1;
         $Settings->{_}{background_processing} //= 1;
         # If set, the "Controller" tab for the control of the printer over serial line and the serial port settings are hidden.
@@ -142,7 +134,6 @@ sub OnInit {
     # application frame
     Wx::Image::AddHandler(Wx::PNGHandler->new);
     $self->{mainframe} = my $frame = Slic3r::GUI::MainFrame->new(
-        mode            => $mode // $Settings->{_}{mode},
         # If set, the "Controller" tab for the control of the printer over serial line and the serial port settings are hidden.
         no_controller   => $no_controller // $Settings->{_}{no_controller},
         no_plater       => $no_plater,
@@ -181,10 +172,10 @@ sub OnInit {
     }
     $self->{mainframe}->config_wizard if $run_wizard;
     
-    $self->check_version
-        if $self->have_version_check
-            && ($Settings->{_}{version_check} // 1)
-            && (!$Settings->{_}{last_version_check} || (time - $Settings->{_}{last_version_check}) >= 86400);
+#    $self->check_version
+#        if $self->have_version_check
+#            && ($Settings->{_}{version_check} // 1)
+#            && (!$Settings->{_}{last_version_check} || (time - $Settings->{_}{last_version_check}) >= 86400);
     
     EVT_IDLE($frame, sub {
         while (my $cb = shift @cb) {
@@ -192,24 +183,24 @@ sub OnInit {
         }
     });
     
-    EVT_COMMAND($self, -1, $VERSION_CHECK_EVENT, sub {
-        my ($self, $event) = @_;
-        my ($success, $response, $manual_check) = @{$event->GetData};
-        
-        if ($success) {
-            if ($response =~ /^obsolete ?= ?([a-z0-9.-]+,)*\Q$Slic3r::VERSION\E(?:,|$)/) {
-                my $res = Wx::MessageDialog->new(undef, "A new version is available. Do you want to open the Slic3r website now?",
-                    'Update', wxYES_NO | wxCANCEL | wxYES_DEFAULT | wxICON_INFORMATION | wxICON_ERROR)->ShowModal;
-                Wx::LaunchDefaultBrowser('http://slic3r.org/') if $res == wxID_YES;
-            } else {
-                Slic3r::GUI::show_info(undef, "You're using the latest version. No updates are available.") if $manual_check;
-            }
-            $Settings->{_}{last_version_check} = time();
-            $self->save_settings;
-        } else {
-            Slic3r::GUI::show_error(undef, "Failed to check for updates. Try later.") if $manual_check;
-        }
-    });
+#    EVT_COMMAND($self, -1, $VERSION_CHECK_EVENT, sub {
+#        my ($self, $event) = @_;
+#        my ($success, $response, $manual_check) = @{$event->GetData};
+#        
+#        if ($success) {
+#            if ($response =~ /^obsolete ?= ?([a-z0-9.-]+,)*\Q$Slic3r::VERSION\E(?:,|$)/) {
+#                my $res = Wx::MessageDialog->new(undef, "A new version is available. Do you want to open the Slic3r website now?",
+#                    'Update', wxYES_NO | wxCANCEL | wxYES_DEFAULT | wxICON_INFORMATION | wxICON_ERROR)->ShowModal;
+#                Wx::LaunchDefaultBrowser('http://slic3r.org/') if $res == wxID_YES;
+#            } else {
+#                Slic3r::GUI::show_info(undef, "You're using the latest version. No updates are available.") if $manual_check;
+#            }
+#            $Settings->{_}{last_version_check} = time();
+#            $self->save_settings;
+#        } else {
+#            Slic3r::GUI::show_error(undef, "Failed to check for updates. Try later.") if $manual_check;
+#        }
+#    });
     
     return 1;
 }
@@ -320,7 +311,9 @@ sub presets {
     my %presets = ();
     opendir my $dh, Slic3r::encode_path("$Slic3r::GUI::datadir/$section")
         or die "Failed to read directory $Slic3r::GUI::datadir/$section (errno: $!)\n";
-    foreach my $file (grep /\.ini$/i, readdir $dh) {
+    # Instead of using the /i modifier for case-insensitive matching, the case insensitivity is expressed
+    # explicitely to avoid having to bundle the UTF8 Perl library.
+    foreach my $file (grep /\.[iI][nN][iI]$/, readdir $dh) {
         $file = Slic3r::decode_path($file);
         my $name = basename($file);
         $name =~ s/\.ini$//;
@@ -331,29 +324,28 @@ sub presets {
     return %presets;
 }
 
-sub have_version_check {
-    my ($self) = @_;
-    
-    # return an explicit 0
-    return ($Slic3r::have_threads && $Slic3r::build && $have_LWP) || 0;
-}
+#sub have_version_check {
+#    my ($self) = @_;
+#    
+#    # return an explicit 0
+#    return ($Slic3r::have_threads && $Slic3r::build && $have_LWP) || 0;
+#}
 
-sub check_version {
-    my ($self, $manual_check) = @_;
-    
-    Slic3r::debugf "Checking for updates...\n";
-    
-    @_ = ();
-    threads->create(sub {
-        my $ua = LWP::UserAgent->new;
-        $ua->timeout(10);
-        my $response = $ua->get('http://slic3r.org/updatecheck');
-        Wx::PostEvent($self, Wx::PlThreadEvent->new(-1, $VERSION_CHECK_EVENT,
-            threads::shared::shared_clone([ $response->is_success, $response->decoded_content, $manual_check ])));
-        
-        Slic3r::thread_cleanup();
-    })->detach;
-}
+#sub check_version {
+#    my ($self, $manual_check) = @_;
+#    
+#    Slic3r::debugf "Checking for updates...\n";
+#    
+#    @_ = ();
+#    threads->create(sub {
+#        my $ua = LWP::UserAgent->new;
+#        $ua->timeout(10);
+#        my $response = $ua->get('http://slic3r.org/updatecheck');
+#        Wx::PostEvent($self, Wx::PlThreadEvent->new(-1, $VERSION_CHECK_EVENT,
+#            threads::shared::shared_clone([ $response->is_success, $response->decoded_content, $manual_check ])));
+#        Slic3r::thread_cleanup();
+#    })->detach;
+#}
 
 sub output_path {
     my ($self, $dir) = @_;
@@ -376,9 +368,8 @@ sub open_model {
         $dialog->Destroy;
         return;
     }
-    my @input_files = map Slic3r::decode_path($_), $dialog->GetPaths;
+    my @input_files = $dialog->GetPaths;
     $dialog->Destroy;
-    
     return @input_files;
 }
 
@@ -410,6 +401,64 @@ sub scan_serial_ports {
     }
     
     return grep !/Bluetooth|FireFly/, @ports;
+}
+
+sub append_menu_item {
+    my ($self, $menu, $string, $description, $cb, $id, $icon, $kind) = @_;
+    
+    $id //= &Wx::NewId();
+    my $item = Wx::MenuItem->new($menu, $id, $string, $description // '', $kind // 0);
+    $self->set_menu_item_icon($item, $icon);
+    $menu->Append($item);
+    
+    EVT_MENU($self, $id, $cb);
+    return $item;
+}
+
+sub append_submenu {
+    my ($self, $menu, $string, $description, $submenu, $id, $icon) = @_;
+    
+    $id //= &Wx::NewId();
+    my $item = Wx::MenuItem->new($menu, $id, $string, $description // '');
+    $self->set_menu_item_icon($item, $icon);
+    $item->SetSubMenu($submenu);
+    $menu->Append($item);
+    
+    return $item;
+}
+
+sub set_menu_item_icon {
+    my ($self, $menuItem, $icon) = @_;
+    
+    # SetBitmap was not available on OS X before Wx 0.9927
+    if ($icon && $menuItem->can('SetBitmap')) {
+        $menuItem->SetBitmap(Wx::Bitmap->new($Slic3r::var->($icon), wxBITMAP_TYPE_PNG));
+    }
+}
+
+sub save_window_pos {
+    my ($self, $window, $name) = @_;
+    
+    $Settings->{_}{"${name}_pos"}  = join ',', $window->GetScreenPositionXY;
+    $Settings->{_}{"${name}_size"} = join ',', $window->GetSizeWH;
+    $Settings->{_}{"${name}_maximized"}      = $window->IsMaximized;
+    $self->save_settings;
+}
+
+sub restore_window_pos {
+    my ($self, $window, $name) = @_;
+    
+    if (defined $Settings->{_}{"${name}_pos"}) {
+        my $size = [ split ',', $Settings->{_}{"${name}_size"}, 2 ];
+        $window->SetSize($size);
+        
+        my $display = Wx::Display->new->GetClientArea();
+        my $pos = [ split ',', $Settings->{_}{"${name}_pos"}, 2 ];
+        if (($pos->[0] + $size->[0]/2) < $display->GetRight && ($pos->[1] + $size->[1]/2) < $display->GetBottom) {
+            $window->Move($pos);
+        }
+        $window->Maximize(1) if $Settings->{_}{"${name}_maximized"};
+    }
 }
 
 1;

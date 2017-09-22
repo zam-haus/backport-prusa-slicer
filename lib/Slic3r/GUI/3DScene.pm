@@ -16,14 +16,14 @@ use strict;
 use warnings;
 
 use Wx qw(:timer :bitmap :icon :dialog);
-use Wx::Event qw(EVT_PAINT EVT_SIZE EVT_ERASE_BACKGROUND EVT_IDLE EVT_MOUSEWHEEL EVT_MOUSE_EVENTS EVT_TIMER);
+use Wx::Event qw(EVT_PAINT EVT_SIZE EVT_ERASE_BACKGROUND EVT_IDLE EVT_MOUSEWHEEL EVT_MOUSE_EVENTS EVT_CHAR EVT_TIMER);
 # must load OpenGL *before* Wx::GLCanvas
 use OpenGL qw(:glconstants :glfunctions :glufunctions :gluconstants);
 use base qw(Wx::GLCanvas Class::Accessor);
 use Math::Trig qw(asin tan);
 use List::Util qw(reduce min max first);
-use Slic3r::Geometry qw(X Y Z MIN MAX triangle_normal normalize deg2rad tan scale unscale scaled_epsilon);
-use Slic3r::Geometry::Clipper qw(offset_ex intersection_pl);
+use Slic3r::Geometry qw(X Y normalize scale unscale scaled_epsilon);
+use Slic3r::Geometry::Clipper qw(offset_ex intersection_pl JT_ROUND);
 use Wx::GLCanvas qw(:all);
 use Slic3r::Geometry qw(PI);
 
@@ -48,6 +48,7 @@ __PACKAGE__->mk_accessors( qw(_quat _dirty init
                               bed_shape
                               bed_triangles
                               bed_grid_lines
+                              bed_polygon
                               background
                               origin
                               _mouse_pos
@@ -55,6 +56,7 @@ __PACKAGE__->mk_accessors( qw(_quat _dirty init
 
                               _drag_volume_idx
                               _drag_start_pos
+                              _drag_volume_center_offset
                               _drag_start_xy
                               _dragged
 
@@ -128,6 +130,7 @@ sub new {
         $self->GetContext();
     }
 
+    $self->{can_multisample} = $can_multisample;
     $self->background(1);
     $self->_quat((0, 0, 0, 1));
     $self->_stheta(45);
@@ -166,6 +169,32 @@ sub new {
     });
     EVT_MOUSEWHEEL($self, \&mouse_wheel_event);
     EVT_MOUSE_EVENTS($self, \&mouse_event);
+#    EVT_KEY_DOWN($self, sub {
+    EVT_CHAR($self, sub {
+        my ($s, $event) = @_;
+        if ($event->HasModifiers) {
+            $event->Skip;
+        } else {
+            my $key = $event->GetKeyCode;
+            if ($key == ord('0')) {
+                $self->select_view('iso');
+            } elsif ($key == ord('1')) {
+                $self->select_view('top');
+            } elsif ($key == ord('2')) {
+                $self->select_view('bottom');
+            } elsif ($key == ord('3')) {
+                $self->select_view('front');
+            } elsif ($key == ord('4')) {
+                $self->select_view('rear');
+            } elsif ($key == ord('5')) {
+                $self->select_view('left');
+            } elsif ($key == ord('6')) {
+                $self->select_view('right');
+            } else {
+                $event->Skip;
+            }
+        }
+    });
     
     $self->{layer_height_edit_timer_id} = &Wx::NewId();
     $self->{layer_height_edit_timer} = Wx::Timer->new($self, $self->{layer_height_edit_timer_id});
@@ -240,11 +269,14 @@ sub layer_editing_allowed {
     return ! (defined($self->{layer_editing_initialized}) && $self->{layer_editing_initialized} == 2);
 }
 
-sub _first_selected_object_id {
+sub _first_selected_object_id_for_variable_layer_height_editing {
     my ($self) = @_;
     for my $i (0..$#{$self->volumes}) {
         if ($self->volumes->[$i]->selected) {
-            return int($self->volumes->[$i]->select_group_id / 1000000);
+            my $object_id = int($self->volumes->[$i]->select_group_id / 1000000);
+            # Objects with object_id >= 1000 have a specific meaning, for example the wipe tower proxy.
+            return ($object_id >= $self->{print}->object_count) ? -1 : $object_id
+                if $object_id < 10000;
         }
     }
     return -1;
@@ -288,12 +320,6 @@ sub _variable_layer_thickness_reset_rect_mouse_inside {
    return $mouse_evt->GetX >= $bar_left && $mouse_evt->GetX <= $bar_right && $mouse_evt->GetY >= $bar_top && $mouse_evt->GetY <= $bar_bottom;
 }
 
-sub _variable_layer_thickness_bar_mouse_cursor_z {
-   my ($self, $object_idx, $mouse_evt) = @_;
-   my ($bar_left, $bar_top, $bar_right, $bar_bottom) = $self->_variable_layer_thickness_bar_rect_screen;
-   return unscale($self->{print}->get_object($object_idx)->size->z) * ($bar_bottom - $mouse_evt->GetY - 1.) / ($bar_bottom - $bar_top);
-}
-
 sub _variable_layer_thickness_bar_mouse_cursor_z_relative {
    my ($self) = @_;
    my $mouse_pos = $self->ScreenToClientPoint(Wx::GetMousePosition());
@@ -308,35 +334,38 @@ sub _variable_layer_thickness_bar_mouse_cursor_z_relative {
 sub _variable_layer_thickness_action {
     my ($self, $mouse_event, $do_modification) = @_;
     # A volume is selected. Test, whether hovering over a layer thickness bar.
+    return if $self->{layer_height_edit_last_object_id} == -1;
     if (defined($mouse_event)) {
-        $self->{layer_height_edit_last_z} = $self->_variable_layer_thickness_bar_mouse_cursor_z($self->{layer_height_edit_last_object_id}, $mouse_event);
+        my ($bar_left, $bar_top, $bar_right, $bar_bottom) = $self->_variable_layer_thickness_bar_rect_screen;
+        $self->{layer_height_edit_last_z} = unscale($self->{print}->get_object($self->{layer_height_edit_last_object_id})->size->z)
+            * ($bar_bottom - $mouse_event->GetY - 1.) / ($bar_bottom - $bar_top);
         $self->{layer_height_edit_last_action} = $mouse_event->ShiftDown ? ($mouse_event->RightIsDown ? 3 : 2) : ($mouse_event->RightIsDown ? 0 : 1);
     }
-    if ($self->{layer_height_edit_last_object_id} != -1) {
-        # Mark the volume as modified, so Print will pick its layer height profile? Where to mark it?
-        # Start a timer to refresh the print? schedule_background_process() ?
-        $self->{print}->get_object($self->{layer_height_edit_last_object_id})->adjust_layer_height_profile(
-            $self->{layer_height_edit_last_z},
-            $self->{layer_height_edit_strength},
-            $self->{layer_height_edit_band_width}, 
-            $self->{layer_height_edit_last_action});
-        $self->volumes->[$self->{layer_height_edit_last_object_id}]->generate_layer_height_texture(
-            $self->{print}->get_object($self->{layer_height_edit_last_object_id}), 1);
-        $self->Refresh;
-        # Automatic action on mouse down with the same coordinate.
-        $self->{layer_height_edit_timer}->Start(100, wxTIMER_CONTINUOUS);
-    }
+    # Mark the volume as modified, so Print will pick its layer height profile? Where to mark it?
+    # Start a timer to refresh the print? schedule_background_process() ?
+    # The PrintObject::adjust_layer_height_profile() call adjusts the profile of its associated ModelObject, it does not modify the profile of the PrintObject itself.
+    $self->{print}->get_object($self->{layer_height_edit_last_object_id})->adjust_layer_height_profile(
+        $self->{layer_height_edit_last_z},
+        $self->{layer_height_edit_strength},
+        $self->{layer_height_edit_band_width}, 
+        $self->{layer_height_edit_last_action});
+    $self->volumes->[$self->{layer_height_edit_last_object_id}]->generate_layer_height_texture(
+        $self->{print}->get_object($self->{layer_height_edit_last_object_id}), 1);
+    $self->Refresh;
+    # Automatic action on mouse down with the same coordinate.
+    $self->{layer_height_edit_timer}->Start(100, wxTIMER_CONTINUOUS);
 }
 
 sub mouse_event {
     my ($self, $e) = @_;
     
     my $pos = Slic3r::Pointf->new($e->GetPositionXY);
-    my $object_idx_selected = $self->{layer_height_edit_last_object_id} = ($self->layer_editing_enabled && $self->{print}) ? $self->_first_selected_object_id : -1;
+    my $object_idx_selected = $self->{layer_height_edit_last_object_id} = ($self->layer_editing_enabled && $self->{print}) ? $self->_first_selected_object_id_for_variable_layer_height_editing : -1;
 
     if ($e->Entering && &Wx::wxMSW) {
         # wxMSW needs focus in order to catch mouse wheel events
         $self->SetFocus;
+        $self->_drag_start_xy(undef);        
     } elsif ($e->LeftDClick) {
         if ($object_idx_selected != -1 && $self->_variable_layer_thickness_bar_rect_mouse_inside($e)) {
         } elsif ($self->on_double_click) {
@@ -353,7 +382,7 @@ sub mouse_event {
             $self->_layer_height_edited(1);
             $self->_variable_layer_thickness_action($e);
         } elsif ($object_idx_selected != -1 && $self->_variable_layer_thickness_reset_rect_mouse_inside($e)) {
-            $self->{print}->get_object($self->{layer_height_edit_last_object_id})->reset_layer_height_profile;
+            $self->{print}->get_object($object_idx_selected)->reset_layer_height_profile;
             # Index 2 means no editing, just wait for mouse up event.
             $self->_layer_height_edited(2);
             $self->Refresh;
@@ -386,8 +415,20 @@ sub mouse_event {
             
             if ($volume_idx != -1) {
                 if ($e->LeftDown && $self->enable_moving) {
-                    $self->_drag_volume_idx($volume_idx);
-                    $self->_drag_start_pos($self->mouse_to_3d(@$pos));
+                    # The mouse_to_3d gets the Z coordinate from the Z buffer at the screen coordinate $pos->x,y,
+                    # an converts the screen space coordinate to unscaled object space.
+                    my $pos3d = $self->mouse_to_3d(@$pos);
+                    # Only accept the initial position, if it is inside the volume bounding box.
+                    my $volume_bbox = $self->volumes->[$volume_idx]->transformed_bounding_box;
+                    $volume_bbox->offset(1.);
+                    if ($volume_bbox->contains_point($pos3d)) {
+                        # The dragging operation is initiated.
+                        $self->_drag_volume_idx($volume_idx);
+                        $self->_drag_start_pos($pos3d);
+                        # Remember the shift to to the object center. The object center will later be used
+                        # to limit the object placement close to the bed.
+                        $self->_drag_volume_center_offset($pos3d->vector_to($volume_bbox->center));
+                    }
                 } elsif ($e->RightDown) {
                     # if right clicking on volume, propagate event through callback
                     $self->on_right_click->($e->GetPosition)
@@ -396,26 +437,32 @@ sub mouse_event {
             }
         }
     } elsif ($e->Dragging && $e->LeftIsDown && ! $self->_layer_height_edited && defined($self->_drag_volume_idx)) {
-        # get new position at the same Z of the initial click point
-        my $mouse_ray = $self->mouse_ray($e->GetX, $e->GetY);
-        my $cur_pos = $mouse_ray->intersect_plane($self->_drag_start_pos->z);
-        
-        # calculate the translation vector
-        my $vector = $self->_drag_start_pos->vector_to($cur_pos);
-        
-        # get volume being dragged
-        my $volume = $self->volumes->[$self->_drag_volume_idx];
-        
-        # get all volumes belonging to the same group, if any
-        my @volumes;
-        if ($volume->drag_group_id == -1) {
-            @volumes = ($volume);
-        } else {
-            @volumes = grep $_->drag_group_id == $volume->drag_group_id, @{$self->volumes};
+        # Get new position at the same Z of the initial click point.
+        my $cur_pos = Slic3r::Linef3->new(
+                $self->mouse_to_3d($e->GetX, $e->GetY, 0),
+                $self->mouse_to_3d($e->GetX, $e->GetY, 1))
+            ->intersect_plane($self->_drag_start_pos->z);
+        # Clip the new position, so the object center remains close to the bed.
+        {
+            $cur_pos->translate(@{$self->_drag_volume_center_offset});
+            my $cur_pos2 = Slic3r::Point->new(scale($cur_pos->x), scale($cur_pos->y));
+            if (! $self->bed_polygon->contains_point($cur_pos2)) {
+                my $ip = $self->bed_polygon->point_projection($cur_pos2);
+                $cur_pos->set_x(unscale($ip->x));
+                $cur_pos->set_y(unscale($ip->y));
+            }
+            $cur_pos->translate(@{$self->_drag_volume_center_offset->negative});
         }
-        
-        # apply new temporary volume origin and ignore Z
-        $_->translate($vector->x, $vector->y, 0) for @volumes; #,,
+        # Calculate the translation vector.
+        my $vector = $self->_drag_start_pos->vector_to($cur_pos);
+        # Get the volume being dragged.
+        my $volume = $self->volumes->[$self->_drag_volume_idx];
+        # Get all volumes belonging to the same group, if any.
+        my @volumes = ($volume->drag_group_id == -1) ?
+            ($volume) :
+            grep $_->drag_group_id == $volume->drag_group_id, @{$self->volumes};
+        # Apply new temporary volume origin and ignore Z.
+        $_->translate($vector->x, $vector->y, 0) for @volumes;
         $self->_drag_start_pos($cur_pos);
         $self->_dragged(1);
         $self->Refresh;
@@ -428,6 +475,7 @@ sub mouse_event {
             if (defined $self->_drag_start_pos) {
                 my $orig = $self->_drag_start_pos;
                 if (TURNTABLE_MODE) {
+                    # Turntable mode is enabled by default.
                     $self->_sphi($self->_sphi + ($pos->x - $orig->x) * TRACKBALLSIZE);
                     $self->_stheta($self->_stheta - ($pos->y - $orig->y) * TRACKBALLSIZE);        #-
                     $self->_stheta(GIMBALL_LOCK_THETA_MAX) if $self->_stheta > GIMBALL_LOCK_THETA_MAX;
@@ -448,15 +496,12 @@ sub mouse_event {
             }
             $self->_drag_start_pos($pos);
         } elsif ($e->MiddleIsDown || $e->RightIsDown) {
-            # if dragging over blank area with right button, translate
-            
+            # If dragging over blank area with right button, pan.
             if (defined $self->_drag_start_xy) {
                 # get point in model space at Z = 0
-                my $cur_pos = $self->mouse_ray($e->GetX, $e->GetY)->intersect_plane(0);
-                my $orig    = $self->mouse_ray(@{$self->_drag_start_xy})->intersect_plane(0);
-                $self->_camera_target->translate(
-                    @{$orig->vector_to($cur_pos)->negative},
-                );
+                my $cur_pos = $self->mouse_to_3d($e->GetX, $e->GetY, 0);
+                my $orig    = $self->mouse_to_3d($self->_drag_start_xy->x, $self->_drag_start_xy->y, 0);
+                $self->_camera_target->translate(@{$orig->vector_to($cur_pos)->negative});
                 $self->on_viewport_changed->() if $self->on_viewport_changed;
                 $self->Refresh;
                 $self->Update;
@@ -500,9 +545,14 @@ sub mouse_event {
 
 sub mouse_wheel_event {
     my ($self, $e) = @_;
+
+    if ($e->MiddleIsDown) {
+        # Ignore the wheel events if the middle button is pressed.
+        return;
+    }
     
     if ($self->layer_editing_enabled && $self->{print}) {
-        my $object_idx_selected = $self->_first_selected_object_id;
+        my $object_idx_selected = $self->_first_selected_object_id_for_variable_layer_height_editing;
         if ($object_idx_selected != -1) {
             # A volume is selected. Test, whether hovering over a layer thickness bar.
             if ($self->_variable_layer_thickness_bar_rect_mouse_inside($e)) {
@@ -518,7 +568,12 @@ sub mouse_wheel_event {
     my $zoom = $e->GetWheelRotation() / $e->GetWheelDelta();
     $zoom = max(min($zoom, 4), -4);
     $zoom /= 10;
-    $self->_zoom($self->_zoom / (1-$zoom));
+    $zoom = $self->_zoom / (1-$zoom);
+    # Don't allow to zoom too far outside the scene.
+    my $zoom_min = $self->get_zoom_to_bounding_box_factor($self->max_bounding_box);
+    $zoom_min *= 0.4 if defined $zoom_min;
+    $zoom = $zoom_min if defined $zoom_min && $zoom < $zoom_min;
+    $self->_zoom($zoom);
     
     # In order to zoom around the mouse point we need to translate
     # the camera target
@@ -602,21 +657,23 @@ sub select_view {
     }
 }
 
+sub get_zoom_to_bounding_box_factor {
+    my ($self, $bb) = @_;
+    return undef if ($bb->empty);
+    my $max_size = max(@{$bb->size}) * 2;
+    return ($max_size == 0) ? undef : min($self->GetSizeWH) / $max_size;
+}
+
 sub zoom_to_bounding_box {
     my ($self, $bb) = @_;
-    return if ($bb->empty);
-    
-    # calculate the zoom factor needed to adjust viewport to
-    # bounding box
-    my $max_size = max(@{$bb->size}) * 2;
-    my $min_viewport_size = min($self->GetSizeWH);
-    # only re-zoom if we have a valid bounding box, avoid a divide by 0 error.
-    $self->_zoom($min_viewport_size / $max_size) if ($max_size != 0);
-    
-    # center view around bounding box center
-    $self->_camera_target($bb->center);
-    
-    $self->on_viewport_changed->() if $self->on_viewport_changed;
+    # Calculate the zoom factor needed to adjust viewport to bounding box.
+    my $zoom = $self->get_zoom_to_bounding_box_factor($bb);
+    if (defined $zoom) {
+        $self->_zoom($zoom);
+        # center view around bounding box center
+        $self->_camera_target($bb->center);
+        $self->on_viewport_changed->() if $self->on_viewport_changed;
+    }
 }
 
 sub zoom_to_bed {
@@ -666,6 +723,8 @@ sub max_bounding_box {
     return $bb;
 }
 
+# Used by ObjectCutDialog and ObjectPartsPanel to generate a rectangular ground plane
+# to support the scene objects.
 sub set_auto_bed_shape {
     my ($self, $bed_shape) = @_;
     
@@ -678,9 +737,14 @@ sub set_auto_bed_shape {
         [ $center->x + $max_size, $center->y + $max_size ],  #++
         [ $center->x - $max_size, $center->y + $max_size ],  #++
     ]);
+    # Set the origin for painting of the coordinate system axes.
     $self->origin(Slic3r::Pointf->new(@$center[X,Y]));
 }
 
+# Set the bed shape to a single closed 2D polygon (array of two element arrays),
+# triangulate the bed and store the triangles into $self->bed_triangles,
+# fills the $self->bed_grid_lines and sets $self->origin.
+# Sets $self->bed_polygon to limit the object placement.
 sub set_bed_shape {
     my ($self, $bed_shape) = @_;
     
@@ -693,7 +757,7 @@ sub set_bed_shape {
     {
         my @points = ();
         foreach my $triangle (@{ $expolygon->triangulate }) {
-            push @points, map {+ unscale($_->x), unscale($_->y), GROUND_Z } @$triangle;  #))
+            push @points, map {+ unscale($_->x), unscale($_->y), GROUND_Z } @$triangle;
         }
         $self->bed_triangles(OpenGL::Array->new_list(GL_FLOAT, @points));
     }
@@ -721,7 +785,10 @@ sub set_bed_shape {
         $self->bed_grid_lines(OpenGL::Array->new_list(GL_FLOAT, @points));
     }
     
+    # Set the origin for painting of the coordinate system axes.
     $self->origin(Slic3r::Pointf->new(0,0));
+
+    $self->bed_polygon(offset_ex([$expolygon->contour], $bed_bb->radius * 1.7, JT_ROUND, scale(0.5))->[0]->contour->clone);
 }
 
 sub deselect_volumes {
@@ -860,6 +927,8 @@ sub mulquats {
             @$q1[3] * @$rq[3] - @$q1[0] * @$rq[0] - @$q1[1] * @$rq[1] - @$q1[2] * @$rq[2])
 }
 
+# Convert the screen space coordinate to an object space coordinate.
+# If the Z screen space coordinate is not provided, a depth buffer value is substituted.
 sub mouse_to_3d {
     my ($self, $x, $y, $z) = @_;
 
@@ -873,33 +942,14 @@ sub mouse_to_3d {
     return Slic3r::Pointf3->new(@projected);
 }
 
-sub mouse_ray {
-    my ($self, $x, $y) = @_;
-    
-    return Slic3r::Linef3->new(
-        $self->mouse_to_3d($x, $y, 0),
-        $self->mouse_to_3d($x, $y, 1),
-    );
-}
-
 sub GetContext {
     my ($self) = @_;
-    
-    if (Wx::wxVERSION >= 2.009) {
-        return $self->{context} ||= Wx::GLContext->new($self);
-    } else {
-        return $self->SUPER::GetContext;
-    }
+    return $self->{context} ||= Wx::GLContext->new($self);
 }
  
 sub SetCurrent {
     my ($self, $context) = @_;
-    
-    if (Wx::wxVERSION >= 2.009) {
-        return $self->SUPER::SetCurrent($context);
-    } else {
-        return $self->SUPER::SetCurrent;
-    }
+    return $self->SUPER::SetCurrent($context);
 }
 
 sub UseVBOs {
@@ -913,6 +963,7 @@ sub UseVBOs {
         $self->{use_VBOs} = 0;
         if ($self->GetContext) {
             $self->SetCurrent($self->GetContext);
+            Slic3r::GUI::_3DScene::_glew_init;
             my @gl_version = split(/\./, glGetString(GL_VERSION));
             $self->{use_VBOs} = int($gl_version[0]) >= 2;
             # print "UseVBOs $self OpenGL major: $gl_version[0], minor: $gl_version[1]. Use VBOs: ", $self->{use_VBOs}, "\n";
@@ -990,8 +1041,15 @@ sub InitGL {
     # Set antialiasing/multisampling
     glDisable(GL_LINE_SMOOTH);
     glDisable(GL_POLYGON_SMOOTH);
-    glEnable(GL_MULTISAMPLE);
-#    glHint(GL_MULTISAMPLE_FILTER_HINT_NV, GL_NICEST);
+
+    # See "GL_MULTISAMPLE and GL_ARRAY_BUFFER_ARB messages on failed launch"
+    # https://github.com/alexrj/Slic3r/issues/4085
+    eval {
+        # Disable the multi sampling by default, so the picking by color will work correctly.
+        glDisable(GL_MULTISAMPLE);
+    };
+    # Disable multi sampling if the eval failed.
+    $self->{can_multisample} = 0 if $@;
     
     # ambient lighting
     glLightModelfv_p(GL_LIGHT_MODEL_AMBIENT, 0.3, 0.3, 0.3, 1);
@@ -1016,9 +1074,7 @@ sub InitGL {
     # A handy trick -- have surface material mirror the color.
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_COLOR_MATERIAL);
-    glEnable(GL_MULTISAMPLE);
-
-    Slic3r::GUI::_3DScene::_glew_init;
+    glEnable(GL_MULTISAMPLE) if ($self->{can_multisample});
 
     if ($self->UseVBOs) {
         my $shader = new Slic3r::GUI::_3DScene::GLShader;
@@ -1072,6 +1128,7 @@ sub Render {
     }
     
     if (TURNTABLE_MODE) {
+        # Turntable mode is enabled by default.
         glRotatef(-$self->_stheta, 1, 0, 0); # pitch
         glRotatef($self->_sphi, 0, 0, 1);    # yaw
     } else {
@@ -1092,8 +1149,10 @@ sub Render {
         # Render the object for picking.
         # FIXME This cannot possibly work in a multi-sampled context as the color gets mangled by the anti-aliasing.
         # Better to use software ray-casting on a bounding-box hierarchy.
-        glDisable(GL_MULTISAMPLE);
+        glPushAttrib(GL_ENABLE_BIT);
+        glDisable(GL_MULTISAMPLE) if ($self->{can_multisample});
         glDisable(GL_LIGHTING);
+        glDisable(GL_BLEND);
         $self->draw_volumes(1);
         glFlush();
         glFinish();
@@ -1118,8 +1177,7 @@ sub Render {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glFlush();
         glFinish();
-        glEnable(GL_LIGHTING);
-        glEnable(GL_MULTISAMPLE);
+        glPopAttrib();
     }
     
     # draw fixed background
@@ -1270,10 +1328,11 @@ sub draw_volumes {
         my $volume = $self->volumes->[$volume_idx];
 
         my $shader_active = 0;
-        if ($self->layer_editing_enabled && ! $fakecolor && $volume->selected && $self->{layer_height_edit_shader} && $volume->has_layer_height_texture) {
+        my $object_id = int($volume->select_group_id / 1000000);
+        if ($self->layer_editing_enabled && ! $fakecolor && $volume->selected && $self->{layer_height_edit_shader} && 
+            $volume->has_layer_height_texture && $object_id < $self->{print}->object_count) {
             # Update the height texture if the ModelObject::layer_height_texture is invalid.
-            $volume->generate_layer_height_texture(
-                $self->{print}->get_object(int($volume->select_group_id / 1000000)), 0);
+            $volume->generate_layer_height_texture($self->{print}->get_object($object_id), 0);
             $self->{layer_height_edit_shader}->enable;
             $self->{layer_height_edit_shader}->set_uniform('z_to_texture_row',            $volume->layer_height_texture_z_to_row_id);
             $self->{layer_height_edit_shader}->set_uniform('z_texture_row_to_normalized', 1. / $volume->layer_height_texture_height);
@@ -1403,6 +1462,7 @@ sub draw_active_object_annotations {
 
     return if (! $self->{layer_height_edit_shader} || ! $self->layer_editing_enabled);
 
+    # Find the selected volume, over which the layer editing is active.
     my $volume;
     foreach my $volume_idx (0..$#{$self->volumes}) {
         my $v = $self->volumes->[$volume_idx];
@@ -1413,6 +1473,11 @@ sub draw_active_object_annotations {
     }
     return if (! $volume);
     
+    # If the active object was not allocated at the Print, go away. This should only be a momentary case between an object addition / deletion
+    # and an update by Platter::async_apply_config.
+    my $object_idx = int($volume->select_group_id / 1000000);
+    return if $object_idx >= $self->{print}->object_count;
+
     # The viewport and camera are set to complete view and glOrtho(-$x/2, $x/2, -$y/2, $y/2, -$depth, $depth), 
     # where x, y is the window size divided by $self->_zoom.
     my ($bar_left, $bar_bottom, $bar_right, $bar_top) = $self->_variable_layer_thickness_bar_rect_viewport;
@@ -1463,18 +1528,31 @@ sub draw_active_object_annotations {
     }
 
     # Paint the graph.
-    #FIXME use the min / maximum layer height
     #FIXME show some kind of legend.
-    my $object_idx = int($volume->select_group_id / 1000000);
     my $print_object = $self->{print}->get_object($object_idx);
     my $max_z = unscale($print_object->size->z);
     my $profile = $print_object->model_object->layer_height_profile;
     my $layer_height = $print_object->config->get('layer_height');
+    my $layer_height_max  = 10000000000.;
+    {
+        # Get a maximum layer height value.
+        #FIXME This is a duplicate code of Slicing.cpp.
+        my $nozzle_diameters  = $print_object->print->config->get('nozzle_diameter');
+        my $layer_heights_min = $print_object->print->config->get('min_layer_height');
+        my $layer_heights_max = $print_object->print->config->get('max_layer_height');
+        for (my $i = 0; $i < scalar(@{$nozzle_diameters}); $i += 1) {
+            my $lh_min = ($layer_heights_min->[$i] == 0.) ? 0.07 : max(0.01, $layer_heights_min->[$i]);
+            my $lh_max = ($layer_heights_max->[$i] == 0.) ? (0.75 * $nozzle_diameters->[$i]) : $layer_heights_max->[$i];
+            $layer_height_max = min($layer_height_max, max($lh_min, $lh_max));
+        }
+    }
+    # Make the vertical bar a bit wider so the layer height curve does not touch the edge of the bar region.
+    $layer_height_max *= 1.12;
     # Baseline
     glColor3f(0., 0., 0.);
     glBegin(GL_LINE_STRIP);
-    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / 0.45,  $bar_bottom);
-    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / 0.45,  $bar_top);
+    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / $layer_height_max,  $bar_bottom);
+    glVertex2f($bar_left + $layer_height * ($bar_right - $bar_left) / $layer_height_max,  $bar_top);
     glEnd();
     # Curve
     glColor3f(0., 0., 1.);
@@ -1482,7 +1560,7 @@ sub draw_active_object_annotations {
     for (my $i = 0; $i < int(@{$profile}); $i += 2) {
         my $z = $profile->[$i];
         my $h = $profile->[$i+1];
-        glVertex3f($bar_left + $h * ($bar_right - $bar_left) / 0.45,  $bar_bottom + $z * ($bar_top - $bar_bottom) / $max_z, $z);
+        glVertex3f($bar_left + $h * ($bar_right - $bar_left) / $layer_height_max,  $bar_bottom + $z * ($bar_top - $bar_bottom) / $max_z, $z);
     }
     glEnd();
     # Revert the matrices.
@@ -1864,10 +1942,10 @@ sub load_object {
 # Create 3D thick extrusion lines for a skirt and brim.
 # Adds a new Slic3r::GUI::3DScene::Volume to $self->volumes.
 sub load_print_toolpaths {
-    my ($self, $print) = @_;
+    my ($self, $print, $colors) = @_;
 
     $self->SetCurrent($self->GetContext) if $self->UseVBOs;
-    Slic3r::GUI::_3DScene::_load_print_toolpaths($print, $self->volumes, $self->UseVBOs)
+    Slic3r::GUI::_3DScene::_load_print_toolpaths($print, $self->volumes, $colors, $self->UseVBOs)
         if ($print->step_done(STEP_SKIRT) && $print->step_done(STEP_BRIM));
 }
 
@@ -1875,10 +1953,19 @@ sub load_print_toolpaths {
 # Adds a new Slic3r::GUI::3DScene::Volume to $self->volumes,
 # one for perimeters, one for infill and one for supports.
 sub load_print_object_toolpaths {
-    my ($self, $object) = @_;
+    my ($self, $object, $colors) = @_;
 
     $self->SetCurrent($self->GetContext) if $self->UseVBOs;
-    Slic3r::GUI::_3DScene::_load_print_object_toolpaths($object, $self->volumes, $self->UseVBOs);
+    Slic3r::GUI::_3DScene::_load_print_object_toolpaths($object, $self->volumes, $colors, $self->UseVBOs);
+}
+
+# Create 3D thick extrusion lines for wipe tower extrusions.
+sub load_wipe_tower_toolpaths {
+    my ($self, $print, $colors) = @_;
+
+    $self->SetCurrent($self->GetContext) if $self->UseVBOs;
+    Slic3r::GUI::_3DScene::_load_wipe_tower_toolpaths($print, $self->volumes, $colors, $self->UseVBOs)
+        if ($print->step_done(STEP_WIPE_TOWER));
 }
 
 sub set_toolpaths_range {

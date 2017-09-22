@@ -2,11 +2,13 @@
 #define slic3r_CoolingBuffer_hpp_
 
 #include "libslic3r.h"
-#include "GCode.hpp"
 #include <map>
 #include <string>
 
 namespace Slic3r {
+
+class GCode;
+class Layer;
 
 /*
 A standalone G-code filter, to control cooling of the print.
@@ -15,23 +17,23 @@ and the print is modified to stretch over a minimum layer time.
 */
 
 class CoolingBuffer {
-    public:
-    CoolingBuffer(GCode &gcodegen)
-        : _gcodegen(&gcodegen), _elapsed_time(0.), _layer_id(0)
-    {
-        this->_min_print_speed = this->_gcodegen->config.min_print_speed * 60;
-    };
-    std::string append(const std::string &gcode, std::string obj_id, size_t layer_id, float print_z);
-    std::string flush();
-    GCode* gcodegen() { return this->_gcodegen; };
-    
-    private:
-    GCode*                      _gcodegen;
-    std::string                 _gcode;
-    float                       _elapsed_time;
-    size_t                      _layer_id;
-    std::map<std::string,float> _last_z;
-    float                       _min_print_speed;
+public:
+    CoolingBuffer(GCode &gcodegen);
+    void        reset();
+    void        set_current_extruder(unsigned int extruder_id) { m_current_extruder = extruder_id; }
+    std::string process_layer(const std::string &gcode, size_t layer_id);
+    GCode* 	    gcodegen() { return &m_gcodegen; }
+
+private:
+	CoolingBuffer& operator=(const CoolingBuffer&);
+
+    GCode&              m_gcodegen;
+    std::string         m_gcode;
+    // Internal data.
+    // X,Y,Z,E,F
+    std::vector<char>   m_axis;
+    std::vector<float>  m_current_pos;
+    unsigned int        m_current_extruder;
 };
 
 }

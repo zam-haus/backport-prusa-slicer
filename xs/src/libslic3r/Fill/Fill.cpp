@@ -15,11 +15,11 @@ namespace Slic3r {
 
 struct SurfaceGroupAttrib
 {
-    SurfaceGroupAttrib() : is_solid(false), fw(0.f), pattern(-1) {}
+    SurfaceGroupAttrib() : is_solid(false), flow_width(0.f), pattern(-1) {}
     bool operator==(const SurfaceGroupAttrib &other) const
-        { return is_solid == other.is_solid && fw == other.fw && pattern == other.pattern; }
+        { return is_solid == other.is_solid && flow_width == other.flow_width && pattern == other.pattern; }
     bool    is_solid;
-    float   fw;
+    float   flow_width;
     // pattern is of type InfillPattern, -1 for an unset pattern.
     int     pattern;
 };
@@ -68,7 +68,7 @@ void make_fill(LayerRegion &layerm, ExtrusionEntityCollection &out)
                 const Surface &surface = *groups[i].front();
                 if (surface.is_solid() && (!surface.is_bridge() || layerm.layer()->id() == 0)) {
                     group_attrib[i].is_solid = true;
-                    group_attrib[i].fw = (surface.surface_type == stTop) ? top_solid_infill_flow.width : solid_infill_flow.width;
+                    group_attrib[i].flow_width = (surface.surface_type == stTop) ? top_solid_infill_flow.width : solid_infill_flow.width;
                     group_attrib[i].pattern = surface.is_external() ? layerm.region()->config.external_fill_pattern.value : ipRectilinear;
                 }
             }
@@ -216,7 +216,7 @@ void make_fill(LayerRegion &layerm, ExtrusionEntityCollection &out)
 
         f->layer_id = layerm.layer()->id();
         f->z = layerm.layer()->print_z;
-        f->angle = Geometry::deg2rad(layerm.region()->config.fill_angle.value);
+        f->angle = float(Geometry::deg2rad(layerm.region()->config.fill_angle.value));
         // Maximum length of the perimeter segment linking two infill lines.
         f->link_max_length = scale_(link_max_length);
         // Used by the concentric infill pattern to clip the loops to create extrusion paths.
