@@ -5,11 +5,12 @@ use warnings;
 BEGIN {
     use FindBin;
     use lib "$FindBin::Bin/../lib";
+    use local::lib "$FindBin::Bin/../local-lib";
 }
 
 use List::Util qw(first);
 use Slic3r;
-use Slic3r::Geometry qw(epsilon unscale X Y);
+use Slic3r::Geometry qw(unscale X Y);
 use Slic3r::Test;
 
 {

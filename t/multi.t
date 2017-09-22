@@ -5,6 +5,7 @@ use warnings;
 BEGIN {
     use FindBin;
     use lib "$FindBin::Bin/../lib";
+    use local::lib "$FindBin::Bin/../local-lib";
 }
 
 use List::Util qw(first);
@@ -128,7 +129,7 @@ use Slic3r::Test;
     $config->set('fill_density', 0);
     $config->set('solid_infill_speed', 99);
     $config->set('top_solid_infill_speed', 99);
-    $config->set('cooling', 0);                 # for preventing speeds from being altered
+    $config->set('cooling', [ 0 ]);             # for preventing speeds from being altered
     $config->set('first_layer_speed', '100%');  # for preventing speeds from being altered
     
     my $test = sub {

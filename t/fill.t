@@ -9,6 +9,7 @@ plan tests => 19;
 BEGIN {
     use FindBin;
     use lib "$FindBin::Bin/../lib";
+    use local::lib "$FindBin::Bin/../local-lib";
 }
 
 use List::Util qw(first sum);
@@ -199,7 +200,7 @@ for my $pattern (qw(rectilinear honeycomb hilbertcurve concentric)) {
     $config->set('infill_extruder', 2);
     $config->set('infill_extrusion_width', 0.5);
     $config->set('fill_density', 40);
-    $config->set('cooling', 0);                 # for preventing speeds from being altered
+    $config->set('cooling', [ 0 ]);             # for preventing speeds from being altered
     $config->set('first_layer_speed', '100%');  # for preventing speeds from being altered
     
     my $test = sub {
@@ -249,7 +250,7 @@ for my $pattern (qw(rectilinear honeycomb hilbertcurve concentric)) {
     $config->set('solid_infill_every_layers', 2);
     $config->set('perimeter_speed', 99);
     $config->set('external_perimeter_speed', 99);
-    $config->set('cooling', 0);
+    $config->set('cooling', [ 0 ]);
     $config->set('first_layer_speed', '100%');
     
     my $print = Slic3r::Test::init_print('20mm_cube', config => $config);

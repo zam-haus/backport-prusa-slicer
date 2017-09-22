@@ -116,7 +116,6 @@ The author of the Silk icon set is Mark James.
         --gui               Forces the GUI launch instead of command line slicing (if you
                             supply a model file, it will be loaded into the plater)
         --no-plater         Disable the plater tab
-        --gui-mode          Overrides the configured mode (simple/expert)
         --autosave <file>   Automatically export current configuration to the specified file
     
       Output options:
@@ -141,13 +140,7 @@ The author of the Silk icon set is Mark James.
         --use-relative-e-distances Enable this to get relative E values (default: no)
         --use-firmware-retraction  Enable firmware-controlled retraction using G10/G11 (default: no)
         --use-volumetric-e  Express E in cubic millimeters and prepend M200 (default: no)
-        --gcode-arcs        Use G2/G3 commands for native arcs (experimental, not supported
-                            by all firmwares)
         --gcode-comments    Make G-code verbose by adding comments (default: no)
-        --vibration-limit   Limit the frequency of moves on X and Y axes (Hz, set zero to disable;
-                            default: 0)
-        --pressure-advance  Adjust pressure using the experimental advance algorithm (K constant,
-                            set zero to disable; default: 0)
     
       Filament options:
         --filament-diameter Diameter in mm of your raw filament (default: 3)

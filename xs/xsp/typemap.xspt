@@ -99,15 +99,9 @@
 %typemap{MotionPlanner*};
 %typemap{Ref<MotionPlanner>}{simple};
 %typemap{Clone<MotionPlanner>}{simple};
-%typemap{GCodeWriter*};
-%typemap{Ref<GCodeWriter>}{simple};
-%typemap{Clone<GCodeWriter>}{simple};
 %typemap{GCodeSender*};
 %typemap{Ref<GCodeSender>}{simple};
 %typemap{Clone<GCodeSender>}{simple};
-%typemap{GCodePressureEqualizer*};
-%typemap{Ref<GCodePressureEqualizer>}{simple};
-%typemap{Clone<GCodePressureEqualizer>}{simple};
 %typemap{BridgeDetector*};
 %typemap{Ref<BridgeDetector>}{simple};
 %typemap{Clone<BridgeDetector>}{simple};
@@ -152,18 +146,6 @@
 %typemap{Ref<PlaceholderParser>}{simple};
 %typemap{Clone<PlaceholderParser>}{simple};
 
-%typemap{AvoidCrossingPerimeters*};
-%typemap{Ref<AvoidCrossingPerimeters>}{simple};
-%typemap{Clone<AvoidCrossingPerimeters>}{simple};
-
-%typemap{Wipe*};
-%typemap{Ref<Wipe>}{simple};
-%typemap{Clone<Wipe>}{simple};
-
-%typemap{OozePrevention*};
-%typemap{Ref<OozePrevention>}{simple};
-%typemap{Clone<OozePrevention>}{simple};
-
 %typemap{CoolingBuffer*};
 %typemap{Ref<CoolingBuffer>}{simple};
 %typemap{Clone<CoolingBuffer>}{simple};
@@ -184,9 +166,6 @@
 %typemap{Polygons*};
 %typemap{TriangleMesh*};
 %typemap{TriangleMeshPtrs};
-%typemap{Extruder*};
-%typemap{Ref<Extruder>}{simple};
-%typemap{Clone<Extruder>}{simple};
 %typemap{Model*};
 %typemap{Ref<Model>}{simple};
 %typemap{Clone<Model>}{simple};

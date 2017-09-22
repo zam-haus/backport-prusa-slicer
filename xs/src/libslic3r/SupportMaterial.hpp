@@ -138,7 +138,7 @@ public:
 	bool 		has_support()				const { return m_object_config->support_material.value; }
 	bool 		build_plate_only() 			const { return this->has_support() && m_object_config->support_material_buildplate_only.value; }
 
-	bool 		synchronize_layers()		const { return m_object_config->support_material_synchronize_layers.value; }
+	bool 		synchronize_layers()		const { return m_slicing_params.soluble_interface && m_object_config->support_material_synchronize_layers.value; }
 	bool 		has_contact_loops() 		const { return m_object_config->support_material_interface_contact_loops.value; }
 
 	// Generate support material for the object.
@@ -226,6 +226,8 @@ private:
 	Flow 			 	 m_first_layer_flow;
 	Flow 			 	 m_support_material_flow;
 	Flow 			 	 m_support_material_interface_flow;
+	// Is merging of regions allowed? Could the interface & base support regions be printed with the same extruder?
+	bool 				 m_can_merge_support_regions;
 
     coordf_t 			 m_support_layer_height_min;
 	coordf_t		 	 m_support_layer_height_max;

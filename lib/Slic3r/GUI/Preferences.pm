@@ -20,24 +20,14 @@ sub new {
         },
         label_width => 200,
     );
-    $optgroup->append_single_option_line(Slic3r::GUI::OptionsGroup::Option->new(
-        opt_id      => 'mode',
-        type        => 'select',
-        label       => 'Mode',
-        tooltip     => 'Choose between a simpler, basic mode and an expert mode with more options and more complicated interface.',
-        labels      => ['Simple','Expert'],
-        values      => ['simple','expert'],
-        default     => $Slic3r::GUI::Settings->{_}{mode},
-        width       => 100,
-    ));
-    $optgroup->append_single_option_line(Slic3r::GUI::OptionsGroup::Option->new(
-        opt_id      => 'version_check',
-        type        => 'bool',
-        label       => 'Check for updates',
-        tooltip     => 'If this is enabled, Slic3r will check for updates daily and display a reminder if a newer version is available.',
-        default     => $Slic3r::GUI::Settings->{_}{version_check} // 1,
-        readonly    => !wxTheApp->have_version_check,
-    ));
+#    $optgroup->append_single_option_line(Slic3r::GUI::OptionsGroup::Option->new(
+#        opt_id      => 'version_check',
+#        type        => 'bool',
+#        label       => 'Check for updates',
+#        tooltip     => 'If this is enabled, Slic3r will check for updates daily and display a reminder if a newer version is available.',
+#        default     => $Slic3r::GUI::Settings->{_}{version_check} // 1,
+#        readonly    => !wxTheApp->have_version_check,
+#    ));
     $optgroup->append_single_option_line(Slic3r::GUI::OptionsGroup::Option->new(
         opt_id      => 'remember_output_path',
         type        => 'bool',
@@ -91,7 +81,7 @@ sub new {
 sub _accept {
     my $self = shift;
     
-    if ($self->{values}{mode} || defined($self->{values}{no_controller})) {
+    if (defined($self->{values}{no_controller})) {
         Slic3r::GUI::warning_catcher($self)->("You need to restart Slic3r to make the changes effective.");
     }
     

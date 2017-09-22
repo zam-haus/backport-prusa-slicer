@@ -17,6 +17,9 @@
 #define SLIC3R_VERSION "1.33.8.devel"
 #define SLIC3R_BUILD "UNKNOWN"
 
+typedef long coord_t;
+typedef double coordf_t;
+
 //FIXME This epsilon value is used for many non-related purposes:
 // For a threshold of a squared Euclidean distance,
 // for a trheshold in a difference of radians,
@@ -39,12 +42,11 @@
 // 3mm ring around the top / bottom / bridging areas.
 //FIXME This is quite a lot.
 #define EXTERNAL_INFILL_MARGIN 3.
+//FIXME Better to use an inline function with an explicit return type.
+//inline coord_t scale_(coordf_t v) { return coord_t(floor(v / SCALING_FACTOR + 0.5f)); }
 #define scale_(val) ((val) / SCALING_FACTOR)
 #define unscale(val) ((val) * SCALING_FACTOR)
 #define SCALED_EPSILON scale_(EPSILON)
-typedef long coord_t;
-typedef double coordf_t;
-
 /* Implementation of CONFESS("foo"): */
 #ifdef _MSC_VER
 	#define CONFESS(...) confess_at(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
@@ -86,6 +88,10 @@ inline std::string debug_out_path(const char *name, ...)
 	#define PRINTF_ZU "%zu"
 #endif
 
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif /* UNUSED */
+
 // Write slices as SVG images into out directory during the 2D processing of the slices.
 // #define SLIC3R_DEBUG_SLICE_PROCESSING
 
@@ -100,7 +106,7 @@ inline void append_to(std::vector<T> &dst, const std::vector<T> &src)
 }
 
 template <typename T>
-void append(std::vector<T>& dest, const std::vector<T>& src)
+inline void append(std::vector<T>& dest, const std::vector<T>& src)
 {
     if (dest.empty())
         dest = src;
@@ -109,7 +115,7 @@ void append(std::vector<T>& dest, const std::vector<T>& src)
 }
 
 template <typename T>
-void append(std::vector<T>& dest, std::vector<T>&& src)
+inline void append(std::vector<T>& dest, std::vector<T>&& src)
 {
     if (dest.empty())
         dest = std::move(src);
@@ -120,11 +126,43 @@ void append(std::vector<T>& dest, std::vector<T>&& src)
 }
 
 template <typename T>
-void remove_nulls(std::vector<T*> &vec)
+inline void remove_nulls(std::vector<T*> &vec)
 {
 	vec.erase(
     	std::remove_if(vec.begin(), vec.end(), [](const T *ptr) { return ptr == nullptr; }),
     	vec.end());
+}
+
+template <typename T>
+inline void sort_remove_duplicates(std::vector<T> &vec)
+{
+	std::sort(vec.begin(), vec.end());
+	vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
+}
+
+// Older compilers do not provide a std::make_unique template. Provide a simple one.
+template<typename T, typename... Args>
+inline std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
+template<typename T>
+static inline T sqr(T x)
+{
+    return x * x;
+}
+
+template <typename T>
+static inline T clamp(const T low, const T high, const T value)
+{
+    return std::max(low, std::min(high, value));
+}
+
+template <typename T>
+static inline T lerp(const T a, const T b, const T t)
+{
+    assert(t >= T(-EPSILON) && t <= T(1.+EPSILON));
+    return (1. - t) * a + t * b;
 }
 
 } // namespace Slic3r

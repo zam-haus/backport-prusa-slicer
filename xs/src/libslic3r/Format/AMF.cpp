@@ -3,6 +3,8 @@
 #include <string>
 #include <expat/expat.h>
 
+#include <boost/nowide/cstdio.hpp>
+
 #include "../libslic3r.h"
 #include "../Model.hpp"
 #include "AMF.hpp"
@@ -147,6 +149,9 @@ struct AMFParserContext
     Instance                *m_instance;
     // Generic string buffer for vertices, face indices, metadata etc.
     std::string              m_value[3];
+
+private:
+    AMFParserContext& operator=(AMFParserContext&);
 };
 
 void AMFParserContext::startElement(const char *name, const char **atts)
@@ -307,7 +312,7 @@ void AMFParserContext::characters(const XML_Char *s, int len)
     }
 }
 
-void AMFParserContext::endElement(const char *name)
+void AMFParserContext::endElement(const char * /* name */)
 {
     switch (m_path.back()) {
 
@@ -477,7 +482,7 @@ bool load_amf(const char *path, Model *model)
         return false;
     }
 
-    FILE *pFile = ::fopen(path, "rt");
+    FILE *pFile = boost::nowide::fopen(path, "rt");
     if (pFile == nullptr) {
         printf("Cannot open file %s\n", path);
         return false;
@@ -519,7 +524,7 @@ bool load_amf(const char *path, Model *model)
 
 bool store_amf(const char *path, Model *model)
 {
-    FILE *file = ::fopen(path, "wb");
+    FILE *file = boost::nowide::fopen(path, "wb");
     if (file == nullptr)
         return false;
 

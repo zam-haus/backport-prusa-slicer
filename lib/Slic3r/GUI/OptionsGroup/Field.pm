@@ -423,8 +423,10 @@ sub get_value {
 
 sub _string_to_colour {
     my ($self, $string) = @_;
-    
+
     $string =~ s/^#//;
+    # If the color is in an invalid format, set it to white.
+    $string = 'FFFFFF' if ($string !~ m/^[[:xdigit:]]{6}/);
     return Wx::Colour->new(unpack 'C*', pack 'H*', $string);
 }
 
@@ -519,7 +521,6 @@ has 'scale'         => (is => 'rw', default => sub { 10 });
 has 'slider'        => (is => 'rw');
 has 'textctrl'      => (is => 'rw');
 
-use Slic3r::Geometry qw(X Y);
 use Wx qw(:misc :sizer);
 use Wx::Event qw(EVT_SLIDER EVT_TEXT EVT_KILL_FOCUS);
 

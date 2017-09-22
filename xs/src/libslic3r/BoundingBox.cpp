@@ -1,5 +1,6 @@
 #include "BoundingBox.hpp"
 #include <algorithm>
+#include <assert.h>
 
 namespace Slic3r {
 
@@ -125,15 +126,18 @@ template void BoundingBoxBase<Pointf>::merge(const Pointfs &points);
 template <class PointClass> void
 BoundingBoxBase<PointClass>::merge(const BoundingBoxBase<PointClass> &bb)
 {
-    if (this->defined) {
-        this->min.x = std::min(bb.min.x, this->min.x);
-        this->min.y = std::min(bb.min.y, this->min.y);
-        this->max.x = std::max(bb.max.x, this->max.x);
-        this->max.y = std::max(bb.max.y, this->max.y);
-    } else {
-        this->min = bb.min;
-        this->max = bb.max;
-        this->defined = true;
+    assert(bb.defined || bb.min.x >= bb.max.x || bb.min.y >= bb.max.y);
+    if (bb.defined) {
+        if (this->defined) {
+            this->min.x = std::min(bb.min.x, this->min.x);
+            this->min.y = std::min(bb.min.y, this->min.y);
+            this->max.x = std::max(bb.max.x, this->max.x);
+            this->max.y = std::max(bb.max.y, this->max.y);
+        } else {
+            this->min = bb.min;
+            this->max = bb.max;
+            this->defined = true;
+        }
     }
 }
 template void BoundingBoxBase<Point>::merge(const BoundingBoxBase<Point> &bb);
@@ -160,11 +164,14 @@ template void BoundingBox3Base<Pointf3>::merge(const Pointf3s &points);
 template <class PointClass> void
 BoundingBox3Base<PointClass>::merge(const BoundingBox3Base<PointClass> &bb)
 {
-    if (this->defined) {
-        this->min.z = std::min(bb.min.z, this->min.z);
-        this->max.z = std::max(bb.max.z, this->max.z);
+    assert(bb.defined || bb.min.x >= bb.max.x || bb.min.y >= bb.max.y || bb.min.z >= bb.max.z);
+    if (bb.defined) {
+        if (this->defined) {
+            this->min.z = std::min(bb.min.z, this->min.z);
+            this->max.z = std::max(bb.max.z, this->max.z);
+        }
+        BoundingBoxBase<PointClass>::merge(bb);
     }
-    BoundingBoxBase<PointClass>::merge(bb);
 }
 template void BoundingBox3Base<Pointf3>::merge(const BoundingBox3Base<Pointf3> &bb);
 

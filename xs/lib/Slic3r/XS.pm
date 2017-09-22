@@ -269,7 +269,6 @@ for my $class (qw(
         Slic3r::Config::Static
         Slic3r::ExPolygon
         Slic3r::ExPolygon::Collection
-        Slic3r::Extruder
         Slic3r::ExtrusionLoop
         Slic3r::ExtrusionMultiPath
         Slic3r::ExtrusionPath
@@ -278,11 +277,7 @@ for my $class (qw(
         Slic3r::Filler
         Slic3r::Flow
         Slic3r::GCode
-        Slic3r::GCode::AvoidCrossingPerimeters
-        Slic3r::GCode::OozePrevention
         Slic3r::GCode::PlaceholderParser
-        Slic3r::GCode::Wipe
-        Slic3r::GCode::Writer
         Slic3r::Geometry::BoundingBox
         Slic3r::Geometry::BoundingBoxf
         Slic3r::Geometry::BoundingBoxf3
