@@ -3,53 +3,11 @@ Date: Thu, 17 Nov 2016 23:16:26 +0800
 Subject: Use system libs
 
 ---
- xs/Build.PL                     | 9 ++++++---
  xs/src/libslic3r/Format/AMF.cpp | 2 +-
- 2 files changed, 7 insertions(+), 4 deletions(-)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/xs/Build.PL b/xs/Build.PL
-index ff91114..c40f3e2 100644
---- a/xs/Build.PL
-+++ b/xs/Build.PL
-@@ -27,7 +27,7 @@ if ($mswin) {
- # HAS_BOOL         : stops Perl/lib/CORE/handy.h from doing "#  define bool char" for MSVC
- # NOGDI            : prevents inclusion of wingdi.h which defines functions Polygon() and Polyline() in global namespace
- # BOOST_ASIO_DISABLE_KQUEUE : prevents a Boost ASIO bug on OS X: https://svn.boost.org/trac/boost/ticket/5339
--my @cflags = qw(-D_GLIBCXX_USE_C99 -DHAS_BOOL -DNOGDI -DSLIC3RXS -DBOOST_ASIO_DISABLE_KQUEUE -DGLEW_STATIC);
-+my @cflags = qw(-D_GLIBCXX_USE_C99 -DHAS_BOOL -DNOGDI -DSLIC3RXS -DBOOST_ASIO_DISABLE_KQUEUE);
- my @ldflags = ();
- if ($^O eq 'darwin') {
-     push @ldflags, qw(-framework IOKit -framework CoreFoundation);
-@@ -43,7 +43,7 @@ if (! $cpp_guess->is_msvc) {
- }
- 
- my @early_includes = ();
--my @INC  = qw(-Isrc/libslic3r -Isrc/glew/include -Isrc/eigen);
-+my @INC  = qw(-Isrc/libslic3r -I/usr/include/eigen3);
- my @LIBS = $cpp_guess->is_msvc ? qw(-LIBPATH:src/libslic3r) : qw(-Lsrc/libslic3r);
- 
- $ENV{SLIC3R_GUI} = 1 if ! defined($ENV{SLIC3R_NOGUI}) || $ENV{SLIC3R_NOGUI} != 1;
-@@ -316,7 +316,7 @@ if ($ENV{SLIC3R_GUI}) {
-     } elsif ($^O eq 'darwin') {
-         push @LIBS, qw(-framework OpenGL);
-     } else {
--        push @LIBS, qw(-lGL -lGLU);
-+        push @LIBS, qw(-lGL -lGLU -lGLEW);
-     }
- }
- 
-@@ -329,6 +329,9 @@ if ($ENV{SLIC3R_DEBUG}) {
-     push @cflags, '-DNDEBUG';
- }
- 
-+# link against libexpat
-+push @LIBS, qw(-lexpat);
-+
- print "\n";
- print 'With @cflags: ', join(', ', map "\"$_\"", @cflags), "\n";
- print 'With @ldflags: ', join(', ', map "\"$_\"", @ldflags), "\n";
 diff --git a/xs/src/libslic3r/Format/AMF.cpp b/xs/src/libslic3r/Format/AMF.cpp
-index 7e5e905..a2c22c0 100644
+index b8abf03..88e996c 100644
 --- a/xs/src/libslic3r/Format/AMF.cpp
 +++ b/xs/src/libslic3r/Format/AMF.cpp
 @@ -1,7 +1,7 @@
@@ -59,5 +17,5 @@ index 7e5e905..a2c22c0 100644
 -#include <expat/expat.h>
 +#include <expat.h>
  
- #include "../libslic3r.h"
- #include "../Model.hpp"
+ #include <boost/nowide/cstdio.hpp>
+ 
