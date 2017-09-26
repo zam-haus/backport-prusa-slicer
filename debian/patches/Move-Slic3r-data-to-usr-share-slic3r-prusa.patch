@@ -7,7 +7,7 @@ Subject: Move Slic3r data to /usr/share/slic3r-prusa
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/lib/Slic3r.pm b/lib/Slic3r.pm
-index 17b7832..8cca69e 100644
+index 17b7832..cf1c3e4 100644
 --- a/lib/Slic3r.pm
 +++ b/lib/Slic3r.pm
 @@ -51,7 +51,7 @@ warn "Running Slic3r under Perl 5.16 is neither supported nor recommended\n"
@@ -15,7 +15,7 @@ index 17b7832..8cca69e 100644
  use FindBin;
  # Path to the images.
 -our $var = sub { decode_path($FindBin::Bin) . "/var/" . $_[0] };
-+our $var = sub { "/usr/share/slic3r-prusa/" . $_[0]; };
++our $var = sub { "/usr/share/slic3r-prusa3d/" . $_[0]; };
  
  use Moo 1.003001;
  
