@@ -7,3 +7,6 @@ include /usr/share/dpkg/default.mk
 
 override_dh_auto_configure:
 	dh_auto_configure --buildsystem=cmake -- -DBUILD_TESTING=1 -DCMAKE_BUILD_TYPE=Release
+
+override_dh_perl:
+	dh_perl /usr/lib/slic3r-prusa3d

@@ -22,6 +22,16 @@ slic3r-prusa (1.37.1+dfsg-1) unstable; urgency=medium
 
  -- Chow Loong Jin <hyperair@debian.org>  Wed, 20 Sep 2017 22:43:28 +0800
 
+slic3r-prusa (1.37.0+dfsg-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Fix "Loadable library and perl binary mismatch":
+    add override_dh_perl in debian/rules to make dh_perl search for perl
+    modules in the private directory as well.
+    (Closes: #872275)
+
+ -- gregor herrmann <gregoa@debian.org>  Wed, 23 Aug 2017 19:17:28 +0200
+
 slic3r-prusa (1.37.0+dfsg-1) unstable; urgency=medium
 
   * [3561f7e] New upstream version 1.37.0+dfsg
