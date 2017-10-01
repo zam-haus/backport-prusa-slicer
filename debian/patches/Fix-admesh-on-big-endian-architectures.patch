@@ -1,0 +1,329 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Mon, 2 Oct 2017 02:01:16 +0800
+Subject: Fix admesh on big endian architectures
+
+Bug: https://github.com/prusa3d/Slic3r/pull/534
+Bug-Debian: https://bugs.debian.org/869638
+Forwarded: yes
+---
+ xs/src/admesh/portable_endian.h | 123 ++++++++++++++++++++++++++++++++++++++++
+ xs/src/admesh/stl.h             |   5 --
+ xs/src/admesh/stl_io.cpp        |  65 ++++++++++++++++++++-
+ xs/src/admesh/stlinit.cpp       |  37 ++++++++++--
+ 4 files changed, 217 insertions(+), 13 deletions(-)
+ create mode 100644 xs/src/admesh/portable_endian.h
+
+diff --git a/xs/src/admesh/portable_endian.h b/xs/src/admesh/portable_endian.h
+new file mode 100644
+index 0000000..f980de8
+--- /dev/null
++++ b/xs/src/admesh/portable_endian.h
+@@ -0,0 +1,123 @@
++/* portable_endian.h
++ * from https://gist.github.com/panzi/6856583
++ * "License": Public Domain
++ * I, Mathias Panzenböck, place this file hereby into the public domain. Use it
++ * at your own risk for whatever you like.  In case there are jurisdictions
++ * that don't support putting things in the public domain you can also consider
++ * it to be "dual licensed" under the BSD, MIT and Apache licenses, if you want
++ * to. This code is trivial anyway. Consider it an example on how to get the
++ * endian conversion functions on different platforms.
++ */
++
++#ifndef PORTABLE_ENDIAN_H__
++#define PORTABLE_ENDIAN_H__
++
++#if (defined(_WIN16) || defined(_WIN32) || defined(_WIN64)) && !defined(__WINDOWS__)
++
++#	define __WINDOWS__
++
++#endif
++
++#if defined(__linux__) || defined(__CYGWIN__)
++
++#	include <endian.h>
++
++#elif defined(__APPLE__)
++
++#	include <libkern/OSByteOrder.h>
++
++#	define htobe16(x) OSSwapHostToBigInt16(x)
++#	define htole16(x) OSSwapHostToLittleInt16(x)
++#	define be16toh(x) OSSwapBigToHostInt16(x)
++#	define le16toh(x) OSSwapLittleToHostInt16(x)
++ 
++#	define htobe32(x) OSSwapHostToBigInt32(x)
++#	define htole32(x) OSSwapHostToLittleInt32(x)
++#	define be32toh(x) OSSwapBigToHostInt32(x)
++#	define le32toh(x) OSSwapLittleToHostInt32(x)
++ 
++#	define htobe64(x) OSSwapHostToBigInt64(x)
++#	define htole64(x) OSSwapHostToLittleInt64(x)
++#	define be64toh(x) OSSwapBigToHostInt64(x)
++#	define le64toh(x) OSSwapLittleToHostInt64(x)
++
++#	define __BYTE_ORDER    BYTE_ORDER
++#	define __BIG_ENDIAN    BIG_ENDIAN
++#	define __LITTLE_ENDIAN LITTLE_ENDIAN
++#	define __PDP_ENDIAN    PDP_ENDIAN
++
++#elif defined(__OpenBSD__)
++
++#	include <sys/endian.h>
++
++#elif defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
++
++#	include <sys/endian.h>
++
++#	define be16toh(x) betoh16(x)
++#	define le16toh(x) letoh16(x)
++
++#	define be32toh(x) betoh32(x)
++#	define le32toh(x) letoh32(x)
++
++#	define be64toh(x) betoh64(x)
++#	define le64toh(x) letoh64(x)
++
++#elif defined(__WINDOWS__)
++
++/* #	include <winsock2.h> */
++#	include <sys/param.h>
++
++#	if BYTE_ORDER == LITTLE_ENDIAN
++
++#		define htobe16(x) htons(x)
++#		define htole16(x) (x)
++#		define be16toh(x) ntohs(x)
++#		define le16toh(x) (x)
++ 
++#		define htobe32(x) htonl(x)
++#		define htole32(x) (x)
++#		define be32toh(x) ntohl(x)
++#		define le32toh(x) (x)
++ 
++#		define htobe64(x) htonll(x)
++#		define htole64(x) (x)
++#		define be64toh(x) ntohll(x)
++#		define le64toh(x) (x)
++
++#	elif BYTE_ORDER == BIG_ENDIAN
++
++		/* that would be xbox 360 */
++#		define htobe16(x) (x)
++#		define htole16(x) __builtin_bswap16(x)
++#		define be16toh(x) (x)
++#		define le16toh(x) __builtin_bswap16(x)
++ 
++#		define htobe32(x) (x)
++#		define htole32(x) __builtin_bswap32(x)
++#		define be32toh(x) (x)
++#		define le32toh(x) __builtin_bswap32(x)
++ 
++#		define htobe64(x) (x)
++#		define htole64(x) __builtin_bswap64(x)
++#		define be64toh(x) (x)
++#		define le64toh(x) __builtin_bswap64(x)
++
++#	else
++
++#		error byte order not supported
++
++#	endif
++
++#	define __BYTE_ORDER    BYTE_ORDER
++#	define __BIG_ENDIAN    BIG_ENDIAN
++#	define __LITTLE_ENDIAN LITTLE_ENDIAN
++#	define __PDP_ENDIAN    PDP_ENDIAN
++
++#else
++
++#	error platform not supported
++
++#endif
++
++#endif
+diff --git a/xs/src/admesh/stl.h b/xs/src/admesh/stl.h
+index 82c8606..6f986b8 100644
+--- a/xs/src/admesh/stl.h
++++ b/xs/src/admesh/stl.h
+@@ -26,11 +26,6 @@
+ #include <stdio.h>
+ #include <stdint.h>
+ #include <stddef.h>
+-#include <boost/detail/endian.hpp>
+-
+-#ifndef BOOST_LITTLE_ENDIAN
+-#error "admesh works correctly on little endian machines only!"
+-#endif
+ 
+ #define STL_MAX(A,B) ((A)>(B)? (A):(B))
+ #define STL_MIN(A,B) ((A)<(B)? (A):(B))
+diff --git a/xs/src/admesh/stl_io.cpp b/xs/src/admesh/stl_io.cpp
+index e223c00..32fddcc 100644
+--- a/xs/src/admesh/stl_io.cpp
++++ b/xs/src/admesh/stl_io.cpp
+@@ -205,6 +205,63 @@ stl_print_neighbors(stl_file *stl, char *file) {
+ }
+ 
+ void
++stl_put_little_int(FILE *fp, int value_in) {
++  int new_value;
++  union {
++    int  int_value;
++    char char_value[4];
++  } value;
++
++  value.int_value = value_in;
++
++  new_value  = value.char_value[0] & 0xFF;
++  new_value |= (value.char_value[1] & 0xFF) << 0x08;
++  new_value |= (value.char_value[2] & 0xFF) << 0x10;
++  new_value |= (value.char_value[3] & 0xFF) << 0x18;
++  fwrite(&new_value, sizeof(int), 1, fp);
++}
++
++void
++stl_put_little_float(FILE *fp, float value_in) {
++  int new_value;
++  union {
++    float float_value;
++    char  char_value[4];
++  } value;
++
++  value.float_value = value_in;
++
++  new_value  = value.char_value[0] & 0xFF;
++  new_value |= (value.char_value[1] & 0xFF) << 0x08;
++  new_value |= (value.char_value[2] & 0xFF) << 0x10;
++  new_value |= (value.char_value[3] & 0xFF) << 0x18;
++  fwrite(&new_value, sizeof(int), 1, fp);
++}
++
++void
++stl_write_binary_block(stl_file *stl, FILE *fp)
++{
++  int i;
++  for(i = 0; i < stl->stats.number_of_facets; i++)
++    {
++      stl_put_little_float(fp, stl->facet_start[i].normal.x);
++      stl_put_little_float(fp, stl->facet_start[i].normal.y);
++      stl_put_little_float(fp, stl->facet_start[i].normal.z);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[0].x);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[0].y);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[0].z);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[1].x);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[1].y);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[1].z);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[2].x);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[2].y);
++      stl_put_little_float(fp, stl->facet_start[i].vertex[2].z);
++      fputc(stl->facet_start[i].extra[0], fp);
++      fputc(stl->facet_start[i].extra[1], fp);
++    }
++}
++
++void
+ stl_write_binary(stl_file *stl, const char *file, const char *label) {
+   FILE      *fp;
+   int       i;
+@@ -229,9 +286,11 @@ stl_write_binary(stl_file *stl, const char *file, const char *label) {
+   for(i = strlen(label); i < LABEL_SIZE; i++) putc(0, fp);
+ 
+   fseek(fp, LABEL_SIZE, SEEK_SET);
+-  fwrite(&stl->stats.number_of_facets, 4, 1, fp);
+-  for(i = 0; i < stl->stats.number_of_facets; i++)
+-    fwrite(stl->facet_start + i, SIZEOF_STL_FACET, 1, fp);
++
++  stl_put_little_int(fp, stl->stats.number_of_facets);
++
++  stl_write_binary_block(stl, fp);
++
+   fclose(fp);
+ }
+ 
+diff --git a/xs/src/admesh/stlinit.cpp b/xs/src/admesh/stlinit.cpp
+index f5110d3..84714cf 100644
+--- a/xs/src/admesh/stlinit.cpp
++++ b/xs/src/admesh/stlinit.cpp
+@@ -20,6 +20,7 @@
+  *           https://github.com/admesh/admesh/issues
+  */
+ 
++#include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -28,6 +29,7 @@
+ 
+ #include <boost/nowide/cstdio.hpp>
+ 
++#include "portable_endian.h"
+ #include "stl.h"
+ 
+ #ifndef SEEK_SET
+@@ -53,7 +55,7 @@ stl_initialize(stl_file *stl) {
+ void
+ stl_count_facets(stl_file *stl, const char *file) {
+   long           file_size;
+-  int            header_num_facets;
++  uint32_t       header_num_facets;
+   int            num_facets;
+   int            i;
+   size_t         s;
+@@ -113,7 +115,7 @@ stl_count_facets(stl_file *stl, const char *file) {
+     }
+ 
+     /* Read the int following the header.  This should contain # of facets */
+-    if((!fread(&header_num_facets, sizeof(int), 1, stl->fp)) || (num_facets != header_num_facets)) {
++    if((!fread(&header_num_facets, sizeof(uint32_t), 1, stl->fp)) || (uint32_t)num_facets != le32toh(header_num_facets)) {
+       fprintf(stderr,
+               "Warning: File size doesn't match number of facets in the header\n");
+     }
+@@ -248,7 +250,24 @@ stl_reallocate(stl_file *stl) {
+ void
+ stl_read(stl_file *stl, int first_facet, int first) {
+   stl_facet facet;
+-  int   i;
++  int   i, j;
++  const int facet_float_length = 12;
++  float *facet_floats[12];
++  char facet_buffer[12 * sizeof(float)];
++  uint32_t endianswap_buffer;  /* for byteswapping operations */
++
++  facet_floats[0] = &facet.normal.x;
++  facet_floats[1] = &facet.normal.y;
++  facet_floats[2] = &facet.normal.z;
++  facet_floats[3] = &facet.vertex[0].x;
++  facet_floats[4] = &facet.vertex[0].y;
++  facet_floats[5] = &facet.vertex[0].z;
++  facet_floats[6] = &facet.vertex[1].x;
++  facet_floats[7] = &facet.vertex[1].y;
++  facet_floats[8] = &facet.vertex[1].z;
++  facet_floats[9] = &facet.vertex[2].x;
++  facet_floats[10] = &facet.vertex[2].y;
++  facet_floats[11] = &facet.vertex[2].z;
+ 
+   if (stl->error) return;
+ 
+@@ -263,11 +282,19 @@ stl_read(stl_file *stl, int first_facet, int first) {
+     if(stl->stats.type == binary)
+       /* Read a single facet from a binary .STL file */
+     {
+-      /* we assume little-endian architecture! */
+-      if (fread(&facet, 1, SIZEOF_STL_FACET, stl->fp) != SIZEOF_STL_FACET) {
++      if(fread(facet_buffer, sizeof(facet_buffer), 1, stl->fp)
++         + fread(&facet.extra, sizeof(char), 2, stl->fp) != 3) {
++        perror("Cannot read facet");
+         stl->error = 1;
+         return;
+       }
++
++      for(j = 0; j < facet_float_length; j++) {
++        /* convert LE float to host byte order */
++        memcpy(&endianswap_buffer, facet_buffer + j * sizeof(float), 4);
++        endianswap_buffer = le32toh(endianswap_buffer);
++        memcpy(facet_floats[j], &endianswap_buffer, 4);
++      }
+     } else
+       /* Read a single facet from an ASCII .STL file */
+     {
