@@ -1,3 +1,17 @@
+slic3r-prusa (1.37.1+dfsg2-2) unstable; urgency=medium
+
+  * [7337428] Ack 1.37.0+dfsg-1.1 NMU:
+    - Fix "Loadable library and perl binary mismatch":
+      add override_dh_perl in debian/rules to make dh_perl search for perl
+      modules in the private directory as well. (Closes: #872275)
+  * [b962ed5] Import patch that fixes big-endian support in admesh
+    (Closes: #869638)
+  * [96ddc54] Bump Standards-Version
+  * [8fd9f76] Update StartupWMClass.
+  * [d077f2a] Update slic3r-prusa's desktop to open files
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 02 Oct 2017 02:24:50 +0800
+
 slic3r-prusa (1.37.1+dfsg2-1) unstable; urgency=medium
 
   * [1528472] New upstream version 1.37.1+dfsg2
