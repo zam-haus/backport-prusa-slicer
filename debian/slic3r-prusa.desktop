@@ -6,4 +6,4 @@ Icon=slic3r-prusa
 Exec=slic3r-prusa3d
 Keywords=perl;slice;3D;printer;convert;gcode;stl;obj;amf;
 StartupNotify=false
-StartupWMClass=slic3r-prusa
+StartupWMClass=slic3r-prusa3d
