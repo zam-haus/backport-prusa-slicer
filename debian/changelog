@@ -1,3 +1,10 @@
+slic3r-prusa (1.37.1+dfsg2-3) unstable; urgency=medium
+
+  * [e6013ee] Run ctest with the verbose flag.
+    This should fix the FTBFS on hppa caused by the lack of output during tests.
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 04 Oct 2017 14:39:48 +0800
+
 slic3r-prusa (1.37.1+dfsg2-2) unstable; urgency=medium
 
   * [7337428] Ack 1.37.0+dfsg-1.1 NMU:
