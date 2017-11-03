@@ -1,8 +1,10 @@
 slic3r-prusa (1.38.0+dfsg-1) unstable; urgency=medium
 
   * [df02f1c] New upstream version 1.38.0+dfsg
+  * [7eec4d5] Drop upstreamed admesh big-endian patch
+  * [ac81797] Bump Standards-Version to 4.1.1
 
- -- Chow Loong Jin <hyperair@debian.org>  Fri, 03 Nov 2017 11:59:54 +0800
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 03 Nov 2017 23:02:51 +0800
 
 slic3r-prusa (1.37.1+dfsg2-3) unstable; urgency=medium
 
