@@ -389,7 +389,7 @@ bool Print::apply_config(DynamicPrintConfig config)
     
     // handle changes to print config
     t_config_option_keys print_diff = this->config.diff(config);
-    this->config.apply(config, print_diff, true);
+    this->config.apply_only(config, print_diff, true);
     bool invalidated = this->invalidate_state_by_config_options(print_diff);
     
     // handle changes to object config defaults
@@ -410,7 +410,7 @@ bool Print::apply_config(DynamicPrintConfig config)
         }
         // check whether the new config is different from the current one
         t_config_option_keys diff = object->config.diff(new_config);
-        object->config.apply(new_config, diff, true);
+        object->config.apply_only(new_config, diff, true);
         invalidated |= object->invalidate_state_by_config_options(diff);
     }
     
@@ -460,7 +460,7 @@ bool Print::apply_config(DynamicPrintConfig config)
             if (this_region_config_set) {
                 t_config_option_keys diff = region.config.diff(this_region_config);
                 if (! diff.empty()) {
-                    region.config.apply(this_region_config, diff);
+                    region.config.apply_only(this_region_config, diff);
                     for (PrintObject *object : this->objects)
                         if (region_id < object->region_volumes.size() && ! object->region_volumes[region_id].empty())
                             invalidated |= object->invalidate_state_by_config_options(diff);
@@ -847,9 +847,7 @@ void Print::_make_skirt()
         extruders_e_per_mm.reserve(set_extruders.size());
         for (auto &extruder_id : set_extruders) {
             extruders.push_back(extruder_id);
-            GCodeConfig config;
-            config.apply(this->config, true);
-            extruders_e_per_mm.push_back(Extruder((unsigned int)extruder_id, &config).e_per_mm(mm3_per_mm));
+            extruders_e_per_mm.push_back(Extruder((unsigned int)extruder_id, &this->config).e_per_mm(mm3_per_mm));
         }
     }
 
