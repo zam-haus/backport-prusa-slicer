@@ -1,3 +1,9 @@
+slic3r-prusa (1.38.0+dfsg-1) unstable; urgency=medium
+
+  * [df02f1c] New upstream version 1.38.0+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 03 Nov 2017 11:59:54 +0800
+
 slic3r-prusa (1.37.1+dfsg2-3) unstable; urgency=medium
 
   * [e6013ee] Run ctest with the verbose flag.
