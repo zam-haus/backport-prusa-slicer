@@ -32,7 +32,7 @@ Build-Depends: debhelper (>= 9.20120312),
                xfonts-base,
                xvfb,
                xauth
-Standards-Version: 4.1.0
+Standards-Version: 4.1.1
 Homepage: http://github.com/prusa3d/slic3r
 Vcs-Git: https://anonscm.debian.org/git/3dprinter/packages/slic3r-prusa.git
 Vcs-Browser: https://anonscm.debian.org/git/3dprinter/packages/slic3r-prusa.git
