@@ -21,7 +21,7 @@ use File::Basename qw(basename);
 use List::Util qw(first);
 use Wx qw(:bookctrl :dialog :keycode :icon :id :misc :panel :sizer :treectrl :window
     :button wxTheApp);
-use Wx::Event qw(EVT_BUTTON EVT_CHOICE EVT_KEY_DOWN EVT_TREE_SEL_CHANGED);
+use Wx::Event qw(EVT_BUTTON EVT_CHOICE EVT_KEY_DOWN EVT_CHECKBOX EVT_TREE_SEL_CHANGED);
 use base qw(Wx::Panel Class::Accessor);
 
 # Index of the currently active preset.
@@ -384,9 +384,10 @@ sub update_tree {
     }
 }
 
+# Update the combo box label of the selected preset based on its "dirty" state,
+# comparing the selected preset config with $self->{config}.
 sub update_dirty {
-    my $self = shift;
-    
+    my ($self) = @_;
     my $list_updated;
     foreach my $i ($self->{default_suppressed}..$#{$self->{presets}}) {
         my $preset = $self->get_preset($i);
@@ -401,20 +402,23 @@ sub update_dirty {
     $self->_on_presets_changed;
 }
 
+# Has the selected preset been modified?
 sub is_dirty {
-    my $self = shift;
+    my ($self) = @_;
     return @{$self->dirty_options} > 0;
 }
 
+# Which options of the selected preset were modified?
 sub dirty_options {
-    my $self = shift;
-    
+    my ($self) = @_;
     return [] if !defined $self->current_preset;  # happens during initialization
     return $self->get_preset_config($self->get_current_preset)->diff($self->{config});
 }
 
+# Search all ini files in the presets directory, add them into the list of $self->{presets} in the form of Slic3r::GUI::Tab::Preset.
+# Initialize the drop down list box.
 sub load_presets {
-    my $self = shift;
+    my ($self) = @_;
     
     $self->{presets} = [
         Slic3r::GUI::Tab::Preset->new(
@@ -445,10 +449,9 @@ sub load_presets {
     $self->_on_presets_changed;
 }
 
+# Load a config file containing a Print, Filament & Printer preset.
 sub load_config_file {
-    my $self = shift;
-    my ($file) = @_;
-    
+    my ($self, $file) = @_;
     # look for the loaded config among the existing menu items
     my $i = first { $self->{presets}[$_]{file} eq $file && $self->{presets}[$_]{external} } 1..$#{$self->{presets}};
     if (!$i) {
@@ -470,9 +473,10 @@ sub load_config_file {
     return 1;
 }
 
+# Load a provied DynamicConfig into the tab, modifying the active preset.
+# This could be used for example by setting a Wipe Tower position by interactive manipulation in the 3D view.
 sub load_config {
-    my $self = shift;
-    my ($config) = @_;
+    my ($self, $config) = @_;
     
     my %keys_modified = ();
     foreach my $opt_key (@{$self->{config}->diff($config)}) {
@@ -487,6 +491,7 @@ sub load_config {
     }
 }
 
+# Load and return a config from the file associated with the $preset (Perl type Slic3r::GUI::Tab::Preset).
 sub get_preset_config {
     my ($self, $preset) = @_;
     return $preset->config($self->{config}->get_keys);
@@ -517,7 +522,7 @@ package Slic3r::GUI::Tab::Print;
 use base 'Slic3r::GUI::Tab';
 
 use List::Util qw(first);
-use Wx qw(:icon :dialog :id);
+use Wx qw(:icon :dialog :id wxTheApp);
 
 sub name { 'print' }
 sub title { 'Print Settings' }
@@ -525,49 +530,7 @@ sub title { 'Print Settings' }
 sub build {
     my $self = shift;
     
-    $self->init_config_options(qw(
-        layer_height first_layer_height
-        perimeters spiral_vase
-        top_solid_layers bottom_solid_layers
-        extra_perimeters ensure_vertical_shell_thickness avoid_crossing_perimeters thin_walls overhangs
-        seam_position external_perimeters_first
-        fill_density fill_pattern external_fill_pattern
-        infill_every_layers infill_only_where_needed
-        solid_infill_every_layers fill_angle bridge_angle solid_infill_below_area 
-        only_retract_when_crossing_perimeters infill_first
-        max_print_speed max_volumetric_speed 
-        max_volumetric_extrusion_rate_slope_positive max_volumetric_extrusion_rate_slope_negative
-        perimeter_speed small_perimeter_speed external_perimeter_speed infill_speed 
-        solid_infill_speed top_solid_infill_speed support_material_speed 
-        support_material_xy_spacing
-        support_material_interface_speed bridge_speed gap_fill_speed
-        travel_speed
-        first_layer_speed
-        perimeter_acceleration infill_acceleration bridge_acceleration 
-        first_layer_acceleration default_acceleration
-        skirts skirt_distance skirt_height min_skirt_length
-        brim_width
-        support_material support_material_threshold support_material_enforce_layers
-        raft_layers
-        support_material_pattern support_material_with_sheath support_material_spacing support_material_synchronize_layers support_material_angle
-        support_material_interface_layers support_material_interface_spacing support_material_interface_contact_loops
-        support_material_contact_distance support_material_buildplate_only dont_support_bridges
-        notes
-        complete_objects extruder_clearance_radius extruder_clearance_height
-        gcode_comments output_filename_format
-        post_process
-        perimeter_extruder infill_extruder solid_infill_extruder
-        support_material_extruder support_material_interface_extruder
-        ooze_prevention standby_temperature_delta
-        interface_shells
-        extrusion_width first_layer_extrusion_width perimeter_extrusion_width 
-        external_perimeter_extrusion_width infill_extrusion_width solid_infill_extrusion_width 
-        top_infill_extrusion_width support_material_extrusion_width
-        infill_overlap bridge_flow_ratio
-        clip_multipart_objects elefant_foot_compensation xy_size_compensation threads resolution
-        wipe_tower wipe_tower_x wipe_tower_y wipe_tower_width wipe_tower_per_color_wipe
-    ));
-    $self->{config}->set('print_settings_id', '');
+    $self->{config}->apply(wxTheApp->{preset_bundle}->prints->default_preset->config);
     
     {
         my $page = $self->add_options_page('Layers and perimeters', 'layers.png');
@@ -771,7 +734,7 @@ sub build {
             $optgroup->append_single_option_line('clip_multipart_objects');
             $optgroup->append_single_option_line('elefant_foot_compensation');
             $optgroup->append_single_option_line('xy_size_compensation');
-            $optgroup->append_single_option_line('threads') if $Slic3r::have_threads;
+#            $optgroup->append_single_option_line('threads') if $Slic3r::have_threads;
             $optgroup->append_single_option_line('resolution');
         }
     }
@@ -824,6 +787,12 @@ sub build {
             $optgroup->append_single_option_line($option);
         }
     }
+}
+
+sub reload_config {
+    my ($self) = @_;
+#    $self->_reload_compatible_printers_widget;
+    $self->SUPER::reload_config;
 }
 
 # Slic3r::GUI::Tab::Print::_update is called after a configuration preset is loaded or switched, or when a single option is modifed by the user.
@@ -1030,10 +999,11 @@ sub _update {
         for qw(wipe_tower_x wipe_tower_y wipe_tower_width wipe_tower_per_color_wipe);
 }
 
-sub hidden_options { !$Slic3r::have_threads ? qw(threads) : () }
+#sub hidden_options { !$Slic3r::have_threads ? qw(threads) : () }
 
 package Slic3r::GUI::Tab::Filament;
 use base 'Slic3r::GUI::Tab';
+use Wx qw(wxTheApp);
 
 sub name { 'filament' }
 sub title { 'Filament Settings' }
@@ -1041,15 +1011,7 @@ sub title { 'Filament Settings' }
 sub build {
     my $self = shift;
     
-    $self->init_config_options(qw(
-        filament_colour filament_diameter filament_type filament_soluble filament_notes filament_max_volumetric_speed extrusion_multiplier filament_density filament_cost
-        temperature first_layer_temperature bed_temperature first_layer_bed_temperature
-        fan_always_on cooling
-        min_fan_speed max_fan_speed bridge_fan_speed disable_fan_first_layers
-        fan_below_layer_time slowdown_below_layer_time min_print_speed
-        start_filament_gcode end_filament_gcode
-    ));
-    $self->{config}->set('filament_settings_id', '');
+    $self->{config}->apply(wxTheApp->{preset_bundle}->filaments->default_preset->config);
     
     {
         my $page = $self->add_options_page('Filament', 'spool.png');
@@ -1231,20 +1193,7 @@ sub build {
     my $self = shift;
     my (%params) = @_;
     
-    $self->init_config_options(qw(
-        bed_shape z_offset
-        gcode_flavor use_relative_e_distances
-        serial_port serial_speed
-        octoprint_host octoprint_apikey
-        use_firmware_retraction
-        use_volumetric_e variable_layer_height
-        single_extruder_multi_material start_gcode end_gcode before_layer_gcode layer_gcode toolchange_gcode
-        nozzle_diameter extruder_offset
-        retract_length retract_lift retract_speed deretract_speed retract_before_wipe retract_restart_extra retract_before_travel retract_layer_change wipe
-        retract_length_toolchange retract_restart_extra_toolchange
-        extruder_colour printer_notes
-    ));
-    $self->{config}->set('printer_settings_id', '');
+    $self->{config}->apply(wxTheApp->{preset_bundle}->printers->default_preset->config);
     
     my $bed_shape_widget = sub {
         my ($parent) = @_;
@@ -1705,6 +1654,7 @@ sub on_preset_loaded {
     }
 }
 
+# Load a config file containing a Print, Filament & Printer preset.
 sub load_config_file {
     my $self = shift;
     if ($self->SUPER::load_config_file(@_)) {
@@ -1847,6 +1797,8 @@ has 'external'  => (is => 'ro', default => sub { 0 });
 has 'name'      => (is => 'rw', required => 1);
 has 'file'      => (is => 'rw');
 
+# Load a config file, return a C++ class Slic3r::DynamicPrintConfig with $keys initialized from the config file.
+# In case of a "default" config item, return the default values.
 sub config {
     my ($self, $keys) = @_;
     
