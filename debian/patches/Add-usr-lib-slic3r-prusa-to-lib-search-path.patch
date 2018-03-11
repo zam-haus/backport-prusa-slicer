@@ -7,7 +7,7 @@ Subject: Add /usr/lib/slic3r-prusa to lib search path
  1 file changed, 1 insertion(+), 2 deletions(-)
 
 diff --git a/slic3r.pl b/slic3r.pl
-index 4b6e43e..d833ed1 100755
+index a3cc3cf..bff71e0 100755
 --- a/slic3r.pl
 +++ b/slic3r.pl
 @@ -5,8 +5,7 @@ use warnings;
