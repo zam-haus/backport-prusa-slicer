@@ -23,7 +23,8 @@
 namespace Slic3r {
 
 enum GCodeFlavor {
-    gcfRepRap, gcfTeacup, gcfMakerWare, gcfSailfish, gcfMach3, gcfMachinekit, gcfNoExtrusion, gcfSmoothie, gcfRepetier,
+    gcfRepRap, gcfRepetier, gcfTeacup, gcfMakerWare, gcfMarlin, gcfSailfish, gcfMach3, gcfMachinekit, 
+    gcfSmoothie, gcfNoExtrusion,
 };
 
 enum InfillPattern {
@@ -50,6 +51,7 @@ template<> inline t_config_enum_values& ConfigOptionEnum<GCodeFlavor>::get_enum_
         keys_map["repetier"]        = gcfRepetier;
         keys_map["teacup"]          = gcfTeacup;
         keys_map["makerware"]       = gcfMakerWare;
+        keys_map["marlin"]          = gcfMarlin;
         keys_map["sailfish"]        = gcfSailfish;
         keys_map["smoothie"]        = gcfSmoothie;
         keys_map["mach3"]           = gcfMach3;
@@ -141,6 +143,9 @@ class DynamicPrintConfig : public DynamicConfig
 public:
     DynamicPrintConfig() {}
     DynamicPrintConfig(const DynamicPrintConfig &other) : DynamicConfig(other) {}
+
+    static DynamicPrintConfig* new_from_defaults();
+    static DynamicPrintConfig* new_from_defaults_keys(const std::vector<std::string> &keys);
 
     // Overrides ConfigBase::def(). Static configuration definition. Any value stored into this ConfigBase shall have its definition here.
     const ConfigDef*    def() const override { return &print_config_def; }
@@ -449,6 +454,7 @@ class GCodeConfig : public StaticPrintConfig
     STATIC_PRINT_CONFIG_CACHE(GCodeConfig)
 public:
     ConfigOptionString              before_layer_gcode;
+    ConfigOptionString              between_objects_gcode;
     ConfigOptionFloats              deretract_speed;
     ConfigOptionString              end_gcode;
     ConfigOptionStrings             end_filament_gcode;
@@ -497,6 +503,7 @@ protected:
     void initialize(StaticCacheBase &cache, const char *base_ptr)
     {
         OPT_PTR(before_layer_gcode);
+        OPT_PTR(between_objects_gcode);
         OPT_PTR(deretract_speed);
         OPT_PTR(end_gcode);
         OPT_PTR(end_filament_gcode);

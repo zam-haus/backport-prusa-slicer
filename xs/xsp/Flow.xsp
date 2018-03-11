@@ -26,8 +26,8 @@
     float spacing();
     float spacing_to(Flow* other)
         %code{% RETVAL = THIS->spacing(*other); %};
-    long scaled_width();
-    long scaled_spacing();
+    int   scaled_width();
+    int   scaled_spacing();
     double mm3_per_mm();
 %{
 
@@ -43,18 +43,6 @@ _new_from_width(CLASS, role, width, nozzle_diameter, height, bridge_flow_ratio)
         ConfigOptionFloatOrPercent optwidth;
         optwidth.deserialize(width);
         RETVAL = new Flow(Flow::new_from_config_width(role, optwidth, nozzle_diameter, height, bridge_flow_ratio));
-    OUTPUT:
-        RETVAL
-
-Flow*
-_new_from_spacing(CLASS, spacing, nozzle_diameter, height, bridge)
-    char*           CLASS;
-    float           spacing;
-    float           nozzle_diameter;
-    float           height;
-    bool            bridge;
-    CODE:
-        RETVAL = new Flow(Flow::new_from_spacing(spacing, nozzle_diameter, height, bridge));
     OUTPUT:
         RETVAL
 
