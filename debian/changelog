@@ -2,6 +2,9 @@ slic3r-prusa (1.39.1+dfsg-1) unstable; urgency=medium
 
   * [f77b280] debian/watch: Fix filenamemangle
   * [91a4788] New upstream version 1.39.1+dfsg
+  * [c8af33b] Refresh patches
+  * [136dd9c] Fix resources installation
+  * [b14e7ae] Update icon symlinks for new icon path
 
  -- Chow Loong Jin <hyperair@debian.org>  Mon, 12 Mar 2018 03:47:30 +0800
 
