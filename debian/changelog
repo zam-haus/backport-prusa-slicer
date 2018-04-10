@@ -1,3 +1,10 @@
+slic3r-prusa (1.39.1+dfsg-3) unstable; urgency=medium
+
+  * [0f31b95] Reduce debug info to avoid running out of address space on mips.
+    Thanks to Adrian Bunk <bunk@debian.org> (Closes: #895214)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 10 Apr 2018 15:01:30 +0800
+
 slic3r-prusa (1.39.1+dfsg-2) unstable; urgency=medium
 
   * [3fb5ec7] Fix format-security FTBFS (Closes: #892959)
