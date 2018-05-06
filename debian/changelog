@@ -1,3 +1,9 @@
+slic3r-prusa (1.39.2+dfsg-1) unstable; urgency=medium
+
+  * [7f4fb4d] New upstream version 1.39.2+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 07 May 2018 00:41:59 +0800
+
 slic3r-prusa (1.39.1+dfsg-3) unstable; urgency=medium
 
   * [0f31b95] Reduce debug info to avoid running out of address space on mips.
