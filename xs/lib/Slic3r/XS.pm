@@ -12,7 +12,7 @@ our $VERSION = '0.01';
 BEGIN {
     if ($^O eq 'MSWin32') {
         eval "use Wx";
-#        eval "use Wx::Html";
+        eval "use Wx::Html";
         eval "use Wx::Print";  # because of some Wx bug, thread creation fails if we don't have this (looks like Wx::Printout is hard-coded in some thread cleanup code)
     }
 }
@@ -283,6 +283,7 @@ for my $class (qw(
         Slic3r::GUI::_3DScene::GLVolume
         Slic3r::GUI::Preset
         Slic3r::GUI::PresetCollection
+        Slic3r::GUI::Tab
         Slic3r::Layer
         Slic3r::Layer::Region
         Slic3r::Layer::Support

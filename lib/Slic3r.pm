@@ -43,6 +43,7 @@ use FindBin;
 # Let the XS module know where the GUI resources reside.
 set_resources_dir(decode_path($FindBin::Bin) . (($^O eq 'darwin') ? '/../Resources' : '/resources'));
 set_var_dir(resources_dir() . "/icons");
+set_local_dir(resources_dir() . "/localization/");
 
 use Moo 1.003001;
 
@@ -136,6 +137,7 @@ sub thread_cleanup {
     *Slic3r::Flow::DESTROY                  = sub {};
     *Slic3r::GCode::DESTROY                 = sub {};
     *Slic3r::GCode::PlaceholderParser::DESTROY = sub {};
+    *Slic3r::GCode::PreviewData::DESTROY    = sub {};
     *Slic3r::GCode::Sender::DESTROY         = sub {};
     *Slic3r::Geometry::BoundingBox::DESTROY = sub {};
     *Slic3r::Geometry::BoundingBoxf::DESTROY = sub {};
@@ -159,7 +161,13 @@ sub thread_cleanup {
     *Slic3r::Print::SupportMaterial2::DESTROY = sub {};
     *Slic3r::TriangleMesh::DESTROY          = sub {};
     *Slic3r::GUI::AppConfig::DESTROY        = sub {};
+    *Slic3r::GUI::GCodePreviewData::DESTROY = sub {};
     *Slic3r::GUI::PresetBundle::DESTROY     = sub {};
+    *Slic3r::GUI::Tab::DESTROY              = sub {};
+    *Slic3r::GUI::PresetHints::DESTROY      = sub {};
+    *Slic3r::GUI::TabIface::DESTROY         = sub {};
+    *Slic3r::OctoPrint::DESTROY             = sub {};
+    *Slic3r::PresetUpdater::DESTROY         = sub {};
     return undef;  # this prevents a "Scalars leaked" warning
 }
 
@@ -275,5 +283,6 @@ sub system_info
 # this package declaration prevents an ugly fatal warning to be emitted when
 # spawning a new thread
 package GLUquadricObjPtr;
+package Wx::Printout;
 
 1;

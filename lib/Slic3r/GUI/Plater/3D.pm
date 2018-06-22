@@ -8,9 +8,11 @@ use Wx qw(:misc :pen :brush :sizer :font :cursor :keycode wxTAB_TRAVERSAL);
 use Wx::Event qw(EVT_KEY_DOWN EVT_CHAR);
 use base qw(Slic3r::GUI::3DScene Class::Accessor);
 
+use Wx::Locale gettext => 'L';
+
 __PACKAGE__->mk_accessors(qw(
     on_arrange on_rotate_object_left on_rotate_object_right on_scale_object_uniformly
-    on_remove_object on_increase_objects on_decrease_objects));
+    on_remove_object on_increase_objects on_decrease_objects on_enable_action_buttons));
 
 sub new {
     my $class = shift;
@@ -29,7 +31,9 @@ sub new {
     $self->{on_select_object}   = sub {};
     $self->{on_instances_moved} = sub {};
     $self->{on_wipe_tower_moved} = sub {};
-    
+
+    $self->{objects_volumes_idxs} = [];
+        
     $self->on_select(sub {
         my ($volume_idx) = @_;
         $self->{on_select_object}->(($volume_idx == -1) ? undef : $self->volumes->[$volume_idx]->object_idx)
@@ -174,6 +178,22 @@ sub set_on_model_update {
     $self->on_model_update($cb);
 }
 
+sub set_on_enable_action_buttons {
+    my ($self, $cb) = @_;
+    $self->on_enable_action_buttons($cb);
+}
+
+sub update_volumes_selection {
+    my ($self) = @_;
+
+    foreach my $obj_idx (0..$#{$self->{model}->objects}) {
+        if ($self->{objects}[$obj_idx]->selected) {
+            my $volume_idxs = $self->{objects_volumes_idxs}->[$obj_idx];
+            $self->select_volume($_) for @{$volume_idxs};
+        }
+    }
+}
+
 sub reload_scene {
     my ($self, $force) = @_;
 
@@ -187,12 +207,14 @@ sub reload_scene {
 
     $self->{reload_delayed} = 0;
 
+    $self->{objects_volumes_idxs} = [];    
     foreach my $obj_idx (0..$#{$self->{model}->objects}) {
         my @volume_idxs = $self->load_object($self->{model}, $self->{print}, $obj_idx);
-        if ($self->{objects}[$obj_idx]->selected) {
-            $self->select_volume($_) for @volume_idxs;
-        }
+        push(@{$self->{objects_volumes_idxs}}, \@volume_idxs);
     }
+    
+    $self->update_volumes_selection;
+        
     if (defined $self->{config}->nozzle_diameter) {
         # Should the wipe tower be visualized?
         my $extruders_count = scalar @{ $self->{config}->nozzle_diameter };
@@ -203,10 +225,32 @@ sub reload_scene {
         if ($extruders_count > 1 && $self->{config}->single_extruder_multi_material && $self->{config}->wipe_tower &&
             ! $self->{config}->complete_objects) {
             $self->volumes->load_wipe_tower_preview(1000, 
-                $self->{config}->wipe_tower_x, $self->{config}->wipe_tower_y, 
-                $self->{config}->wipe_tower_width, $self->{config}->wipe_tower_per_color_wipe * ($extruders_count - 1),
-                $self->{model}->bounding_box->z_max, $self->UseVBOs);
+                $self->{config}->wipe_tower_x, $self->{config}->wipe_tower_y, $self->{config}->wipe_tower_width,
+		#$self->{config}->wipe_tower_per_color_wipe# 15 * ($extruders_count - 1), # this is just a hack when the config parameter became obsolete
+		15 * ($extruders_count - 1),
+                $self->{model}->bounding_box->z_max, $self->{config}->wipe_tower_rotation_angle, $self->UseVBOs);
         }
+    }
+    
+    $self->update_volumes_colors_by_extruder($self->{config});
+    
+    # checks for geometry outside the print volume to render it accordingly
+    if (scalar @{$self->volumes} > 0)
+    {
+        my $contained = $self->volumes->check_outside_state($self->{config});
+        if (!$contained) {
+            $self->set_warning_enabled(1);
+            Slic3r::GUI::_3DScene::generate_warning_texture(L("Detected object outside print volume"));
+            $self->on_enable_action_buttons->(0) if ($self->on_enable_action_buttons);
+        } else {
+            $self->set_warning_enabled(0);
+            $self->volumes->reset_outside_state();
+            Slic3r::GUI::_3DScene::reset_warning_texture();
+            $self->on_enable_action_buttons->(scalar @{$self->{model}->objects} > 0) if ($self->on_enable_action_buttons);
+        }
+    } else {
+        $self->set_warning_enabled(0);
+        Slic3r::GUI::_3DScene::reset_warning_texture();
     }
 }
 

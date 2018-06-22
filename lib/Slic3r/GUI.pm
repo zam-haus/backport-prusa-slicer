@@ -7,15 +7,11 @@ use File::Basename qw(basename);
 use FindBin;
 use List::Util qw(first);
 use Slic3r::GUI::2DBed;
-use Slic3r::GUI::AboutDialog;
 use Slic3r::GUI::BedShapeDialog;
-use Slic3r::GUI::BonjourBrowser;
-use Slic3r::GUI::ConfigWizard;
 use Slic3r::GUI::Controller;
 use Slic3r::GUI::Controller::ManualControlDialog;
 use Slic3r::GUI::Controller::PrinterPanel;
 use Slic3r::GUI::MainFrame;
-use Slic3r::GUI::Notifier;
 use Slic3r::GUI::Plater;
 use Slic3r::GUI::Plater::2D;
 use Slic3r::GUI::Plater::2DToolpaths;
@@ -26,31 +22,31 @@ use Slic3r::GUI::Plater::ObjectCutDialog;
 use Slic3r::GUI::Plater::ObjectSettingsDialog;
 use Slic3r::GUI::Plater::LambdaObjectDialog;
 use Slic3r::GUI::Plater::OverrideSettingsPanel;
-use Slic3r::GUI::Preferences;
 use Slic3r::GUI::ProgressStatusBar;
 use Slic3r::GUI::OptionsGroup;
 use Slic3r::GUI::OptionsGroup::Field;
 use Slic3r::GUI::SystemInfo;
-use Slic3r::GUI::Tab;
+
+use Wx::Locale gettext => 'L';
 
 our $have_OpenGL = eval "use Slic3r::GUI::3DScene; 1";
-our $have_LWP    = eval "use LWP::UserAgent; 1";
 
 use Wx 0.9901 qw(:bitmap :dialog :icon :id :misc :systemsettings :toplevelwindow :filedialog :font);
 use Wx::Event qw(EVT_IDLE EVT_COMMAND EVT_MENU);
 use base 'Wx::App';
 
 use constant FILE_WILDCARDS => {
-    known   => 'Known files (*.stl, *.obj, *.amf, *.xml, *.prusa)|*.stl;*.STL;*.obj;*.OBJ;*.amf;*.AMF;*.xml;*.XML;*.prusa;*.PRUSA',
+    known   => 'Known files (*.stl, *.obj, *.amf, *.xml, *.3mf, *.prusa)|*.stl;*.STL;*.obj;*.OBJ;*.zip.amf;*.amf;*.AMF;*.xml;*.XML;*.3mf;*.3MF;*.prusa;*.PRUSA',
     stl     => 'STL files (*.stl)|*.stl;*.STL',
     obj     => 'OBJ files (*.obj)|*.obj;*.OBJ',
-    amf     => 'AMF files (*.amf)|*.amf;*.AMF;*.xml;*.XML',
+    amf     => 'AMF files (*.amf)|*.zip.amf;*.amf;*.AMF;*.xml;*.XML',
+    threemf => '3MF files (*.3mf)|*.3mf;*.3MF',
     prusa   => 'Prusa Control files (*.prusa)|*.prusa;*.PRUSA',
     ini     => 'INI files *.ini|*.ini;*.INI',
     gcode   => 'G-code files (*.gcode, *.gco, *.g, *.ngc)|*.gcode;*.GCODE;*.gco;*.GCO;*.g;*.G;*.ngc;*.NGC',
     svg     => 'SVG files *.svg|*.svg;*.SVG',
 };
-use constant MODEL_WILDCARD => join '|', @{&FILE_WILDCARDS}{qw(known stl obj amf prusa)};
+use constant MODEL_WILDCARD => join '|', @{&FILE_WILDCARDS}{qw(known stl obj amf threemf prusa)};
 
 # Datadir provided on the command line.
 our $datadir;
@@ -67,6 +63,14 @@ our $medium_font = Wx::SystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
 $medium_font->SetPointSize(12);
 our $grey = Wx::Colour->new(200,200,200);
 
+# Events to be sent from a C++ menu implementation:
+# 1) To inform about a change of the application language.
+our $LANGUAGE_CHANGE_EVENT  = Wx::NewEventType;
+# 2) To inform about a change of Preferences.
+our $PREFERENCES_EVENT      = Wx::NewEventType;
+# To inform AppConfig about Slic3r version available online
+our $VERSION_ONLINE_EVENT   = Wx::NewEventType;
+
 sub OnInit {
     my ($self) = @_;
     
@@ -80,11 +84,12 @@ sub OnInit {
     # Mac: "~/Library/Application Support/Slic3r"
     Slic3r::set_data_dir($datadir || Wx::StandardPaths::Get->GetUserDataDir);
     Slic3r::GUI::set_wxapp($self);
-    
-    $self->{notifier} = Slic3r::GUI::Notifier->new;
+
     $self->{app_config} = Slic3r::GUI::AppConfig->new;
+    Slic3r::GUI::set_app_config($self->{app_config});
     $self->{preset_bundle} = Slic3r::GUI::PresetBundle->new;
-    
+    Slic3r::GUI::set_preset_bundle($self->{preset_bundle});
+
     # just checking for existence of Slic3r::data_dir is not enough: it may be an empty directory
     # supplied as argument to --datadir; in that case we should still run the wizard
     eval { $self->{preset_bundle}->setup_directories() };
@@ -92,55 +97,121 @@ sub OnInit {
         warn $@ . "\n";
         fatal_error(undef, $@);
     }
-    my $run_wizard = ! $self->{app_config}->exists;
+    my $app_conf_exists = $self->{app_config}->exists;
     # load settings
-    $self->{app_config}->load if ! $run_wizard;
+    $self->{app_config}->load if $app_conf_exists;
     $self->{app_config}->set('version', $Slic3r::VERSION);
     $self->{app_config}->save;
 
+    $self->{preset_updater} = Slic3r::PresetUpdater->new($VERSION_ONLINE_EVENT);
+    Slic3r::GUI::set_preset_updater($self->{preset_updater});
+
+    Slic3r::GUI::load_language();
+
     # Suppress the '- default -' presets.
     $self->{preset_bundle}->set_default_suppressed($self->{app_config}->get('no_defaults') ? 1 : 0);
-    eval { $self->{preset_bundle}->load_presets };
+    eval { $self->{preset_bundle}->load_presets($self->{app_config}); };
     if ($@) {
         warn $@ . "\n";
         show_error(undef, $@);
     }
-    eval { $self->{preset_bundle}->load_selections($self->{app_config}) };
-    $run_wizard = 1 if $self->{preset_bundle}->has_defauls_only;
-    
+
     # application frame
+    print STDERR "Creating main frame...\n";
     Wx::Image::FindHandlerType(wxBITMAP_TYPE_PNG) || Wx::Image::AddHandler(Wx::PNGHandler->new);
     $self->{mainframe} = my $frame = Slic3r::GUI::MainFrame->new(
         # If set, the "Controller" tab for the control of the printer over serial line and the serial port settings are hidden.
         no_controller   => $self->{app_config}->get('no_controller'),
         no_plater       => $no_plater,
+        lang_ch_event   => $LANGUAGE_CHANGE_EVENT,
+        preferences_event => $PREFERENCES_EVENT,
     );
     $self->SetTopWindow($frame);
 
-    EVT_IDLE($frame, sub {
+    # This makes CallAfter() work
+    EVT_IDLE($self->{mainframe}, sub {
         while (my $cb = shift @cb) {
             $cb->();
         }
         $self->{app_config}->save if $self->{app_config}->dirty;
     });
 
-    if ($run_wizard) {
-        # On OSX the UI was not initialized correctly if the wizard was called
-        # before the UI was up and running.
-        $self->CallAfter(sub {
-            # Run the config wizard, don't offer the "reset user profile" checkbox.
-            $self->{mainframe}->config_wizard(1);
-        });
-    }
+    # On OS X the UI tends to freeze in weird ways if modal dialogs (config wizard, update notifications, ...)
+    # are shown before or in the same event callback with the main frame creation.
+    # Therefore we schedule them for later using CallAfter.
+    $self->CallAfter(sub {
+        eval {
+            if (! $self->{preset_updater}->config_update()) {
+                exit 0;
+            }
+        };
+        if ($@) {
+            warn $@ . "\n";
+            fatal_error(undef, $@);
+        }
+    });
+
+    $self->CallAfter(sub {
+        if (! Slic3r::GUI::config_wizard_startup($app_conf_exists)) {
+            # Only notify if there was not wizard so as not to bother too much ...
+            $self->{preset_updater}->slic3r_update_notify();
+        }
+        $self->{preset_updater}->sync($self->{preset_bundle});
+    });
+
+    # The following event is emited by the C++ menu implementation of application language change.
+    EVT_COMMAND($self, -1, $LANGUAGE_CHANGE_EVENT, sub{
+        print STDERR "LANGUAGE_CHANGE_EVENT\n";
+        $self->recreate_GUI;
+    });
+
+    # The following event is emited by the C++ menu implementation of preferences change.
+    EVT_COMMAND($self, -1, $PREFERENCES_EVENT, sub{
+        $self->update_ui_from_settings;
+    });
     
+    # The following event is emited by PresetUpdater (C++)
+    EVT_COMMAND($self, -1, $VERSION_ONLINE_EVENT, sub {
+        my ($self, $event) = @_;
+        my $version = $event->GetString;
+        $self->{app_config}->set('version_online', $version);
+        $self->{app_config}->save;
+    });
+
     return 1;
 }
 
-sub about {
+sub recreate_GUI{
+    print STDERR "recreate_GUI\n";
     my ($self) = @_;
-    my $about = Slic3r::GUI::AboutDialog->new(undef);
-    $about->ShowModal;
-    $about->Destroy;
+    my $topwindow = $self->GetTopWindow();
+    $self->{mainframe} = my $frame = Slic3r::GUI::MainFrame->new(
+        # If set, the "Controller" tab for the control of the printer over serial line and the serial port settings are hidden.
+        no_controller   => $self->{app_config}->get('no_controller'),
+        no_plater       => $no_plater,
+        lang_ch_event   => $LANGUAGE_CHANGE_EVENT,
+        preferences_event => $PREFERENCES_EVENT,
+    );
+
+    if($topwindow)
+    {
+        $self->SetTopWindow($frame);
+        $topwindow->Destroy;
+    }
+
+    EVT_IDLE($self->{mainframe}, sub {
+        while (my $cb = shift @cb) {
+            $cb->();
+        }
+        $self->{app_config}->save if $self->{app_config}->dirty;
+    });
+
+    # On OSX the UI was not initialized correctly if the wizard was called
+    # before the UI was up and running.
+    $self->CallAfter(sub {
+        # Run the config wizard, don't offer the "reset user profile" checkbox.
+        Slic3r::GUI::config_wizard_startup(1);
+    });
 }
 
 sub system_info {
@@ -183,7 +254,7 @@ sub catch_error {
 # static method accepting a wxWindow object as first parameter
 sub show_error {
     my ($parent, $message) = @_;
-    Wx::MessageDialog->new($parent, $message, 'Error', wxOK | wxICON_ERROR)->ShowModal;
+    Slic3r::GUI::show_error_id($parent ? $parent->GetId() : 0, $message);
 }
 
 # static method accepting a wxWindow object as first parameter
@@ -219,7 +290,9 @@ sub notify {
     $frame->RequestUserAttention(&Wx::wxMAC ? wxUSER_ATTENTION_ERROR : wxUSER_ATTENTION_INFO)
         unless ($frame->IsActive);
 
-    $self->{notifier}->notify($message);
+    # There used to be notifier using a Growl application for OSX, but Growl is dead.
+    # The notifier also supported the Linux X D-bus notifications, but that support was broken.
+    #TODO use wxNotificationMessage?
 }
 
 # Called after the Preferences dialog is closed and the program settings are saved.
@@ -231,8 +304,9 @@ sub update_ui_from_settings {
 
 sub open_model {
     my ($self, $window) = @_;
-    
-    my $dialog = Wx::FileDialog->new($window // $self->GetTopWindow, 'Choose one or more files (STL/OBJ/AMF/PRUSA):', 
+
+    my $dlg_title = L('Choose one or more files (STL/OBJ/AMF/3MF/PRUSA):');   
+    my $dialog = Wx::FileDialog->new($window // $self->GetTopWindow, $dlg_title, 
         $self->{app_config}->get_last_dir, "",
         MODEL_WILDCARD, wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
     if ($dialog->ShowModal != wxID_OK) {

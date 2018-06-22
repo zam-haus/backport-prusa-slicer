@@ -5,14 +5,18 @@
 #include "Format/OBJ.hpp"
 #include "Format/PRUS.hpp"
 #include "Format/STL.hpp"
+#include "Format/3mf.hpp"
 
 #include <float.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/nowide/iostream.hpp>
+#include <boost/algorithm/string/replace.hpp>
 
 namespace Slic3r {
+
+    unsigned int Model::s_auto_extruder_id = 1;
 
 Model::Model(const Model &other)
 {
@@ -46,16 +50,16 @@ Model Model::read_from_file(const std::string &input_file, bool add_default_inst
         result = load_stl(input_file.c_str(), &model);
     else if (boost::algorithm::iends_with(input_file, ".obj"))
         result = load_obj(input_file.c_str(), &model);
-    else if (boost::algorithm::iends_with(input_file, ".amf") ||
-               boost::algorithm::iends_with(input_file, ".amf.xml"))
-        result = load_amf(input_file.c_str(), &model);
+    else if (!boost::algorithm::iends_with(input_file, ".zip.amf") && (boost::algorithm::iends_with(input_file, ".amf") ||
+        boost::algorithm::iends_with(input_file, ".amf.xml")))
+        result = load_amf(input_file.c_str(), nullptr, &model);
 #ifdef SLIC3R_PRUS
     else if (boost::algorithm::iends_with(input_file, ".prusa"))
         result = load_prus(input_file.c_str(), &model);
 #endif /* SLIC3R_PRUS */
     else
         throw std::runtime_error("Unknown file format. Input file must have .stl, .obj, .amf(.xml) or .prusa extension.");
-    
+
     if (! result)
         throw std::runtime_error("Loading of a model file failed.");
 
@@ -65,6 +69,41 @@ Model Model::read_from_file(const std::string &input_file, bool add_default_inst
     for (ModelObject *o : model.objects)
         o->input_file = input_file;
     
+    if (add_default_instances)
+        model.add_default_instances();
+
+    return model;
+}
+
+Model Model::read_from_archive(const std::string &input_file, PresetBundle* bundle, bool add_default_instances)
+{
+    Model model;
+
+    bool result = false;
+    if (boost::algorithm::iends_with(input_file, ".3mf"))
+        result = load_3mf(input_file.c_str(), bundle, &model);
+    else if (boost::algorithm::iends_with(input_file, ".zip.amf"))
+        result = load_amf(input_file.c_str(), bundle, &model);
+    else
+        throw std::runtime_error("Unknown file format. Input file must have .3mf or .zip.amf extension.");
+
+    if (!result)
+        throw std::runtime_error("Loading of a model file failed.");
+
+    if (model.objects.empty())
+        throw std::runtime_error("The supplied file couldn't be read because it's empty");
+
+    for (ModelObject *o : model.objects)
+    {
+        if (boost::algorithm::iends_with(input_file, ".zip.amf"))
+        {
+            // we remove the .zip part of the extension to avoid it be added to filenames when exporting
+            o->input_file = boost::ireplace_last_copy(input_file, ".zip.", ".");
+        }
+        else
+            o->input_file = input_file;
+    }
+
     if (add_default_instances)
         model.add_default_instances();
 
@@ -113,6 +152,23 @@ void Model::delete_object(size_t idx)
     ModelObjectPtrs::iterator i = this->objects.begin() + idx;
     delete *i;
     this->objects.erase(i);
+}
+
+void Model::delete_object(ModelObject* object)
+{
+    if (object == nullptr)
+        return;
+
+    for (ModelObjectPtrs::iterator it = objects.begin(); it != objects.end(); ++it)
+    {
+        ModelObject* obj = *it;
+        if (obj == object)
+        {
+            delete obj;
+            objects.erase(it);
+            return;
+        }
+    }
 }
 
 void Model::clear_objects()
@@ -168,11 +224,19 @@ bool Model::add_default_instances()
 }
 
 // this returns the bounding box of the *transformed* instances
-BoundingBoxf3 Model::bounding_box()
+BoundingBoxf3 Model::bounding_box() const
 {
     BoundingBoxf3 bb;
     for (ModelObject *o : this->objects)
         bb.merge(o->bounding_box());
+    return bb;
+}
+
+BoundingBoxf3 Model::transformed_bounding_box() const
+{
+    BoundingBoxf3 bb;
+    for (const ModelObject* obj : this->objects)
+        bb.merge(obj->tight_bounding_box(false));
     return bb;
 }
 
@@ -205,6 +269,10 @@ TriangleMesh Model::mesh() const
 
 static bool _arrange(const Pointfs &sizes, coordf_t dist, const BoundingBoxf* bb, Pointfs &out)
 {
+    if (sizes.empty())
+        // return if the list is empty or the following call to BoundingBoxf constructor will lead to a crash
+        return true;
+
     // we supply unscaled data to arrange()
     bool result = Slic3r::Geometry::arrange(
         sizes.size(),               // number of parts
@@ -336,23 +404,73 @@ bool Model::looks_like_multipart_object() const
     return false;
 }
 
-void Model::convert_multipart_object()
+void Model::convert_multipart_object(unsigned int max_extruders)
 {
     if (this->objects.empty())
         return;
     
     ModelObject* object = new ModelObject(this);
     object->input_file = this->objects.front()->input_file;
-    
+
+    reset_auto_extruder_id();
+
     for (const ModelObject* o : this->objects)
         for (const ModelVolume* v : o->volumes)
-            object->add_volume(*v)->name = o->name;
+        {
+            ModelVolume* new_v = object->add_volume(*v);
+            if (new_v != nullptr)
+            {
+                new_v->name = o->name;
+                new_v->config.set_deserialize("extruder", get_auto_extruder_id_as_string(max_extruders));
+            }
+        }
 
     for (const ModelInstance* i : this->objects.front()->instances)
         object->add_instance(*i);
     
     this->clear_objects();
     this->objects.push_back(object);
+}
+
+void Model::adjust_min_z()
+{
+    if (objects.empty())
+        return;
+
+    if (bounding_box().min.z < 0.0)
+    {
+        for (ModelObject* obj : objects)
+        {
+            if (obj != nullptr)
+            {
+                coordf_t obj_min_z = obj->bounding_box().min.z;
+                if (obj_min_z < 0.0)
+                    obj->translate(0.0, 0.0, -obj_min_z);
+            }
+        }
+    }
+}
+
+unsigned int Model::get_auto_extruder_id(unsigned int max_extruders)
+{
+    unsigned int id = s_auto_extruder_id;
+
+    if (++s_auto_extruder_id > max_extruders)
+        reset_auto_extruder_id();
+
+    return id;
+}
+
+std::string Model::get_auto_extruder_id_as_string(unsigned int max_extruders)
+{
+    char str_extruder[64];
+    sprintf(str_extruder, "%ud", get_auto_extruder_id(max_extruders));
+    return str_extruder;
+}
+
+void Model::reset_auto_extruder_id()
+{
+    s_auto_extruder_id = 1;
 }
 
 ModelObject::ModelObject(Model *model, const ModelObject &other, bool copy_volumes) :  
@@ -485,7 +603,7 @@ void ModelObject::clear_instances()
 
 // Returns the bounding box of the transformed instances.
 // This bounding box is approximate and not snug.
-BoundingBoxf3 ModelObject::bounding_box()
+const BoundingBoxf3& ModelObject::bounding_box()
 {
     if (! m_bounding_box_valid) {
         BoundingBoxf3 raw_bbox;
@@ -499,6 +617,54 @@ BoundingBoxf3 ModelObject::bounding_box()
         m_bounding_box_valid = true;
     }
     return m_bounding_box;
+}
+
+BoundingBoxf3 ModelObject::tight_bounding_box(bool include_modifiers) const
+{
+    BoundingBoxf3 bb;
+
+    for (const ModelVolume* vol : this->volumes)
+    {
+        if (include_modifiers || !vol->modifier)
+        {
+            for (const ModelInstance* inst : this->instances)
+            {
+                double c = cos(inst->rotation);
+                double s = sin(inst->rotation);
+
+                for (int f = 0; f < vol->mesh.stl.stats.number_of_facets; ++f)
+                {
+                    const stl_facet& facet = vol->mesh.stl.facet_start[f];
+
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        // original point
+                        const stl_vertex& v = facet.vertex[i];
+                        Pointf3 p((double)v.x, (double)v.y, (double)v.z);
+
+                        // scale
+                        p.x *= inst->scaling_factor;
+                        p.y *= inst->scaling_factor;
+                        p.z *= inst->scaling_factor;
+
+                        // rotate Z
+                        double x = p.x;
+                        double y = p.y;
+                        p.x = c * x - s * y;
+                        p.y = s * x + c * y;
+
+                        // translate
+                        p.x += inst->offset.x;
+                        p.y += inst->offset.y;
+
+                        bb.merge(p);
+                    }
+                }
+            }
+        }
+    }
+
+    return bb;
 }
 
 // A mesh containing all transformed instances of this object.
@@ -607,6 +773,20 @@ void ModelObject::rotate(float angle, const Axis &axis)
     this->invalidate_bounding_box();
 }
 
+void ModelObject::transform(const float* matrix3x4)
+{
+    if (matrix3x4 == nullptr)
+        return;
+
+    for (ModelVolume* v : volumes)
+    {
+        v->mesh.transform(matrix3x4);
+    }
+
+    origin_translation = Pointf3(0.0, 0.0, 0.0);
+    invalidate_bounding_box();
+}
+
 void ModelObject::mirror(const Axis &axis)
 {
     for (ModelVolume *v : this->volumes)
@@ -657,33 +837,8 @@ void ModelObject::cut(coordf_t z, Model* model) const
             lower->add_volume(*volume);
         } else {
             TriangleMesh upper_mesh, lower_mesh;
-            // TODO: shouldn't we use object bounding box instead of per-volume bb?
-            coordf_t cut_z = z + volume->mesh.bounding_box().min.z;
-            if (false) {
-//            if (volume->mesh.has_multiple_patches()) {
-                // Cutting algorithm does not work on intersecting meshes.
-                // As we are not sure whether the meshes don't intersect,
-                // we rather split the mesh into multiple non-intersecting pieces.
-                TriangleMeshPtrs meshptrs = volume->mesh.split();
-                for (TriangleMeshPtrs::iterator mesh = meshptrs.begin(); mesh != meshptrs.end(); ++mesh) {
-                    printf("Cutting mesh patch %d of %d\n", int(mesh - meshptrs.begin()), int(meshptrs.size()));
-                    (*mesh)->repair();
-                    TriangleMeshSlicer tms(*mesh);
-                    if (mesh == meshptrs.begin()) {
-                        tms.cut(cut_z, &upper_mesh, &lower_mesh);
-                    } else {
-                        TriangleMesh upper_mesh_this, lower_mesh_this;
-                        tms.cut(cut_z, &upper_mesh_this, &lower_mesh_this);
-                        upper_mesh.merge(upper_mesh_this);
-                        lower_mesh.merge(lower_mesh_this);
-                    }
-                    delete *mesh;
-                }
-            } else {
-                printf("Cutting mesh patch\n");
-                TriangleMeshSlicer tms(&volume->mesh);
-                tms.cut(cut_z, &upper_mesh, &lower_mesh);
-            }
+            TriangleMeshSlicer tms(&volume->mesh);
+            tms.cut(z, &upper_mesh, &lower_mesh);
 
             upper_mesh.repair();
             lower_mesh.repair();
@@ -811,7 +966,7 @@ ModelMaterial* ModelVolume::assign_unique_material()
 // Split this volume, append the result to the object owning this volume.
 // Return the number of volumes created from this one.
 // This is useful to assign different materials to different volumes of an object.
-size_t ModelVolume::split()
+size_t ModelVolume::split(unsigned int max_extruders)
 {
     TriangleMeshPtrs meshptrs = this->mesh.split();
     if (meshptrs.size() <= 1) {
@@ -822,6 +977,9 @@ size_t ModelVolume::split()
     size_t idx = 0;
     size_t ivolume = std::find(this->object->volumes.begin(), this->object->volumes.end(), this) - this->object->volumes.begin();
     std::string name = this->name;
+
+    Model::reset_auto_extruder_id();
+
     for (TriangleMesh *mesh : meshptrs) {
         mesh->repair();
         if (idx == 0)
@@ -831,6 +989,7 @@ size_t ModelVolume::split()
         char str_idx[64];
         sprintf(str_idx, "_%d", idx + 1);
         this->object->volumes[ivolume]->name = name + str_idx;
+        this->object->volumes[ivolume]->config.set_deserialize("extruder", Model::get_auto_extruder_id_as_string(max_extruders));
         delete mesh;
         ++ idx;
     }

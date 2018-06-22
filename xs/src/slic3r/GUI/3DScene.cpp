@@ -6,8 +6,11 @@
 #include "../../libslic3r/ExtrusionEntity.hpp"
 #include "../../libslic3r/ExtrusionEntityCollection.hpp"
 #include "../../libslic3r/Geometry.hpp"
+#include "../../libslic3r/GCode/PreviewData.hpp"
 #include "../../libslic3r/Print.hpp"
 #include "../../libslic3r/Slicing.hpp"
+#include "../../slic3r/GUI/PresetBundle.hpp"
+#include "GCode/Analyzer.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +22,13 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
+
+#include <wx/bitmap.h>
+#include <wx/dcmemory.h>
+#include <wx/image.h>
+#include <wx/settings.h>
+
+#include "GUI.hpp"
 
 namespace Slic3r {
 
@@ -34,6 +44,25 @@ void GLIndexedVertexArray::load_mesh_flat_shading(const TriangleMesh &mesh)
         const stl_facet &facet = mesh.stl.facet_start[i];
         for (int j = 0; j < 3; ++ j)
             this->push_geometry(facet.vertex[j].x, facet.vertex[j].y, facet.vertex[j].z, facet.normal.x, facet.normal.y, facet.normal.z);
+    }
+}
+
+void GLIndexedVertexArray::load_mesh_full_shading(const TriangleMesh &mesh)
+{
+    assert(triangle_indices.empty() && vertices_and_normals_interleaved_size == 0);
+    assert(quad_indices.empty() && triangle_indices_size == 0);
+    assert(vertices_and_normals_interleaved.size() % 6 == 0 && quad_indices_size == vertices_and_normals_interleaved.size());
+
+    this->vertices_and_normals_interleaved.reserve(this->vertices_and_normals_interleaved.size() + 3 * 3 * 2 * mesh.facets_count());
+
+    unsigned int vertices_count = 0;
+    for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
+        const stl_facet &facet = mesh.stl.facet_start[i];
+        for (int j = 0; j < 3; ++j)
+            this->push_geometry(facet.vertex[j].x, facet.vertex[j].y, facet.vertex[j].z, facet.normal.x, facet.normal.y, facet.normal.z);
+
+        this->push_triangle(vertices_count, vertices_count + 1, vertices_count + 2);
+        vertices_count += 3;
     }
 }
 
@@ -164,6 +193,45 @@ void GLIndexedVertexArray::render(
     glDisableClientState(GL_NORMAL_ARRAY);
 }
 
+const float GLVolume::SELECTED_COLOR[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
+const float GLVolume::HOVER_COLOR[4] = { 0.4f, 0.9f, 0.1f, 1.0f };
+const float GLVolume::OUTSIDE_COLOR[4] = { 0.0f, 0.38f, 0.8f, 1.0f };
+const float GLVolume::SELECTED_OUTSIDE_COLOR[4] = { 0.19f, 0.58f, 1.0f, 1.0f };
+
+void GLVolume::set_render_color(float r, float g, float b, float a)
+{
+    render_color[0] = r;
+    render_color[1] = g;
+    render_color[2] = b;
+    render_color[3] = a;
+}
+
+void GLVolume::set_render_color(const float* rgba, unsigned int size)
+{
+    size = std::min((unsigned int)4, size);
+    for (int i = 0; i < size; ++i)
+    {
+        render_color[i] = rgba[i];
+    }
+}
+
+void GLVolume::set_render_color()
+{
+    if (selected)
+    {
+        if (is_outside)
+            set_render_color(SELECTED_OUTSIDE_COLOR, 4);
+        else
+            set_render_color(SELECTED_COLOR, 4);
+    }
+    else if (hover)
+        set_render_color(HOVER_COLOR, 4);
+    else if (is_outside)
+        set_render_color(OUTSIDE_COLOR, 4);
+    else
+        set_render_color(color, 4);
+}
+
 void GLVolume::set_range(double min_z, double max_z)
 {
     this->qverts_range.first  = 0;
@@ -201,6 +269,9 @@ void GLVolume::set_range(double min_z, double max_z)
 
 void GLVolume::render() const
 {
+    if (!is_active)
+        return;
+
     glCullFace(GL_BACK);
     glPushMatrix();
     glTranslated(this->origin.x, this->origin.y, this->origin.z);
@@ -209,6 +280,56 @@ void GLVolume::render() const
     else
         this->indexed_vertex_array.render();
     glPopMatrix();
+}
+
+void GLVolume::render_using_layer_height() const
+{
+    if (!is_active)
+        return;
+
+    GLint current_program_id;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &current_program_id);
+
+    if ((layer_height_texture_data.shader_id > 0) && (layer_height_texture_data.shader_id != current_program_id))
+        glUseProgram(layer_height_texture_data.shader_id);
+
+    GLint z_to_texture_row_id = (layer_height_texture_data.shader_id > 0) ? glGetUniformLocation(layer_height_texture_data.shader_id, "z_to_texture_row") : -1;
+    GLint z_texture_row_to_normalized_id = (layer_height_texture_data.shader_id > 0) ? glGetUniformLocation(layer_height_texture_data.shader_id, "z_texture_row_to_normalized") : -1;
+    GLint z_cursor_id = (layer_height_texture_data.shader_id > 0) ? glGetUniformLocation(layer_height_texture_data.shader_id, "z_cursor") : -1;
+    GLint z_cursor_band_width_id = (layer_height_texture_data.shader_id > 0) ? glGetUniformLocation(layer_height_texture_data.shader_id, "z_cursor_band_width") : -1;
+
+    if (z_to_texture_row_id  >= 0)
+        glUniform1f(z_to_texture_row_id, (GLfloat)layer_height_texture_z_to_row_id());
+
+    if (z_texture_row_to_normalized_id >= 0)
+        glUniform1f(z_texture_row_to_normalized_id, (GLfloat)(1.0f / layer_height_texture_height()));
+
+    if (z_cursor_id >= 0)
+        glUniform1f(z_cursor_id, (GLfloat)(layer_height_texture_data.print_object->model_object()->bounding_box().max.z * layer_height_texture_data.z_cursor_relative));
+
+    if (z_cursor_band_width_id >= 0)
+        glUniform1f(z_cursor_band_width_id, (GLfloat)layer_height_texture_data.edit_band_width);
+
+    unsigned int w = layer_height_texture_width();
+    unsigned int h = layer_height_texture_height();
+
+    glBindTexture(GL_TEXTURE_2D, layer_height_texture_data.texture_id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexImage2D(GL_TEXTURE_2D, 1, GL_RGBA8, w / 2, h / 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, layer_height_texture_data_ptr_level0());
+    glTexSubImage2D(GL_TEXTURE_2D, 1, 0, 0, w / 2, h / 2, GL_RGBA, GL_UNSIGNED_BYTE, layer_height_texture_data_ptr_level1());
+
+    render();
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    if ((current_program_id > 0) && (layer_height_texture_data.shader_id != current_program_id))
+        glUseProgram(current_program_id);
+}
+
+double GLVolume::layer_height_texture_z_to_row_id() const
+{
+    return (this->layer_height_texture.get() == nullptr) ? 0.0 : double(this->layer_height_texture->cells - 1) / (double(this->layer_height_texture->width) * this->layer_height_texture_data.print_object->model_object()->bounding_box().max.z);
 }
 
 void GLVolume::generate_layer_height_texture(PrintObject *print_object, bool force)
@@ -266,6 +387,15 @@ std::vector<int> GLVolumeCollection::load_object(
     std::vector<int> volumes_idx;
     for (int volume_idx = 0; volume_idx < int(model_object->volumes.size()); ++ volume_idx) {
         const ModelVolume *model_volume = model_object->volumes[volume_idx];
+
+        int extruder_id = -1;
+        if (!model_volume->modifier)
+        {
+            extruder_id = model_volume->config.has("extruder") ? model_volume->config.option("extruder")->getInt() : 0;
+            if (extruder_id == 0)
+                extruder_id = model_object->config.has("extruder") ? model_object->config.option("extruder")->getInt() : 0;
+        }
+
         for (int instance_idx : instance_idxs) {
             const ModelInstance *instance = model_object->instances[instance_idx];
             TriangleMesh mesh = model_volume->mesh;
@@ -276,7 +406,11 @@ std::vector<int> GLVolumeCollection::load_object(
             color[3] = model_volume->modifier ? 0.5f : 1.f;
             this->volumes.emplace_back(new GLVolume(color));
             GLVolume &v = *this->volumes.back();
-			v.indexed_vertex_array.load_mesh_flat_shading(mesh);
+            if (use_VBOs)
+                v.indexed_vertex_array.load_mesh_full_shading(mesh);
+            else
+                v.indexed_vertex_array.load_mesh_flat_shading(mesh);
+
             // finalize_geometry() clears the vertex arrays, therefore the bounding box has to be computed before finalize_geometry().
             v.bounding_box = v.indexed_vertex_array.bounding_box();
             v.indexed_vertex_array.finalize_geometry(use_VBOs);
@@ -291,8 +425,14 @@ std::vector<int> GLVolumeCollection::load_object(
                 v.drag_group_id = obj_idx * 1000;
             else if (drag_by == "instance")
                 v.drag_group_id = obj_idx * 1000 + instance_idx;
-            if (! model_volume->modifier)
+
+            if (!model_volume->modifier)
+            {
                 v.layer_height_texture = layer_height_texture;
+                if (extruder_id != -1)
+                    v.extruder_id = extruder_id;
+            }
+            v.is_modifier = model_volume->modifier;
         }
     }
     
@@ -301,13 +441,25 @@ std::vector<int> GLVolumeCollection::load_object(
 
 
 int GLVolumeCollection::load_wipe_tower_preview(
-    int obj_idx, float pos_x, float pos_y, float width, float depth, float height, bool use_VBOs)
+    int obj_idx, float pos_x, float pos_y, float width, float depth, float height, float rotation_angle, bool use_VBOs)
 {
-    float color[4] = { 1.0f, 1.0f, 0.0f, 0.5f };
+    float color[4] = { 0.5f, 0.5f, 0.0f, 0.5f };
     this->volumes.emplace_back(new GLVolume(color));
     GLVolume &v = *this->volumes.back();
+
+    if (height == 0.0f)
+        height = 0.1f;
+
     auto mesh = make_cube(width, depth, height);
-    v.indexed_vertex_array.load_mesh_flat_shading(mesh);
+    mesh.translate(-width / 2.f, -depth / 2.f, 0.f);
+    Point origin_of_rotation(0.f, 0.f);
+    mesh.rotate(rotation_angle,&origin_of_rotation);
+
+    if (use_VBOs)
+        v.indexed_vertex_array.load_mesh_full_shading(mesh);
+    else
+        v.indexed_vertex_array.load_mesh_flat_shading(mesh);
+
     v.origin = Pointf3(pos_x, pos_y, 0.);
     // finalize_geometry() clears the vertex arrays, therefore the bounding box has to be computed before finalize_geometry().
     v.bounding_box = v.indexed_vertex_array.bounding_box();
@@ -315,65 +467,164 @@ int GLVolumeCollection::load_wipe_tower_preview(
     v.composite_id = obj_idx * 1000000;
     v.select_group_id = obj_idx * 1000000;
     v.drag_group_id = obj_idx * 1000;
+    v.is_wipe_tower = true;
     return int(this->volumes.size() - 1);
 }
 
 void GLVolumeCollection::render_VBOs() const
 {
-//    glEnable(GL_BLEND);
-//    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glCullFace(GL_BACK);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_NORMAL_ARRAY);
+    ::glEnable(GL_BLEND);
+    ::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    ::glCullFace(GL_BACK);
+    ::glEnableClientState(GL_VERTEX_ARRAY);
+    ::glEnableClientState(GL_NORMAL_ARRAY);
  
     GLint current_program_id;
-    glGetIntegerv(GL_CURRENT_PROGRAM, &current_program_id);
+    ::glGetIntegerv(GL_CURRENT_PROGRAM, &current_program_id);
     GLint color_id = (current_program_id > 0) ? glGetUniformLocation(current_program_id, "uniform_color") : -1;
+    GLint print_box_min_id = (current_program_id > 0) ? glGetUniformLocation(current_program_id, "print_box.min") : -1;
+    GLint print_box_max_id = (current_program_id > 0) ? glGetUniformLocation(current_program_id, "print_box.max") : -1;
+    GLint print_box_origin_id = (current_program_id > 0) ? glGetUniformLocation(current_program_id, "print_box.volume_origin") : -1;
 
     for (GLVolume *volume : this->volumes) {
-        if (! volume->indexed_vertex_array.vertices_and_normals_interleaved_VBO_id)
+        if (!volume->is_active)
             continue;
+
+        if (!volume->indexed_vertex_array.vertices_and_normals_interleaved_VBO_id)
+            continue;
+
+        if (volume->layer_height_texture_data.can_use())
+        {
+            ::glDisableClientState(GL_VERTEX_ARRAY);
+            ::glDisableClientState(GL_NORMAL_ARRAY);
+            volume->generate_layer_height_texture(volume->layer_height_texture_data.print_object, false);
+            volume->render_using_layer_height();
+            ::glEnableClientState(GL_VERTEX_ARRAY);
+            ::glEnableClientState(GL_NORMAL_ARRAY);
+            continue;
+        }
+
+        volume->set_render_color();
+
         GLsizei n_triangles = GLsizei(std::min(volume->indexed_vertex_array.triangle_indices_size, volume->tverts_range.second - volume->tverts_range.first));
         GLsizei n_quads     = GLsizei(std::min(volume->indexed_vertex_array.quad_indices_size,     volume->qverts_range.second - volume->qverts_range.first));
         if (n_triangles + n_quads == 0)
+        {
+            ::glDisableClientState(GL_VERTEX_ARRAY);
+            ::glDisableClientState(GL_NORMAL_ARRAY);
+
+            if (color_id >= 0)
+            {
+                float color[4];
+                ::memcpy((void*)color, (const void*)volume->render_color, 4 * sizeof(float));
+                ::glUniform4fv(color_id, 1, (const GLfloat*)color);
+            }
+            else
+                ::glColor4f(volume->render_color[0], volume->render_color[1], volume->render_color[2], volume->render_color[3]);
+
+            if (print_box_min_id != -1)
+                ::glUniform3fv(print_box_min_id, 1, (const GLfloat*)print_box_min);
+
+            if (print_box_max_id != -1)
+                ::glUniform3fv(print_box_max_id, 1, (const GLfloat*)print_box_max);
+
+            if (print_box_origin_id != -1)
+            {
+                float origin[4] = { (float)volume->origin.x, (float)volume->origin.y, (float)volume->origin.z, volume->outside_printer_detection_enabled ? 1.0f : 0.0f };
+                ::glUniform4fv(print_box_origin_id, 1, (const GLfloat*)origin);
+            }
+
+            volume->render();
+
+            ::glEnableClientState(GL_VERTEX_ARRAY);
+            ::glEnableClientState(GL_NORMAL_ARRAY);
+
             continue;
+        }
+
         if (color_id >= 0)
-            glUniform4fv(color_id, 1, (const GLfloat*)volume->color);
+            ::glUniform4fv(color_id, 1, (const GLfloat*)volume->render_color);
         else
-            glColor4f(volume->color[0], volume->color[1], volume->color[2], volume->color[3]);            
-        glBindBuffer(GL_ARRAY_BUFFER, volume->indexed_vertex_array.vertices_and_normals_interleaved_VBO_id);
-        glVertexPointer(3, GL_FLOAT, 6 * sizeof(float), (const void*)(3 * sizeof(float)));
-        glNormalPointer(GL_FLOAT, 6 * sizeof(float), nullptr);
+            ::glColor4f(volume->render_color[0], volume->render_color[1], volume->render_color[2], volume->render_color[3]);
+
+        if (print_box_min_id != -1)
+            ::glUniform3fv(print_box_min_id, 1, (const GLfloat*)print_box_min);
+
+        if (print_box_max_id != -1)
+            ::glUniform3fv(print_box_max_id, 1, (const GLfloat*)print_box_max);
+
+        if (print_box_origin_id != -1)
+        {
+            float origin[4] = { (float)volume->origin.x, (float)volume->origin.y, (float)volume->origin.z, volume->outside_printer_detection_enabled ? 1.0f : 0.0f };
+            ::glUniform4fv(print_box_origin_id, 1, (const GLfloat*)origin);
+        }
+
+        ::glBindBuffer(GL_ARRAY_BUFFER, volume->indexed_vertex_array.vertices_and_normals_interleaved_VBO_id);
+        ::glVertexPointer(3, GL_FLOAT, 6 * sizeof(float), (const void*)(3 * sizeof(float)));
+        ::glNormalPointer(GL_FLOAT, 6 * sizeof(float), nullptr);
+
+        bool has_offset = (volume->origin.x != 0) || (volume->origin.y != 0) || (volume->origin.z != 0);
+        if (has_offset) {
+            ::glPushMatrix();
+            ::glTranslated(volume->origin.x, volume->origin.y, volume->origin.z);
+        }
+
         if (n_triangles > 0) {
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, volume->indexed_vertex_array.triangle_indices_VBO_id);
-            glDrawElements(GL_TRIANGLES, n_triangles, GL_UNSIGNED_INT, (const void*)(volume->tverts_range.first * 4));
+            ::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, volume->indexed_vertex_array.triangle_indices_VBO_id);
+            ::glDrawElements(GL_TRIANGLES, n_triangles, GL_UNSIGNED_INT, (const void*)(volume->tverts_range.first * 4));
         }
         if (n_quads > 0) {
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, volume->indexed_vertex_array.quad_indices_VBO_id);
-            glDrawElements(GL_QUADS, n_quads, GL_UNSIGNED_INT, (const void*)(volume->qverts_range.first * 4));
+            ::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, volume->indexed_vertex_array.quad_indices_VBO_id);
+            ::glDrawElements(GL_QUADS, n_quads, GL_UNSIGNED_INT, (const void*)(volume->qverts_range.first * 4));
         }
+
+        if (has_offset)
+            ::glPopMatrix();
     }
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-//    glDisable(GL_BLEND);
+    ::glBindBuffer(GL_ARRAY_BUFFER, 0);
+    ::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    ::glDisableClientState(GL_VERTEX_ARRAY);
+    ::glDisableClientState(GL_NORMAL_ARRAY);
+
+    ::glDisable(GL_BLEND);
 }
 
 void GLVolumeCollection::render_legacy() const
 {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     glCullFace(GL_BACK);
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_NORMAL_ARRAY);
  
     for (GLVolume *volume : this->volumes) {
         assert(! volume->indexed_vertex_array.vertices_and_normals_interleaved_VBO_id);
+        if (!volume->is_active)
+            continue;
+
+        volume->set_render_color();
+
         GLsizei n_triangles = GLsizei(std::min(volume->indexed_vertex_array.triangle_indices_size, volume->tverts_range.second - volume->tverts_range.first));
         GLsizei n_quads     = GLsizei(std::min(volume->indexed_vertex_array.quad_indices_size,     volume->qverts_range.second - volume->qverts_range.first));
         if (n_triangles + n_quads == 0)
+        {
+            ::glDisableClientState(GL_VERTEX_ARRAY);
+            ::glDisableClientState(GL_NORMAL_ARRAY);
+
+            ::glColor4f(volume->render_color[0], volume->render_color[1], volume->render_color[2], volume->render_color[3]);
+            volume->render();
+
+            ::glEnableClientState(GL_VERTEX_ARRAY);
+            ::glEnableClientState(GL_NORMAL_ARRAY);
+
             continue;
-        glColor4f(volume->color[0], volume->color[1], volume->color[2], volume->color[3]);
+        }
+
+        glColor4f(volume->render_color[0], volume->render_color[1], volume->render_color[2], volume->render_color[3]);
         glVertexPointer(3, GL_FLOAT, 6 * sizeof(float), volume->indexed_vertex_array.vertices_and_normals_interleaved.data() + 3);
         glNormalPointer(GL_FLOAT, 6 * sizeof(float), volume->indexed_vertex_array.vertices_and_normals_interleaved.data());
         bool has_offset = volume->origin.x != 0 || volume->origin.y != 0 || volume->origin.z != 0;
@@ -386,11 +637,154 @@ void GLVolumeCollection::render_legacy() const
         if (n_quads > 0)
             glDrawElements(GL_QUADS, n_quads, GL_UNSIGNED_INT, volume->indexed_vertex_array.quad_indices.data() + volume->qverts_range.first);
         if (has_offset)
-            glPushMatrix();
+            glPopMatrix();
     }
 
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_NORMAL_ARRAY);
+
+    glDisable(GL_BLEND);
+}
+
+bool GLVolumeCollection::check_outside_state(const DynamicPrintConfig* config)
+{
+    if (config == nullptr)
+        return false;
+
+    const ConfigOptionPoints* opt = dynamic_cast<const ConfigOptionPoints*>(config->option("bed_shape"));
+    if (opt == nullptr)
+        return false;
+
+    BoundingBox bed_box_2D = get_extents(Polygon::new_scale(opt->values));
+    BoundingBoxf3 print_volume(Pointf3(unscale(bed_box_2D.min.x), unscale(bed_box_2D.min.y), 0.0), Pointf3(unscale(bed_box_2D.max.x), unscale(bed_box_2D.max.y), config->opt_float("max_print_height")));
+    // Allow the objects to protrude below the print bed
+    print_volume.min.z = -1e10;
+
+    bool contained = true;
+    for (GLVolume* volume : this->volumes)
+    {
+        if (volume != nullptr)
+        {
+            bool state = print_volume.contains(volume->transformed_bounding_box());
+            contained &= state;
+            volume->is_outside = !state;
+        }
+    }
+
+    return contained;
+}
+
+void GLVolumeCollection::reset_outside_state()
+{
+    for (GLVolume* volume : this->volumes)
+    {
+        if (volume != nullptr)
+            volume->is_outside = false;
+    }
+}
+
+void GLVolumeCollection::update_colors_by_extruder(const DynamicPrintConfig* config)
+{
+    static const float inv_255 = 1.0f / 255.0f;
+
+    struct Color
+    {
+        std::string text;
+        unsigned char rgb[3];
+
+        Color()
+            : text("")
+        {
+            rgb[0] = 255;
+            rgb[1] = 255;
+            rgb[2] = 255;
+        }
+
+        void set(const std::string& text, unsigned char* rgb)
+        {
+            this->text = text;
+            ::memcpy((void*)this->rgb, (const void*)rgb, 3 * sizeof(unsigned char));
+        }
+    };
+
+    if (config == nullptr)
+        return;
+
+    const ConfigOptionStrings* extruders_opt = dynamic_cast<const ConfigOptionStrings*>(config->option("extruder_colour"));
+    if (extruders_opt == nullptr)
+        return;
+
+    const ConfigOptionStrings* filamemts_opt = dynamic_cast<const ConfigOptionStrings*>(config->option("filament_colour"));
+    if (filamemts_opt == nullptr)
+        return;
+
+    unsigned int colors_count = std::max((unsigned int)extruders_opt->values.size(), (unsigned int)filamemts_opt->values.size());
+    if (colors_count == 0)
+        return;
+
+    std::vector<Color> colors(colors_count);
+
+    unsigned char rgb[3];
+    for (unsigned int i = 0; i < colors_count; ++i)
+    {
+        const std::string& txt_color = config->opt_string("extruder_colour", i);
+        if (PresetBundle::parse_color(txt_color, rgb))
+        {
+            colors[i].set(txt_color, rgb);
+        }
+        else
+        {
+            const std::string& txt_color = config->opt_string("filament_colour", i);
+            if (PresetBundle::parse_color(txt_color, rgb))
+                colors[i].set(txt_color, rgb);
+        }
+    }
+
+    for (GLVolume* volume : volumes)
+    {
+        if ((volume == nullptr) || volume->is_modifier || volume->is_wipe_tower)
+            continue;
+
+        int extruder_id = volume->extruder_id - 1;
+        if ((extruder_id < 0) || ((unsigned int)colors.size() <= extruder_id))
+            extruder_id = 0;
+
+        const Color& color = colors[extruder_id];
+        if (!color.text.empty())
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                volume->color[i] = (float)color.rgb[i] * inv_255;
+            }
+        }
+    }
+}
+
+std::vector<double> GLVolumeCollection::get_current_print_zs(bool active_only) const
+{
+    // Collect layer top positions of all volumes.
+    std::vector<double> print_zs;
+    for (GLVolume *vol : this->volumes)
+    {
+        if (!active_only || vol->is_active)
+            append(print_zs, vol->print_zs);
+    }
+    std::sort(print_zs.begin(), print_zs.end());
+
+    // Replace intervals of layers with similar top positions with their average value.
+    int n = int(print_zs.size());
+    int k = 0;
+    for (int i = 0; i < n;) {
+        int j = i + 1;
+        coordf_t zmax = print_zs[i] + EPSILON;
+        for (; j < n && print_zs[j] <= zmax; ++ j) ;
+        print_zs[k ++] = (j > i + 1) ? (0.5 * (print_zs[i] + print_zs[j - 1])) : print_zs[i];
+        i = j;
+    }
+    if (k < n)
+        print_zs.erase(print_zs.begin() + k, print_zs.end());
+
+    return print_zs;
 }
 
 // caller is responsible for supplying NO lines with zero length
@@ -411,15 +805,14 @@ static void thick_lines_to_indexed_vertex_array(
 #define TOP     2
 #define BOTTOM  3
 
-    Line prev_line;
     // right, left, top, bottom
     int     idx_prev[4]      = { -1, -1, -1, -1 };
     double  bottom_z_prev    = 0.;
     Pointf  b1_prev;
-    Pointf  b2_prev;
     Vectorf v_prev;
     int     idx_initial[4]   = { -1, -1, -1, -1 };
     double  width_initial    = 0.;
+    double  bottom_z_initial = 0.0;
 
     // loop once more in case of closed loops
     size_t lines_end = closed ? (lines.size() + 1) : lines.size();
@@ -427,13 +820,18 @@ static void thick_lines_to_indexed_vertex_array(
         size_t i = (ii == lines.size()) ? 0 : ii;
         const Line &line = lines[i];
         double len = unscale(line.length());
+        double inv_len = 1.0 / len;
         double bottom_z = top_z - heights[i];
-        double middle_z = (top_z + bottom_z) / 2.;
+        double middle_z = 0.5 * (top_z + bottom_z);
         double width = widths[i];
-        
+
+        bool is_first = (ii == 0);
+        bool is_last = (ii == lines_end - 1);
+        bool is_closing = closed && is_last;
+
         Vectorf v = Vectorf::new_unscale(line.vector());
-        v.scale(1. / len);
-        
+        v.scale(inv_len);
+
         Pointf a = Pointf::new_unscale(line.a);
         Pointf b = Pointf::new_unscale(line.b);
         Pointf a1 = a;
@@ -441,17 +839,19 @@ static void thick_lines_to_indexed_vertex_array(
         Pointf b1 = b;
         Pointf b2 = b;
         {
-            double dist = width / 2.;  // scaled
-            a1.translate(+dist*v.y, -dist*v.x);
-            a2.translate(-dist*v.y, +dist*v.x);
-            b1.translate(+dist*v.y, -dist*v.x);
-            b2.translate(-dist*v.y, +dist*v.x);
+            double dist = 0.5 * width;  // scaled
+            double dx = dist * v.x;
+            double dy = dist * v.y;
+            a1.translate(+dy, -dx);
+            a2.translate(-dy, +dx);
+            b1.translate(+dy, -dx);
+            b2.translate(-dy, +dx);
         }
 
         // calculate new XY normals
         Vector n = line.normal();
         Vectorf3 xy_right_normal = Vectorf3::new_unscale(n.x, n.y, 0);
-        xy_right_normal.scale(1.f / len);
+        xy_right_normal.scale(inv_len);
 
         int idx_a[4];
         int idx_b[4];
@@ -460,14 +860,21 @@ static void thick_lines_to_indexed_vertex_array(
         bool bottom_z_different = bottom_z_prev != bottom_z;
         bottom_z_prev = bottom_z;
 
+        if (!is_first && bottom_z_different)
+        {
+            // Found a change of the layer thickness -> Add a cap at the end of the previous segment.
+            volume.push_quad(idx_b[BOTTOM], idx_b[LEFT], idx_b[TOP], idx_b[RIGHT]);
+        }
+
         // Share top / bottom vertices if possible.
-        if (ii == 0) {
-            idx_a[TOP] = idx_last ++;
+        if (is_first) {
+            idx_a[TOP] = idx_last++;
             volume.push_geometry(a.x, a.y, top_z   , 0., 0.,  1.); 
         } else {
             idx_a[TOP] = idx_prev[TOP];
         }
-        if (ii == 0 || bottom_z_different) {
+
+        if (is_first || bottom_z_different) {
             // Start of the 1st line segment or a change of the layer thickness while maintaining the print_z.
             idx_a[BOTTOM] = idx_last ++;
             volume.push_geometry(a.x, a.y, bottom_z, 0., 0., -1.);
@@ -475,13 +882,15 @@ static void thick_lines_to_indexed_vertex_array(
             volume.push_geometry(a2.x, a2.y, middle_z, -xy_right_normal.x, -xy_right_normal.y, -xy_right_normal.z);
             idx_a[RIGHT] = idx_last ++;
             volume.push_geometry(a1.x, a1.y, middle_z, xy_right_normal.x, xy_right_normal.y, xy_right_normal.z);
-        } else {
+        }
+        else {
             idx_a[BOTTOM] = idx_prev[BOTTOM];
         }
 
-        if (ii == 0) {
+        if (is_first) {
             // Start of the 1st line segment.
             width_initial    = width;
+            bottom_z_initial = bottom_z;
             memcpy(idx_initial, idx_a, sizeof(int) * 4);
         } else {
             // Continuing a previous segment.
@@ -489,43 +898,54 @@ static void thick_lines_to_indexed_vertex_array(
 			double v_dot    = dot(v_prev, v);
             bool   sharp    = v_dot < 0.707; // sin(45 degrees)
             if (sharp) {
-                // Allocate new left / right points for the start of this segment as these points will receive their own normals to indicate a sharp turn.
-                idx_a[RIGHT] = idx_last ++;
-                volume.push_geometry(a1.x, a1.y, middle_z, xy_right_normal.x, xy_right_normal.y, xy_right_normal.z);
-                idx_a[LEFT ] = idx_last ++;
-                volume.push_geometry(a2.x, a2.y, middle_z, -xy_right_normal.x, -xy_right_normal.y, -xy_right_normal.z);
+                if (!bottom_z_different)
+                {
+                    // Allocate new left / right points for the start of this segment as these points will receive their own normals to indicate a sharp turn.
+                    idx_a[RIGHT] = idx_last++;
+                    volume.push_geometry(a1.x, a1.y, middle_z, xy_right_normal.x, xy_right_normal.y, xy_right_normal.z);
+                    idx_a[LEFT] = idx_last++;
+                    volume.push_geometry(a2.x, a2.y, middle_z, -xy_right_normal.x, -xy_right_normal.y, -xy_right_normal.z);
+                }
             }
             if (v_dot > 0.9) {
-                // The two successive segments are nearly collinear.
-                idx_a[LEFT ] = idx_prev[LEFT];
-                idx_a[RIGHT] = idx_prev[RIGHT];
-            } else if (! sharp) {
-                // Create a sharp corner with an overshot and average the left / right normals.
-                // At the crease angle of 45 degrees, the overshot at the corner will be less than (1-1/cos(PI/8)) = 8.2% over an arc.
-                Pointf intersection;
-                Geometry::ray_ray_intersection(b1_prev, v_prev, a1, v, intersection);
-                a1 = intersection;
-                a2 = 2. * a - intersection;
-                assert(length(a1.vector_to(a)) < width);
-                assert(length(a2.vector_to(a)) < width);
-                float *n_left_prev  = volume.vertices_and_normals_interleaved.data() + idx_prev[LEFT ] * 6;
-                float *p_left_prev  = n_left_prev  + 3;
-                float *n_right_prev = volume.vertices_and_normals_interleaved.data() + idx_prev[RIGHT] * 6;
-                float *p_right_prev = n_right_prev + 3;
-                p_left_prev [0] = float(a2.x);
-                p_left_prev [1] = float(a2.y);
-                p_right_prev[0] = float(a1.x);
-                p_right_prev[1] = float(a1.y);
-                xy_right_normal.x += n_right_prev[0];
-                xy_right_normal.y += n_right_prev[1];
-                xy_right_normal.scale(1. / length(xy_right_normal));
-                n_left_prev [0] = float(-xy_right_normal.x);
-                n_left_prev [1] = float(-xy_right_normal.y);
-                n_right_prev[0] = float( xy_right_normal.x);
-                n_right_prev[1] = float( xy_right_normal.y);
-                idx_a[LEFT ] = idx_prev[LEFT ];
-                idx_a[RIGHT] = idx_prev[RIGHT];
-            } else if (cross(v_prev, v) > 0.) {
+                if (!bottom_z_different)
+                {
+                    // The two successive segments are nearly collinear.
+                    idx_a[LEFT ] = idx_prev[LEFT];
+                    idx_a[RIGHT] = idx_prev[RIGHT];
+                }
+            }
+            else if (!sharp) {
+                if (!bottom_z_different)
+                {
+                    // Create a sharp corner with an overshot and average the left / right normals.
+                    // At the crease angle of 45 degrees, the overshot at the corner will be less than (1-1/cos(PI/8)) = 8.2% over an arc.
+                    Pointf intersection;
+                    Geometry::ray_ray_intersection(b1_prev, v_prev, a1, v, intersection);
+                    a1 = intersection;
+                    a2 = 2. * a - intersection;
+                    assert(length(a1.vector_to(a)) < width);
+                    assert(length(a2.vector_to(a)) < width);
+                    float *n_left_prev  = volume.vertices_and_normals_interleaved.data() + idx_prev[LEFT ] * 6;
+                    float *p_left_prev  = n_left_prev  + 3;
+                    float *n_right_prev = volume.vertices_and_normals_interleaved.data() + idx_prev[RIGHT] * 6;
+                    float *p_right_prev = n_right_prev + 3;
+                    p_left_prev [0] = float(a2.x);
+                    p_left_prev [1] = float(a2.y);
+                    p_right_prev[0] = float(a1.x);
+                    p_right_prev[1] = float(a1.y);
+                    xy_right_normal.x += n_right_prev[0];
+                    xy_right_normal.y += n_right_prev[1];
+                    xy_right_normal.scale(1. / length(xy_right_normal));
+                    n_left_prev [0] = float(-xy_right_normal.x);
+                    n_left_prev [1] = float(-xy_right_normal.y);
+                    n_right_prev[0] = float( xy_right_normal.x);
+                    n_right_prev[1] = float( xy_right_normal.y);
+                    idx_a[LEFT ] = idx_prev[LEFT ];
+                    idx_a[RIGHT] = idx_prev[RIGHT];
+                }
+            }
+            else if (cross(v_prev, v) > 0.) {
                 // Right turn. Fill in the right turn wedge.
                 volume.push_triangle(idx_prev[RIGHT], idx_a   [RIGHT],  idx_prev[TOP]   );
                 volume.push_triangle(idx_prev[RIGHT], idx_prev[BOTTOM], idx_a   [RIGHT] );
@@ -534,18 +954,21 @@ static void thick_lines_to_indexed_vertex_array(
                 volume.push_triangle(idx_prev[LEFT],  idx_prev[TOP],    idx_a   [LEFT]  );
                 volume.push_triangle(idx_prev[LEFT],  idx_a   [LEFT],   idx_prev[BOTTOM]);
             }
-            if (ii == lines.size()) {
-                if (! sharp) {
-                    // Closing a loop with smooth transition. Unify the closing left / right vertices.
-                    memcpy(volume.vertices_and_normals_interleaved.data() + idx_initial[LEFT ] * 6, volume.vertices_and_normals_interleaved.data() + idx_prev[LEFT ] * 6, sizeof(float) * 6);
-                    memcpy(volume.vertices_and_normals_interleaved.data() + idx_initial[RIGHT] * 6, volume.vertices_and_normals_interleaved.data() + idx_prev[RIGHT] * 6, sizeof(float) * 6);
-                    volume.vertices_and_normals_interleaved.erase(volume.vertices_and_normals_interleaved.end() - 12, volume.vertices_and_normals_interleaved.end());
-                    // Replace the left / right vertex indices to point to the start of the loop. 
-                    for (size_t u = volume.quad_indices.size() - 16; u < volume.quad_indices.size(); ++ u) {
-                        if (volume.quad_indices[u] == idx_prev[LEFT])
-                            volume.quad_indices[u] = idx_initial[LEFT];
-                        else if (volume.quad_indices[u] == idx_prev[RIGHT])
-                            volume.quad_indices[u] = idx_initial[RIGHT];
+            if (is_closing) {
+                if (!sharp) {
+                    if (!bottom_z_different)
+                    {
+                        // Closing a loop with smooth transition. Unify the closing left / right vertices.
+                        memcpy(volume.vertices_and_normals_interleaved.data() + idx_initial[LEFT ] * 6, volume.vertices_and_normals_interleaved.data() + idx_prev[LEFT ] * 6, sizeof(float) * 6);
+                        memcpy(volume.vertices_and_normals_interleaved.data() + idx_initial[RIGHT] * 6, volume.vertices_and_normals_interleaved.data() + idx_prev[RIGHT] * 6, sizeof(float) * 6);
+                        volume.vertices_and_normals_interleaved.erase(volume.vertices_and_normals_interleaved.end() - 12, volume.vertices_and_normals_interleaved.end());
+                        // Replace the left / right vertex indices to point to the start of the loop. 
+                        for (size_t u = volume.quad_indices.size() - 16; u < volume.quad_indices.size(); ++ u) {
+                            if (volume.quad_indices[u] == idx_prev[LEFT])
+                                volume.quad_indices[u] = idx_initial[LEFT];
+                            else if (volume.quad_indices[u] == idx_prev[RIGHT])
+                                volume.quad_indices[u] = idx_initial[RIGHT];
+                        }
                     }
                 }
                 // This is the last iteration, only required to solve the transition.
@@ -554,13 +977,14 @@ static void thick_lines_to_indexed_vertex_array(
         }
 
         // Only new allocate top / bottom vertices, if not closing a loop.
-        if (closed && ii + 1 == lines.size()) {
+        if (is_closing) {
             idx_b[TOP] = idx_initial[TOP];
         } else {
             idx_b[TOP] = idx_last ++;
             volume.push_geometry(b.x, b.y, top_z   , 0., 0.,  1.);
         }
-        if (closed && ii + 1 == lines.size() && width == width_initial) {
+
+        if (is_closing && (width == width_initial) && (bottom_z == bottom_z_initial)) {
             idx_b[BOTTOM] = idx_initial[BOTTOM];
         } else {
             idx_b[BOTTOM] = idx_last ++;
@@ -572,22 +996,26 @@ static void thick_lines_to_indexed_vertex_array(
         idx_b[RIGHT ] = idx_last ++;
         volume.push_geometry(b1.x, b1.y, middle_z, xy_right_normal.x, xy_right_normal.y, xy_right_normal.z);
 
-        prev_line = line;
         memcpy(idx_prev, idx_b, 4 * sizeof(int));
         bottom_z_prev = bottom_z;
         b1_prev = b1;
-        b2_prev = b2;
-        v_prev  = v;
+        v_prev = v;
+
+        if (bottom_z_different)
+        {
+            // Found a change of the layer thickness -> Add a cap at the beginning of this segment.
+            volume.push_quad(idx_a[BOTTOM], idx_a[RIGHT], idx_a[TOP], idx_a[LEFT]);
+        }
 
         if (! closed) {
             // Terminate open paths with caps.
-            if (i == 0)
+            if (is_first && !bottom_z_different)
                 volume.push_quad(idx_a[BOTTOM], idx_a[RIGHT], idx_a[TOP], idx_a[LEFT]);
             // We don't use 'else' because both cases are true if we have only one line.
-            if (i + 1 == lines.size())
+            if (is_last && !bottom_z_different)
                 volume.push_quad(idx_b[BOTTOM], idx_b[LEFT], idx_b[TOP], idx_b[RIGHT]);
         }
-        
+
         // Add quads for a straight hollow tube-like segment.
         // bottom-right face
         volume.push_quad(idx_a[BOTTOM], idx_b[BOTTOM], idx_b[RIGHT], idx_a[RIGHT]);
@@ -605,6 +1033,321 @@ static void thick_lines_to_indexed_vertex_array(
 #undef BOTTOM
 }
 
+// caller is responsible for supplying NO lines with zero length
+static void thick_lines_to_indexed_vertex_array(const Lines3& lines,
+    const std::vector<double>& widths,
+    const std::vector<double>& heights,
+    bool closed,
+    GLIndexedVertexArray& volume)
+{
+    assert(!lines.empty());
+    if (lines.empty())
+        return;
+
+#define LEFT    0
+#define RIGHT   1
+#define TOP     2
+#define BOTTOM  3
+
+    // left, right, top, bottom
+    int      idx_initial[4] = { -1, -1, -1, -1 };
+    int      idx_prev[4] = { -1, -1, -1, -1 };
+    double   z_prev = 0.0;
+    Vectorf3 n_right_prev;
+    Vectorf3 n_top_prev;
+    Vectorf3 unit_v_prev;
+    double   width_initial = 0.0;
+
+    // new vertices around the line endpoints
+    // left, right, top, bottom
+    Pointf3 a[4];
+    Pointf3 b[4];
+
+    // loop once more in case of closed loops
+    size_t lines_end = closed ? (lines.size() + 1) : lines.size();
+    for (size_t ii = 0; ii < lines_end; ++ii)
+    {
+        size_t i = (ii == lines.size()) ? 0 : ii;
+
+        const Line3& line = lines[i];
+        double height = heights[i];
+        double width = widths[i];
+
+        Vectorf3 unit_v = normalize(Vectorf3::new_unscale(line.vector()));
+
+        Vectorf3 n_top;
+        Vectorf3 n_right;
+        Vectorf3 unit_positive_z(0.0, 0.0, 1.0);
+
+        if ((line.a.x == line.b.x) && (line.a.y == line.b.y))
+        {
+            // vertical segment
+            n_right = (line.a.z < line.b.z) ? Vectorf3(-1.0, 0.0, 0.0) : Vectorf3(1.0, 0.0, 0.0);
+            n_top = Vectorf3(0.0, 1.0, 0.0);
+        }
+        else
+        {
+            // generic segment
+            n_right = normalize(cross(unit_v, unit_positive_z));
+            n_top = normalize(cross(n_right, unit_v));
+        }
+
+        Vectorf3 rl_displacement = 0.5 * width * n_right;
+        Vectorf3 tb_displacement = 0.5 * height * n_top;
+        Pointf3 l_a = Pointf3::new_unscale(line.a);
+        Pointf3 l_b = Pointf3::new_unscale(line.b);
+
+        a[RIGHT] = l_a + rl_displacement;
+        a[LEFT] = l_a - rl_displacement;
+        a[TOP] = l_a + tb_displacement;
+        a[BOTTOM] = l_a - tb_displacement;
+        b[RIGHT] = l_b + rl_displacement;
+        b[LEFT] = l_b - rl_displacement;
+        b[TOP] = l_b + tb_displacement;
+        b[BOTTOM] = l_b - tb_displacement;
+
+        Vectorf3 n_bottom = -n_top;
+        Vectorf3 n_left = -n_right;
+
+        int idx_a[4];
+        int idx_b[4];
+        int idx_last = int(volume.vertices_and_normals_interleaved.size() / 6);
+
+        bool z_different = (z_prev != l_a.z);
+        z_prev = l_b.z;
+
+        // Share top / bottom vertices if possible.
+        if (ii == 0)
+        {
+            idx_a[TOP] = idx_last++;
+            volume.push_geometry(a[TOP], n_top);
+        }
+        else
+            idx_a[TOP] = idx_prev[TOP];
+
+        if ((ii == 0) || z_different)
+        {
+            // Start of the 1st line segment or a change of the layer thickness while maintaining the print_z.
+            idx_a[BOTTOM] = idx_last++;
+            volume.push_geometry(a[BOTTOM], n_bottom);
+            idx_a[LEFT] = idx_last++;
+            volume.push_geometry(a[LEFT], n_left);
+            idx_a[RIGHT] = idx_last++;
+            volume.push_geometry(a[RIGHT], n_right);
+        }
+        else
+            idx_a[BOTTOM] = idx_prev[BOTTOM];
+
+        if (ii == 0)
+        {
+            // Start of the 1st line segment.
+            width_initial = width;
+            ::memcpy(idx_initial, idx_a, sizeof(int) * 4);
+        }
+        else
+        {
+            // Continuing a previous segment.
+            // Share left / right vertices if possible.
+            double v_dot = dot(unit_v_prev, unit_v);
+            bool is_sharp = v_dot < 0.707; // sin(45 degrees)
+            bool is_right_turn = dot(n_top_prev, cross(unit_v_prev, unit_v)) > 0.0;
+
+            if (is_sharp)
+            {
+                // Allocate new left / right points for the start of this segment as these points will receive their own normals to indicate a sharp turn.
+                idx_a[RIGHT] = idx_last++;
+                volume.push_geometry(a[RIGHT], n_right);
+                idx_a[LEFT] = idx_last++;
+                volume.push_geometry(a[LEFT], n_left);
+            }
+
+            if (v_dot > 0.9)
+            {
+                // The two successive segments are nearly collinear.
+                idx_a[LEFT] = idx_prev[LEFT];
+                idx_a[RIGHT] = idx_prev[RIGHT];
+            }
+            else if (!is_sharp)
+            {
+                // Create a sharp corner with an overshot and average the left / right normals.
+                // At the crease angle of 45 degrees, the overshot at the corner will be less than (1-1/cos(PI/8)) = 8.2% over an arc.
+
+                // averages normals
+                Vectorf3 average_n_right = normalize(0.5 * (n_right + n_right_prev));
+                Vectorf3 average_n_left = -average_n_right;
+                Vectorf3 average_rl_displacement = 0.5 * width * average_n_right;
+
+                // updates vertices around a
+                a[RIGHT] = l_a + average_rl_displacement;
+                a[LEFT] = l_a - average_rl_displacement;
+
+                // updates previous line normals
+                float* normal_left_prev = volume.vertices_and_normals_interleaved.data() + idx_prev[LEFT] * 6;
+                normal_left_prev[0] = float(average_n_left.x);
+                normal_left_prev[1] = float(average_n_left.y);
+                normal_left_prev[2] = float(average_n_left.z);
+
+                float* normal_right_prev = volume.vertices_and_normals_interleaved.data() + idx_prev[RIGHT] * 6;
+                normal_right_prev[0] = float(average_n_right.x);
+                normal_right_prev[1] = float(average_n_right.y);
+                normal_right_prev[2] = float(average_n_right.z);
+
+                // updates previous line's vertices around b
+                float* b_left_prev = normal_left_prev + 3;
+                b_left_prev[0] = float(a[LEFT].x);
+                b_left_prev[1] = float(a[LEFT].y);
+                b_left_prev[2] = float(a[LEFT].z);
+
+                float* b_right_prev = normal_right_prev + 3;
+                b_right_prev[0] = float(a[RIGHT].x);
+                b_right_prev[1] = float(a[RIGHT].y);
+                b_right_prev[2] = float(a[RIGHT].z);
+
+                idx_a[LEFT] = idx_prev[LEFT];
+                idx_a[RIGHT] = idx_prev[RIGHT];
+            }
+            else if (is_right_turn)
+            {
+                // Right turn. Fill in the right turn wedge.
+                volume.push_triangle(idx_prev[RIGHT], idx_a[RIGHT], idx_prev[TOP]);
+                volume.push_triangle(idx_prev[RIGHT], idx_prev[BOTTOM], idx_a[RIGHT]);
+            }
+            else
+            {
+                // Left turn. Fill in the left turn wedge.
+                volume.push_triangle(idx_prev[LEFT], idx_prev[TOP], idx_a[LEFT]);
+                volume.push_triangle(idx_prev[LEFT], idx_a[LEFT], idx_prev[BOTTOM]);
+            }
+
+            if (ii == lines.size())
+            {
+                if (!is_sharp)
+                {
+                    // Closing a loop with smooth transition. Unify the closing left / right vertices.
+                    ::memcpy(volume.vertices_and_normals_interleaved.data() + idx_initial[LEFT] * 6, volume.vertices_and_normals_interleaved.data() + idx_prev[LEFT] * 6, sizeof(float) * 6);
+                    ::memcpy(volume.vertices_and_normals_interleaved.data() + idx_initial[RIGHT] * 6, volume.vertices_and_normals_interleaved.data() + idx_prev[RIGHT] * 6, sizeof(float) * 6);
+                    volume.vertices_and_normals_interleaved.erase(volume.vertices_and_normals_interleaved.end() - 12, volume.vertices_and_normals_interleaved.end());
+                    // Replace the left / right vertex indices to point to the start of the loop. 
+                    for (size_t u = volume.quad_indices.size() - 16; u < volume.quad_indices.size(); ++u)
+                    {
+                        if (volume.quad_indices[u] == idx_prev[LEFT])
+                            volume.quad_indices[u] = idx_initial[LEFT];
+                        else if (volume.quad_indices[u] == idx_prev[RIGHT])
+                            volume.quad_indices[u] = idx_initial[RIGHT];
+                    }
+                }
+
+                // This is the last iteration, only required to solve the transition.
+                break;
+            }
+        }
+
+        // Only new allocate top / bottom vertices, if not closing a loop.
+        if (closed && (ii + 1 == lines.size()))
+            idx_b[TOP] = idx_initial[TOP];
+        else
+        {
+            idx_b[TOP] = idx_last++;
+            volume.push_geometry(b[TOP], n_top);
+        }
+
+        if (closed && (ii + 1 == lines.size()) && (width == width_initial))
+            idx_b[BOTTOM] = idx_initial[BOTTOM];
+        else
+        {
+            idx_b[BOTTOM] = idx_last++;
+            volume.push_geometry(b[BOTTOM], n_bottom);
+        }
+
+        // Generate new vertices for the end of this line segment.
+        idx_b[LEFT] = idx_last++;
+        volume.push_geometry(b[LEFT], n_left);
+        idx_b[RIGHT] = idx_last++;
+        volume.push_geometry(b[RIGHT], n_right);
+
+        ::memcpy(idx_prev, idx_b, 4 * sizeof(int));
+        n_right_prev = n_right;
+        n_top_prev = n_top;
+        unit_v_prev = unit_v;
+
+        if (!closed)
+        {
+            // Terminate open paths with caps.
+            if (i == 0)
+                volume.push_quad(idx_a[BOTTOM], idx_a[RIGHT], idx_a[TOP], idx_a[LEFT]);
+
+            // We don't use 'else' because both cases are true if we have only one line.
+            if (i + 1 == lines.size())
+                volume.push_quad(idx_b[BOTTOM], idx_b[LEFT], idx_b[TOP], idx_b[RIGHT]);
+        }
+
+        // Add quads for a straight hollow tube-like segment.
+        // bottom-right face
+        volume.push_quad(idx_a[BOTTOM], idx_b[BOTTOM], idx_b[RIGHT], idx_a[RIGHT]);
+        // top-right face
+        volume.push_quad(idx_a[RIGHT], idx_b[RIGHT], idx_b[TOP], idx_a[TOP]);
+        // top-left face
+        volume.push_quad(idx_a[TOP], idx_b[TOP], idx_b[LEFT], idx_a[LEFT]);
+        // bottom-left face
+        volume.push_quad(idx_a[LEFT], idx_b[LEFT], idx_b[BOTTOM], idx_a[BOTTOM]);
+    }
+
+#undef LEFT
+#undef RIGHT
+#undef TOP
+#undef BOTTOM
+}
+
+static void point_to_indexed_vertex_array(const Point3& point,
+    double width,
+    double height,
+    GLIndexedVertexArray& volume)
+{
+    // builds a double piramid, with vertices on the local axes, around the point
+
+    Pointf3 center = Pointf3::new_unscale(point);
+
+    double scale_factor = 1.0;
+    double w = scale_factor * width;
+    double h = scale_factor * height;
+
+    // new vertices ids
+    int idx_last = int(volume.vertices_and_normals_interleaved.size() / 6);
+    int idxs[6];
+    for (int i = 0; i < 6; ++i)
+    {
+        idxs[i] = idx_last + i;
+    }
+
+    Vectorf3 displacement_x(w, 0.0, 0.0);
+    Vectorf3 displacement_y(0.0, w, 0.0);
+    Vectorf3 displacement_z(0.0, 0.0, h);
+
+    Vectorf3 unit_x(1.0, 0.0, 0.0);
+    Vectorf3 unit_y(0.0, 1.0, 0.0);
+    Vectorf3 unit_z(0.0, 0.0, 1.0);
+
+    // vertices
+    volume.push_geometry(center - displacement_x, -unit_x); // idxs[0]
+    volume.push_geometry(center + displacement_x, unit_x);  // idxs[1]
+    volume.push_geometry(center - displacement_y, -unit_y); // idxs[2]
+    volume.push_geometry(center + displacement_y, unit_y);  // idxs[3]
+    volume.push_geometry(center - displacement_z, -unit_z); // idxs[4]
+    volume.push_geometry(center + displacement_z, unit_z);  // idxs[5]
+
+    // top piramid faces
+    volume.push_triangle(idxs[0], idxs[2], idxs[5]);
+    volume.push_triangle(idxs[2], idxs[1], idxs[5]);
+    volume.push_triangle(idxs[1], idxs[3], idxs[5]);
+    volume.push_triangle(idxs[3], idxs[0], idxs[5]);
+
+    // bottom piramid faces
+    volume.push_triangle(idxs[2], idxs[0], idxs[4]);
+    volume.push_triangle(idxs[1], idxs[2], idxs[4]);
+    volume.push_triangle(idxs[3], idxs[1], idxs[4]);
+    volume.push_triangle(idxs[0], idxs[3], idxs[4]);
+}
+
 static void thick_lines_to_verts(
     const Lines                 &lines, 
     const std::vector<double>   &widths,
@@ -614,6 +1357,32 @@ static void thick_lines_to_verts(
     GLVolume                    &volume)
 {
     thick_lines_to_indexed_vertex_array(lines, widths, heights, closed, top_z, volume.indexed_vertex_array);
+}
+
+static void thick_lines_to_verts(const Lines3& lines,
+    const std::vector<double>& widths,
+    const std::vector<double>& heights,
+    bool closed,
+    GLVolume& volume)
+{
+    thick_lines_to_indexed_vertex_array(lines, widths, heights, closed, volume.indexed_vertex_array);
+}
+
+static void thick_point_to_verts(const Point3& point,
+    double width,
+    double height,
+    GLVolume& volume)
+{
+    point_to_indexed_vertex_array(point, width, height, volume.indexed_vertex_array);
+}
+
+// Fill in the qverts and tverts with quads and triangles for the extrusion_path.
+static inline void extrusionentity_to_verts(const ExtrusionPath &extrusion_path, float print_z, GLVolume &volume)
+{
+    Lines               lines = extrusion_path.polyline.lines();
+    std::vector<double> widths(lines.size(), extrusion_path.width);
+    std::vector<double> heights(lines.size(), extrusion_path.height);
+    thick_lines_to_verts(lines, widths, heights, false, print_z, volume);
 }
 
 // Fill in the qverts and tverts with quads and triangles for the extrusion_path.
@@ -699,6 +1468,258 @@ static void extrusionentity_to_verts(const ExtrusionEntity *extrusion_entity, fl
     }
 }
 
+static void polyline3_to_verts(const Polyline3& polyline, double width, double height, GLVolume& volume)
+{
+    Lines3 lines = polyline.lines();
+    std::vector<double> widths(lines.size(), width);
+    std::vector<double> heights(lines.size(), height);
+    thick_lines_to_verts(lines, widths, heights, false, volume);
+}
+
+static void point3_to_verts(const Point3& point, double width, double height, GLVolume& volume)
+{
+    thick_point_to_verts(point, width, height, volume);
+}
+
+_3DScene::GCodePreviewVolumeIndex _3DScene::s_gcode_preview_volume_index;
+_3DScene::LegendTexture _3DScene::s_legend_texture;
+_3DScene::WarningTexture _3DScene::s_warning_texture;
+
+unsigned int _3DScene::TextureBase::finalize()
+{
+    if (!m_data.empty()) {
+        // sends buffer to gpu
+        ::glGenTextures(1, &m_tex_id);
+        ::glBindTexture(GL_TEXTURE_2D, m_tex_id);
+        ::glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)m_tex_width, (GLsizei)m_tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (const GLvoid*)m_data.data());
+        ::glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        ::glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        ::glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
+        ::glBindTexture(GL_TEXTURE_2D, 0);
+        m_data.clear();
+    }
+    return (m_tex_width > 0 && m_tex_height > 0) ? m_tex_id : 0;
+}
+
+void _3DScene::TextureBase::_destroy_texture()
+{
+    if (m_tex_id > 0)
+    {
+        ::glDeleteTextures(1, &m_tex_id);
+        m_tex_id = 0;
+        m_tex_height = 0;
+        m_tex_width = 0;
+    }
+    m_data.clear();
+}
+
+
+const unsigned char _3DScene::WarningTexture::Background_Color[3] = { 9, 91, 134 };
+const unsigned char _3DScene::WarningTexture::Opacity = 255;
+
+// Generate a texture data, but don't load it into the GPU yet, as the GPU context may not yet be valid.
+bool _3DScene::WarningTexture::generate(const std::string& msg)
+{
+    // Mark the texture as released, but don't release the texture from the GPU yet.
+    m_tex_width = m_tex_height = 0;
+    m_data.clear();
+
+    if (msg.empty())
+        return false;
+
+    wxMemoryDC memDC;
+    // select default font
+    memDC.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+
+    // calculates texture size
+    wxCoord w, h;
+    memDC.GetTextExtent(msg, &w, &h);
+    m_tex_width = (unsigned int)w;
+    m_tex_height = (unsigned int)h;
+
+    // generates bitmap
+    wxBitmap bitmap(m_tex_width, m_tex_height);
+
+#if defined(__APPLE__) || defined(_MSC_VER)
+    bitmap.UseAlpha();
+#endif
+
+    memDC.SelectObject(bitmap);
+    memDC.SetBackground(wxBrush(wxColour(Background_Color[0], Background_Color[1], Background_Color[2])));
+    memDC.Clear();
+
+    memDC.SetTextForeground(*wxWHITE);
+
+    // draw message
+    memDC.DrawText(msg, 0, 0);
+
+    memDC.SelectObject(wxNullBitmap);
+
+    // Convert the bitmap into a linear data ready to be loaded into the GPU.
+    {
+        wxImage image = bitmap.ConvertToImage();
+        image.SetMaskColour(Background_Color[0], Background_Color[1], Background_Color[2]);
+
+        // prepare buffer
+        m_data.assign(4 * m_tex_width * m_tex_height, 0);
+        for (unsigned int h = 0; h < m_tex_height; ++h)
+        {
+            unsigned int hh = h * m_tex_width;
+            unsigned char* px_ptr = m_data.data() + 4 * hh;
+            for (unsigned int w = 0; w < m_tex_width; ++w)
+            {
+                *px_ptr++ = image.GetRed(w, h);
+                *px_ptr++ = image.GetGreen(w, h);
+                *px_ptr++ = image.GetBlue(w, h);
+                *px_ptr++ = image.IsTransparent(w, h) ? 0 : Opacity;
+            }
+        }
+    }
+    return true;
+}
+
+const unsigned char _3DScene::LegendTexture::Squares_Border_Color[3] = { 64, 64, 64 };
+const unsigned char _3DScene::LegendTexture::Background_Color[3] = { 9, 91, 134 };
+const unsigned char _3DScene::LegendTexture::Opacity = 255;
+
+// Generate a texture data, but don't load it into the GPU yet, as the GPU context may not yet be valid.
+bool _3DScene::LegendTexture::generate(const GCodePreviewData& preview_data, const std::vector<float>& tool_colors)
+{
+    // Mark the texture as released, but don't release the texture from the GPU yet.
+    m_tex_width = m_tex_height = 0;
+    m_data.clear();
+
+    // collects items to render
+    auto title = GUI::L_str(preview_data.get_legend_title());
+    const GCodePreviewData::LegendItemsList& items = preview_data.get_legend_items(tool_colors);
+
+    unsigned int items_count = (unsigned int)items.size();
+    if (items_count == 0)
+        // nothing to render, return
+        return false;
+
+    wxMemoryDC memDC;
+    // select default font
+    memDC.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+
+    // calculates texture size
+    wxCoord w, h;
+    memDC.GetTextExtent(title, &w, &h);
+    unsigned int title_width = (unsigned int)w;
+    unsigned int title_height = (unsigned int)h;
+
+    unsigned int max_text_width = 0;
+    unsigned int max_text_height = 0;
+    for (const GCodePreviewData::LegendItem& item : items)
+    {
+        memDC.GetTextExtent(GUI::from_u8(item.text), &w, &h);
+        max_text_width = std::max(max_text_width, (unsigned int)w);
+        max_text_height = std::max(max_text_height, (unsigned int)h);
+    }
+
+    m_tex_width = std::max(2 * Px_Border + title_width, 2 * (Px_Border + Px_Square_Contour) + Px_Square + Px_Text_Offset + max_text_width);
+    m_tex_height = 2 * (Px_Border + Px_Square_Contour) + title_height + Px_Title_Offset + items_count * Px_Square;
+    if (items_count > 1)
+        m_tex_height += (items_count - 1) * Px_Square_Contour;
+
+    // generates bitmap
+    wxBitmap bitmap(m_tex_width, m_tex_height);
+
+#if defined(__APPLE__) || defined(_MSC_VER)
+    bitmap.UseAlpha();
+#endif
+
+    memDC.SelectObject(bitmap);
+    memDC.SetBackground(wxBrush(wxColour(Background_Color[0], Background_Color[1], Background_Color[2])));
+    memDC.Clear();
+
+    memDC.SetTextForeground(*wxWHITE);
+
+    // draw title
+    unsigned int title_x = Px_Border;
+    unsigned int title_y = Px_Border;
+    memDC.DrawText(title, title_x, title_y);
+
+    // draw icons contours as background
+    unsigned int squares_contour_x = Px_Border;
+    unsigned int squares_contour_y = Px_Border + title_height + Px_Title_Offset;
+    unsigned int squares_contour_width = Px_Square + 2 * Px_Square_Contour;
+    unsigned int squares_contour_height = items_count * Px_Square + 2 * Px_Square_Contour;
+    if (items_count > 1)
+        squares_contour_height += (items_count - 1) * Px_Square_Contour;
+
+    wxColour color(Squares_Border_Color[0], Squares_Border_Color[1], Squares_Border_Color[2]);
+    wxPen pen(color);
+    wxBrush brush(color);
+    memDC.SetPen(pen);
+    memDC.SetBrush(brush);
+    memDC.DrawRectangle(wxRect(squares_contour_x, squares_contour_y, squares_contour_width, squares_contour_height));
+
+    // draw items (colored icon + text)
+    unsigned int icon_x = squares_contour_x + Px_Square_Contour;
+    unsigned int icon_x_inner = icon_x + 1;
+    unsigned int icon_y = squares_contour_y + Px_Square_Contour;
+    unsigned int icon_y_step = Px_Square + Px_Square_Contour;
+
+    unsigned int text_x = icon_x + Px_Square + Px_Text_Offset;
+    unsigned int text_y_offset = (Px_Square - max_text_height) / 2;
+
+    unsigned int px_inner_square = Px_Square - 2;
+
+    for (const GCodePreviewData::LegendItem& item : items)
+    {
+        // draw darker icon perimeter
+        const std::vector<unsigned char>& item_color_bytes = item.color.as_bytes();
+        wxImage::HSVValue dark_hsv = wxImage::RGBtoHSV(wxImage::RGBValue(item_color_bytes[0], item_color_bytes[1], item_color_bytes[2]));
+        dark_hsv.value *= 0.75;
+        wxImage::RGBValue dark_rgb = wxImage::HSVtoRGB(dark_hsv);
+        color.Set(dark_rgb.red, dark_rgb.green, dark_rgb.blue, item_color_bytes[3]);
+        pen.SetColour(color);
+        brush.SetColour(color);
+        memDC.SetPen(pen);
+        memDC.SetBrush(brush);
+        memDC.DrawRectangle(wxRect(icon_x, icon_y, Px_Square, Px_Square));
+
+        // draw icon interior
+        color.Set(item_color_bytes[0], item_color_bytes[1], item_color_bytes[2], item_color_bytes[3]);
+        pen.SetColour(color);
+        brush.SetColour(color);
+        memDC.SetPen(pen);
+        memDC.SetBrush(brush);
+        memDC.DrawRectangle(wxRect(icon_x_inner, icon_y + 1, px_inner_square, px_inner_square));
+
+        // draw text
+		memDC.DrawText(GUI::from_u8(item.text), text_x, icon_y + text_y_offset);
+
+        // update y
+        icon_y += icon_y_step;
+    }
+
+    memDC.SelectObject(wxNullBitmap);
+
+    // Convert the bitmap into a linear data ready to be loaded into the GPU.
+    {
+        wxImage image = bitmap.ConvertToImage();
+        image.SetMaskColour(Background_Color[0], Background_Color[1], Background_Color[2]);
+
+        // prepare buffer
+        m_data.assign(4 * m_tex_width * m_tex_height, 0);
+        for (unsigned int h = 0; h < m_tex_height; ++h)
+        {
+            unsigned int hh = h * m_tex_width;
+            unsigned char* px_ptr = m_data.data() + 4 * hh;
+            for (unsigned int w = 0; w < m_tex_width; ++w)
+            {
+                *px_ptr++ = image.GetRed(w, h);
+                *px_ptr++ = image.GetGreen(w, h);
+                *px_ptr++ = image.GetBlue(w, h);
+                *px_ptr++ = image.IsTransparent(w, h) ? 0 : Opacity;
+            }
+        }
+    }
+    return true;
+}
+
 void _3DScene::_glew_init()
 { 
     glewInit();
@@ -731,6 +1752,85 @@ static inline std::vector<float> parse_colors(const std::vector<std::string> &sc
     return output;
 }
 
+void _3DScene::load_gcode_preview(const Print* print, const GCodePreviewData* preview_data, GLVolumeCollection* volumes, const std::vector<std::string>& str_tool_colors, bool use_VBOs)
+{
+    if ((preview_data == nullptr) || (volumes == nullptr))
+        return;
+
+    if (volumes->empty())
+    {
+        std::vector<float> tool_colors = parse_colors(str_tool_colors);
+
+        s_gcode_preview_volume_index.reset();
+
+        _load_gcode_extrusion_paths(*preview_data, *volumes, tool_colors, use_VBOs);
+        _load_gcode_travel_paths(*preview_data, *volumes, tool_colors, use_VBOs);
+        _load_gcode_retractions(*preview_data, *volumes, use_VBOs);
+        _load_gcode_unretractions(*preview_data, *volumes, use_VBOs);
+
+        if (volumes->empty())
+            reset_legend_texture();
+        else
+        {
+            _generate_legend_texture(*preview_data, tool_colors);
+
+            // removes empty volumes
+            volumes->volumes.erase(std::remove_if(volumes->volumes.begin(), volumes->volumes.end(),
+                [](const GLVolume *volume) { return volume->print_zs.empty(); }),
+                volumes->volumes.end());
+
+            _load_shells(*print, *volumes, use_VBOs);
+        }
+    }
+
+    _update_gcode_volumes_visibility(*preview_data, *volumes);
+}
+
+unsigned int _3DScene::get_legend_texture_width()
+{
+    return s_legend_texture.get_texture_width();
+}
+
+unsigned int _3DScene::get_legend_texture_height()
+{
+    return s_legend_texture.get_texture_height();
+}
+
+void _3DScene::reset_legend_texture()
+{
+    s_legend_texture.reset_texture();
+}
+
+unsigned int _3DScene::finalize_legend_texture()
+{
+    return s_legend_texture.finalize();
+}
+
+unsigned int _3DScene::get_warning_texture_width()
+{
+    return s_warning_texture.get_texture_width();
+}
+
+unsigned int _3DScene::get_warning_texture_height()
+{
+    return s_warning_texture.get_texture_height();
+}
+
+void _3DScene::generate_warning_texture(const std::string& msg)
+{
+    s_warning_texture.generate(msg);
+}
+
+void _3DScene::reset_warning_texture()
+{
+    s_warning_texture.reset_texture();
+}
+
+unsigned int _3DScene::finalize_warning_texture()
+{
+    return s_warning_texture.finalize();
+}
+
 // Create 3D thick extrusion lines for a skirt and brim.
 // Adds a new Slic3r::GUI::3DScene::Volume to volumes.
 void _3DScene::_load_print_toolpaths(
@@ -739,7 +1839,7 @@ void _3DScene::_load_print_toolpaths(
     const std::vector<std::string>  &tool_colors,
     bool                             use_VBOs)
 {
-    if (! print->has_skirt() && print->config.brim_width.value == 0)
+    if (!print->has_skirt() && print->config.brim_width.value == 0)
         return;
     
     const float color[] = { 0.5f, 1.0f, 0.5f, 1.f }; // greenish
@@ -843,6 +1943,7 @@ void _3DScene::_load_print_object_toolpaths(
     auto            new_volume = [volumes, &new_volume_mutex](const float *color) -> GLVolume* {
         auto *volume = new GLVolume(color);
         new_volume_mutex.lock();
+        volume->outside_printer_detection_enabled = false;
         volumes->volumes.emplace_back(volume);
         new_volume_mutex.unlock();
         return volume;
@@ -993,6 +2094,7 @@ void _3DScene::_load_wipe_tower_toolpaths(
     auto            new_volume = [volumes, &new_volume_mutex](const float *color) -> GLVolume* {
         auto *volume = new GLVolume(color);
         new_volume_mutex.lock();
+        volume->outside_printer_detection_enabled = false;
         volumes->volumes.emplace_back(volume);
         new_volume_mutex.unlock();
         return volume;
@@ -1088,4 +2190,579 @@ void _3DScene::_load_wipe_tower_toolpaths(
     BOOST_LOG_TRIVIAL(debug) << "Loading wipe tower toolpaths in parallel - end"; 
 }
 
+void _3DScene::_load_gcode_extrusion_paths(const GCodePreviewData& preview_data, GLVolumeCollection& volumes, const std::vector<float>& tool_colors, bool use_VBOs)
+{
+    // helper functions to select data in dependence of the extrusion view type
+    struct Helper
+    {
+        static float path_filter(GCodePreviewData::Extrusion::EViewType type, const ExtrusionPath& path)
+        {
+            switch (type)
+            {
+            case GCodePreviewData::Extrusion::FeatureType:
+                return (float)path.role();
+            case GCodePreviewData::Extrusion::Height:
+                return path.height;
+            case GCodePreviewData::Extrusion::Width:
+                return path.width;
+            case GCodePreviewData::Extrusion::Feedrate:
+                return path.feedrate;
+            case GCodePreviewData::Extrusion::VolumetricRate:
+                return path.feedrate * (float)path.mm3_per_mm;
+            case GCodePreviewData::Extrusion::Tool:
+                return (float)path.extruder_id;
+            }
+
+            return 0.0f;
+        }
+
+        static GCodePreviewData::Color path_color(const GCodePreviewData& data, const std::vector<float>& tool_colors, float value)
+        {
+            switch (data.extrusion.view_type)
+            {
+            case GCodePreviewData::Extrusion::FeatureType:
+                return data.get_extrusion_role_color((ExtrusionRole)(int)value);
+            case GCodePreviewData::Extrusion::Height:
+                return data.get_height_color(value);
+            case GCodePreviewData::Extrusion::Width:
+                return data.get_width_color(value);
+            case GCodePreviewData::Extrusion::Feedrate:
+                return data.get_feedrate_color(value);
+            case GCodePreviewData::Extrusion::VolumetricRate:
+                return data.get_volumetric_rate_color(value);
+            case GCodePreviewData::Extrusion::Tool:
+                {
+                    GCodePreviewData::Color color;
+                    ::memcpy((void*)color.rgba, (const void*)(tool_colors.data() + (unsigned int)value * 4), 4 * sizeof(float));
+                    return color;
+                }
+            }
+
+            return GCodePreviewData::Color::Dummy;
+        }
+    };
+
+    // Helper structure for filters
+    struct Filter
+    {
+        float value;
+        ExtrusionRole role;
+        GLVolume* volume;
+
+        Filter(float value, ExtrusionRole role)
+            : value(value)
+            , role(role)
+            , volume(nullptr)
+        {
+        }
+
+        bool operator == (const Filter& other) const
+        {
+            if (value != other.value)
+                return false;
+
+            if (role != other.role)
+                return false;
+
+            return true;
+        }
+    };
+
+    typedef std::vector<Filter> FiltersList;
+    size_t initial_volumes_count = volumes.volumes.size();
+
+    // detects filters
+    FiltersList filters;
+    for (const GCodePreviewData::Extrusion::Layer& layer : preview_data.extrusion.layers)
+    {
+        for (const ExtrusionPath& path : layer.paths)
+        {
+            ExtrusionRole role = path.role();
+            float path_filter = Helper::path_filter(preview_data.extrusion.view_type, path);
+            if (std::find(filters.begin(), filters.end(), Filter(path_filter, role)) == filters.end())
+                filters.emplace_back(path_filter, role);
+        }
+    }
+
+    // nothing to render, return
+    if (filters.empty())
+        return;
+
+    // creates a new volume for each filter
+    for (Filter& filter : filters)
+    {
+        s_gcode_preview_volume_index.first_volumes.emplace_back(GCodePreviewVolumeIndex::Extrusion, (unsigned int)filter.role, (unsigned int)volumes.volumes.size());
+        GLVolume* volume = new GLVolume(Helper::path_color(preview_data, tool_colors, filter.value).rgba);
+        if (volume != nullptr)
+        {
+            filter.volume = volume;
+            volumes.volumes.emplace_back(volume);
+        }
+        else
+        {
+            // an error occourred - restore to previous state and return
+            s_gcode_preview_volume_index.first_volumes.pop_back();
+            if (initial_volumes_count != volumes.volumes.size())
+            {
+                std::vector<GLVolume*>::iterator begin = volumes.volumes.begin() + initial_volumes_count;
+                std::vector<GLVolume*>::iterator end = volumes.volumes.end();
+                for (std::vector<GLVolume*>::iterator it = begin; it < end; ++it)
+                {
+                    GLVolume* volume = *it;
+                    delete volume;
+                }
+                volumes.volumes.erase(begin, end);
+                return;
+            }
+        }
+    }
+
+    // populates volumes
+    for (const GCodePreviewData::Extrusion::Layer& layer : preview_data.extrusion.layers)
+    {
+        for (const ExtrusionPath& path : layer.paths)
+        {
+            float path_filter = Helper::path_filter(preview_data.extrusion.view_type, path);
+            FiltersList::iterator filter = std::find(filters.begin(), filters.end(), Filter(path_filter, path.role()));
+            if (filter != filters.end())
+            {
+                filter->volume->print_zs.push_back(layer.z);
+                filter->volume->offsets.push_back(filter->volume->indexed_vertex_array.quad_indices.size());
+                filter->volume->offsets.push_back(filter->volume->indexed_vertex_array.triangle_indices.size());
+
+                extrusionentity_to_verts(path, layer.z, *filter->volume);
+            }
+        }
+    }
+
+    // finalize volumes and sends geometry to gpu
+    if (volumes.volumes.size() > initial_volumes_count)
+    {
+        for (size_t i = initial_volumes_count; i < volumes.volumes.size(); ++i)
+        {
+            GLVolume* volume = volumes.volumes[i];
+            volume->bounding_box = volume->indexed_vertex_array.bounding_box();
+            volume->indexed_vertex_array.finalize_geometry(use_VBOs);
+        }
+    }
 }
+
+void _3DScene::_load_gcode_travel_paths(const GCodePreviewData& preview_data, GLVolumeCollection& volumes, const std::vector<float>& tool_colors, bool use_VBOs)
+{
+    size_t initial_volumes_count = volumes.volumes.size();
+    s_gcode_preview_volume_index.first_volumes.emplace_back(GCodePreviewVolumeIndex::Travel, 0, (unsigned int)initial_volumes_count);
+
+    bool res = true;
+    switch (preview_data.extrusion.view_type)
+    {
+    case GCodePreviewData::Extrusion::Feedrate:
+        {
+            res = _travel_paths_by_feedrate(preview_data, volumes);
+            break;
+        }
+    case GCodePreviewData::Extrusion::Tool:
+        {
+            res = _travel_paths_by_tool(preview_data, volumes, tool_colors);
+            break;
+        }
+    default:
+        {
+            res = _travel_paths_by_type(preview_data, volumes);
+            break;
+        }
+    }
+
+    if (!res)
+    {
+        // an error occourred - restore to previous state and return
+        if (initial_volumes_count != volumes.volumes.size())
+        {
+            std::vector<GLVolume*>::iterator begin = volumes.volumes.begin() + initial_volumes_count;
+            std::vector<GLVolume*>::iterator end = volumes.volumes.end();
+            for (std::vector<GLVolume*>::iterator it = begin; it < end; ++it)
+            {
+                GLVolume* volume = *it;
+                delete volume;
+            }
+            volumes.volumes.erase(begin, end);
+        }
+
+        return;
+    }
+
+    // finalize volumes and sends geometry to gpu
+    if (volumes.volumes.size() > initial_volumes_count)
+    {
+        for (size_t i = initial_volumes_count; i < volumes.volumes.size(); ++i)
+        {
+            GLVolume* volume = volumes.volumes[i];
+            volume->bounding_box = volume->indexed_vertex_array.bounding_box();
+            volume->indexed_vertex_array.finalize_geometry(use_VBOs);
+        }
+    }
+}
+
+bool _3DScene::_travel_paths_by_type(const GCodePreviewData& preview_data, GLVolumeCollection& volumes)
+{
+    // Helper structure for types
+    struct Type
+    {
+        GCodePreviewData::Travel::EType value;
+        GLVolume* volume;
+
+        explicit Type(GCodePreviewData::Travel::EType value)
+            : value(value)
+            , volume(nullptr)
+        {
+        }
+
+        bool operator == (const Type& other) const
+        {
+            return value == other.value;
+        }
+    };
+
+    typedef std::vector<Type> TypesList;
+
+    // colors travels by travel type
+
+    // detects types
+    TypesList types;
+    for (const GCodePreviewData::Travel::Polyline& polyline : preview_data.travel.polylines)
+    {
+        if (std::find(types.begin(), types.end(), Type(polyline.type)) == types.end())
+            types.emplace_back(polyline.type);
+    }
+
+    // nothing to render, return
+    if (types.empty())
+        return true;
+
+    // creates a new volume for each type
+    for (Type& type : types)
+    {
+        GLVolume* volume = new GLVolume(preview_data.travel.type_colors[type.value].rgba);
+        if (volume == nullptr)
+            return false;
+        else
+        {
+            type.volume = volume;
+            volumes.volumes.emplace_back(volume);
+        }
+    }
+
+    // populates volumes
+    for (const GCodePreviewData::Travel::Polyline& polyline : preview_data.travel.polylines)
+    {
+        TypesList::iterator type = std::find(types.begin(), types.end(), Type(polyline.type));
+        if (type != types.end())
+        {
+            type->volume->print_zs.push_back(unscale(polyline.polyline.bounding_box().min.z));
+            type->volume->offsets.push_back(type->volume->indexed_vertex_array.quad_indices.size());
+            type->volume->offsets.push_back(type->volume->indexed_vertex_array.triangle_indices.size());
+
+            polyline3_to_verts(polyline.polyline, preview_data.travel.width, preview_data.travel.height, *type->volume);
+        }
+    }
+
+    return true;
+}
+
+bool _3DScene::_travel_paths_by_feedrate(const GCodePreviewData& preview_data, GLVolumeCollection& volumes)
+{
+    // Helper structure for feedrate
+    struct Feedrate
+    {
+        float value;
+        GLVolume* volume;
+
+        explicit Feedrate(float value)
+            : value(value)
+            , volume(nullptr)
+        {
+        }
+
+        bool operator == (const Feedrate& other) const
+        {
+            return value == other.value;
+        }
+    };
+
+    typedef std::vector<Feedrate> FeedratesList;
+
+    // colors travels by feedrate
+
+    // detects feedrates
+    FeedratesList feedrates;
+    for (const GCodePreviewData::Travel::Polyline& polyline : preview_data.travel.polylines)
+    {
+        if (std::find(feedrates.begin(), feedrates.end(), Feedrate(polyline.feedrate)) == feedrates.end())
+            feedrates.emplace_back(polyline.feedrate);
+    }
+
+    // nothing to render, return
+    if (feedrates.empty())
+        return true;
+
+    // creates a new volume for each feedrate
+    for (Feedrate& feedrate : feedrates)
+    {
+        GLVolume* volume = new GLVolume(preview_data.get_feedrate_color(feedrate.value).rgba);
+        if (volume == nullptr)
+            return false;
+        else
+        {
+            feedrate.volume = volume;
+            volumes.volumes.emplace_back(volume);
+        }
+    }
+
+    // populates volumes
+    for (const GCodePreviewData::Travel::Polyline& polyline : preview_data.travel.polylines)
+    {
+        FeedratesList::iterator feedrate = std::find(feedrates.begin(), feedrates.end(), Feedrate(polyline.feedrate));
+        if (feedrate != feedrates.end())
+        {
+            feedrate->volume->print_zs.push_back(unscale(polyline.polyline.bounding_box().min.z));
+            feedrate->volume->offsets.push_back(feedrate->volume->indexed_vertex_array.quad_indices.size());
+            feedrate->volume->offsets.push_back(feedrate->volume->indexed_vertex_array.triangle_indices.size());
+
+            polyline3_to_verts(polyline.polyline, preview_data.travel.width, preview_data.travel.height, *feedrate->volume);
+        }
+    }
+
+    return true;
+}
+
+bool _3DScene::_travel_paths_by_tool(const GCodePreviewData& preview_data, GLVolumeCollection& volumes, const std::vector<float>& tool_colors)
+{
+    // Helper structure for tool
+    struct Tool
+    {
+        unsigned int value;
+        GLVolume* volume;
+
+        explicit Tool(unsigned int value)
+            : value(value)
+            , volume(nullptr)
+        {
+        }
+
+        bool operator == (const Tool& other) const
+        {
+            return value == other.value;
+        }
+    };
+
+    typedef std::vector<Tool> ToolsList;
+
+    // colors travels by tool
+
+    // detects tools
+    ToolsList tools;
+    for (const GCodePreviewData::Travel::Polyline& polyline : preview_data.travel.polylines)
+    {
+        if (std::find(tools.begin(), tools.end(), Tool(polyline.extruder_id)) == tools.end())
+            tools.emplace_back(polyline.extruder_id);
+    }
+
+    // nothing to render, return
+    if (tools.empty())
+        return true;
+
+    // creates a new volume for each tool
+    for (Tool& tool : tools)
+    {
+        GLVolume* volume = new GLVolume(tool_colors.data() + tool.value * 4);
+        if (volume == nullptr)
+            return false;
+        else
+        {
+            tool.volume = volume;
+            volumes.volumes.emplace_back(volume);
+        }
+    }
+
+    // populates volumes
+    for (const GCodePreviewData::Travel::Polyline& polyline : preview_data.travel.polylines)
+    {
+        ToolsList::iterator tool = std::find(tools.begin(), tools.end(), Tool(polyline.extruder_id));
+        if (tool != tools.end())
+        {
+            tool->volume->print_zs.push_back(unscale(polyline.polyline.bounding_box().min.z));
+            tool->volume->offsets.push_back(tool->volume->indexed_vertex_array.quad_indices.size());
+            tool->volume->offsets.push_back(tool->volume->indexed_vertex_array.triangle_indices.size());
+
+            polyline3_to_verts(polyline.polyline, preview_data.travel.width, preview_data.travel.height, *tool->volume);
+        }
+    }
+
+    return true;
+}
+
+void _3DScene::_load_gcode_retractions(const GCodePreviewData& preview_data, GLVolumeCollection& volumes, bool use_VBOs)
+{
+    s_gcode_preview_volume_index.first_volumes.emplace_back(GCodePreviewVolumeIndex::Retraction, 0, (unsigned int)volumes.volumes.size());
+
+    // nothing to render, return
+    if (preview_data.retraction.positions.empty())
+        return;
+
+    GLVolume* volume = new GLVolume(preview_data.retraction.color.rgba);
+    if (volume != nullptr)
+    {
+        volumes.volumes.emplace_back(volume);
+
+        GCodePreviewData::Retraction::PositionsList copy(preview_data.retraction.positions);
+        std::sort(copy.begin(), copy.end(), [](const GCodePreviewData::Retraction::Position& p1, const GCodePreviewData::Retraction::Position& p2){ return p1.position.z < p2.position.z; });
+
+        for (const GCodePreviewData::Retraction::Position& position : copy)
+        {
+            volume->print_zs.push_back(unscale(position.position.z));
+            volume->offsets.push_back(volume->indexed_vertex_array.quad_indices.size());
+            volume->offsets.push_back(volume->indexed_vertex_array.triangle_indices.size());
+
+            point3_to_verts(position.position, position.width, position.height, *volume);
+        }
+
+        // finalize volumes and sends geometry to gpu
+        volume->bounding_box = volume->indexed_vertex_array.bounding_box();
+        volume->indexed_vertex_array.finalize_geometry(use_VBOs);
+    }
+}
+
+void _3DScene::_load_gcode_unretractions(const GCodePreviewData& preview_data, GLVolumeCollection& volumes, bool use_VBOs)
+{
+    s_gcode_preview_volume_index.first_volumes.emplace_back(GCodePreviewVolumeIndex::Unretraction, 0, (unsigned int)volumes.volumes.size());
+
+    // nothing to render, return
+    if (preview_data.unretraction.positions.empty())
+        return;
+
+    GLVolume* volume = new GLVolume(preview_data.unretraction.color.rgba);
+    if (volume != nullptr)
+    {
+        volumes.volumes.emplace_back(volume);
+
+        GCodePreviewData::Retraction::PositionsList copy(preview_data.unretraction.positions);
+        std::sort(copy.begin(), copy.end(), [](const GCodePreviewData::Retraction::Position& p1, const GCodePreviewData::Retraction::Position& p2){ return p1.position.z < p2.position.z; });
+
+        for (const GCodePreviewData::Retraction::Position& position : copy)
+        {
+            volume->print_zs.push_back(unscale(position.position.z));
+            volume->offsets.push_back(volume->indexed_vertex_array.quad_indices.size());
+            volume->offsets.push_back(volume->indexed_vertex_array.triangle_indices.size());
+
+            point3_to_verts(position.position, position.width, position.height, *volume);
+        }
+
+        // finalize volumes and sends geometry to gpu
+        volume->bounding_box = volume->indexed_vertex_array.bounding_box();
+        volume->indexed_vertex_array.finalize_geometry(use_VBOs);
+    }
+}
+
+void _3DScene::_update_gcode_volumes_visibility(const GCodePreviewData& preview_data, GLVolumeCollection& volumes)
+{
+    unsigned int size = (unsigned int)s_gcode_preview_volume_index.first_volumes.size();
+    for (unsigned int i = 0; i < size; ++i)
+    {
+        std::vector<GLVolume*>::iterator begin = volumes.volumes.begin() + s_gcode_preview_volume_index.first_volumes[i].id;
+        std::vector<GLVolume*>::iterator end = (i + 1 < size) ? volumes.volumes.begin() + s_gcode_preview_volume_index.first_volumes[i + 1].id : volumes.volumes.end();
+
+        for (std::vector<GLVolume*>::iterator it = begin; it != end; ++it)
+        {
+            GLVolume* volume = *it;
+            volume->outside_printer_detection_enabled = false;
+
+            switch (s_gcode_preview_volume_index.first_volumes[i].type)
+            {
+            case GCodePreviewVolumeIndex::Extrusion:
+                {
+                    if ((ExtrusionRole)s_gcode_preview_volume_index.first_volumes[i].flag == erCustom)
+                        volume->zoom_to_volumes = false;
+                    
+                    volume->is_active = preview_data.extrusion.is_role_flag_set((ExtrusionRole)s_gcode_preview_volume_index.first_volumes[i].flag);
+                    break;
+                }
+            case GCodePreviewVolumeIndex::Travel:
+                {
+                    volume->is_active = preview_data.travel.is_visible;
+                    volume->zoom_to_volumes = false;
+                    break;
+                }
+            case GCodePreviewVolumeIndex::Retraction:
+                {
+                    volume->is_active = preview_data.retraction.is_visible;
+                    volume->zoom_to_volumes = false;
+                    break;
+                }
+            case GCodePreviewVolumeIndex::Unretraction:
+                {
+                    volume->is_active = preview_data.unretraction.is_visible;
+                    volume->zoom_to_volumes = false;
+                    break;
+                }
+            case GCodePreviewVolumeIndex::Shell:
+                {
+                    volume->is_active = preview_data.shell.is_visible;
+                    volume->color[3] = 0.25f;
+                    volume->zoom_to_volumes = false;
+                    break;
+                }
+            default:
+                {
+                    volume->is_active = false;
+                    volume->zoom_to_volumes = false;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void _3DScene::_generate_legend_texture(const GCodePreviewData& preview_data, const std::vector<float>& tool_colors)
+{
+    s_legend_texture.generate(preview_data, tool_colors);
+}
+
+void _3DScene::_load_shells(const Print& print, GLVolumeCollection& volumes, bool use_VBOs)
+{
+    size_t initial_volumes_count = volumes.volumes.size();
+    s_gcode_preview_volume_index.first_volumes.emplace_back(GCodePreviewVolumeIndex::Shell, 0, (unsigned int)initial_volumes_count);
+
+    if (print.objects.empty())
+        // nothing to render, return
+        return;
+
+    // adds objects' volumes 
+    unsigned int object_id = 0;
+    for (PrintObject* obj : print.objects)
+    {
+        ModelObject* model_obj = obj->model_object();
+
+        std::vector<int> instance_ids(model_obj->instances.size());
+        for (int i = 0; i < model_obj->instances.size(); ++i)
+        {
+            instance_ids[i] = i;
+        }
+
+        for (ModelInstance* instance : model_obj->instances)
+        {
+            volumes.load_object(model_obj, object_id, instance_ids, "object", "object", "object", use_VBOs);
+        }
+
+        ++object_id;
+    }
+
+    // adds wipe tower's volume
+    coordf_t max_z = print.objects[0]->model_object()->get_model()->bounding_box().max.z;
+    const PrintConfig& config = print.config;
+    unsigned int extruders_count = config.nozzle_diameter.size();
+    if ((extruders_count > 1) && config.single_extruder_multi_material && config.wipe_tower && !config.complete_objects) {
+        const float width_per_extruder = 15.f; // a simple workaround after wipe_tower_per_color_wipe got obsolete
+        volumes.load_wipe_tower_preview(1000, config.wipe_tower_x, config.wipe_tower_y, config.wipe_tower_width, width_per_extruder * (extruders_count - 1), max_z, config.wipe_tower_rotation_angle, use_VBOs);
+    }
+}
+
+} // namespace Slic3r

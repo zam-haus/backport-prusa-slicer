@@ -644,12 +644,9 @@ public:
     bool deserialize(const std::string &str, bool append = false) override
     {
         UNUSED(append);
-        std::istringstream iss(str);
-        iss >> this->value.x;
-        iss.ignore(std::numeric_limits<std::streamsize>::max(), ',');
-        iss.ignore(std::numeric_limits<std::streamsize>::max(), 'x');
-        iss >> this->value.y;
-        return true;
+        char dummy;
+        return sscanf(str.data(), " %lf , %lf %c", &this->value.x, &this->value.y, &dummy) == 2 ||
+               sscanf(str.data(), " %lf x %lf %c", &this->value.x, &this->value.y, &dummy) == 2;
     }
 };
 
@@ -659,6 +656,7 @@ public:
     ConfigOptionPoints() : ConfigOptionVector<Pointf>() {}
     explicit ConfigOptionPoints(size_t n, const Pointf &value) : ConfigOptionVector<Pointf>(n, value) {}
     explicit ConfigOptionPoints(std::initializer_list<Pointf> il) : ConfigOptionVector<Pointf>(std::move(il)) {}
+    explicit ConfigOptionPoints(const std::vector<Pointf> &values) : ConfigOptionVector<Pointf>(values) {}
 
     static ConfigOptionType static_type() { return coPoints; }
     ConfigOptionType        type()  const override { return static_type(); }
@@ -1046,6 +1044,10 @@ public:
     void apply_only(const ConfigBase &other, const t_config_option_keys &keys, bool ignore_nonexistent = false);
     bool equals(const ConfigBase &other) const { return this->diff(other).empty(); }
     t_config_option_keys diff(const ConfigBase &other) const;
+	// Use deep_diff to correct return of changed options,
+	// considering individual options for each extruder
+	t_config_option_keys deep_diff(const ConfigBase &other) const;
+    t_config_option_keys equal(const ConfigBase &other) const;
     std::string serialize(const t_config_option_key &opt_key) const;
     // Set a configuration value from a string, it will call an overridable handle_legacy() 
     // to resolve renamed and removed configuration keys.
@@ -1056,7 +1058,8 @@ public:
     void setenv_();
     void load(const std::string &file);
     void load_from_ini(const std::string &file);
-    void load_from_gcode(const std::string &file);
+    void load_from_gcode_file(const std::string &file);
+    void load_from_gcode_string(const char* str);
     void load(const boost::property_tree::ptree &tree);
     void save(const std::string &file) const;
 
@@ -1231,17 +1234,22 @@ protected:
 };
 
 /// Specialization of std::exception to indicate that an unknown config option has been encountered.
-class UnknownOptionException : public std::exception
-{
+class UnknownOptionException : public std::runtime_error {
 public:
-    const char* what() const noexcept override { return "Unknown config option"; }
+    UnknownOptionException() :
+        std::runtime_error("Unknown option exception") {}
+    UnknownOptionException(const std::string &opt_key) :
+        std::runtime_error(std::string("Unknown option exception: ") + opt_key) {}
 };
 
 /// Indicate that the ConfigBase derived class does not provide config definition (the method def() returns null).
-class NoDefinitionException : public std::exception
+class NoDefinitionException : public std::runtime_error
 {
 public:
-    const char* what() const noexcept override { return "No config definition"; }
+    NoDefinitionException() :
+        std::runtime_error("No definition exception") {}
+    NoDefinitionException(const std::string &opt_key) :
+        std::runtime_error(std::string("No definition exception: ") + opt_key) {}
 };
 
 }

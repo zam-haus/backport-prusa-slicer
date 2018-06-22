@@ -241,12 +241,12 @@ std::vector<PerExtruderAdjustments> CoolingBuffer::parse_layer_gcode(const std::
     std::vector<PerExtruderAdjustments> per_extruder_adjustments(extruders.size());
     std::vector<size_t>                 map_extruder_to_per_extruder_adjustment(num_extruders, 0);
     for (size_t i = 0; i < extruders.size(); ++ i) {
-        PerExtruderAdjustments &adj         = per_extruder_adjustments[i];
-        unsigned int            extruder_id = extruders[i].id();
-        adj.extruder_id               = extruder_id;
-        adj.cooling_slow_down_enabled = config.cooling.get_at(extruder_id);
-        adj.slowdown_below_layer_time = config.slowdown_below_layer_time.get_at(extruder_id);
-        adj.min_print_speed           = config.min_print_speed.get_at(extruder_id);
+		PerExtruderAdjustments &adj			= per_extruder_adjustments[i];
+		unsigned int			extruder_id = extruders[i].id();
+		adj.extruder_id				  = extruder_id;
+		adj.cooling_slow_down_enabled = config.cooling.get_at(extruder_id);
+		adj.slowdown_below_layer_time = config.slowdown_below_layer_time.get_at(extruder_id);
+		adj.min_print_speed			  = config.min_print_speed.get_at(extruder_id);
         map_extruder_to_per_extruder_adjustment[extruder_id] = i;
     }
 
@@ -452,14 +452,14 @@ static inline void extruder_range_slow_down_non_proportional(
     std::vector<PerExtruderAdjustments*> by_min_print_speed(it_begin, it_end);
     // Find the next highest adjustable feedrate among the extruders.
     float feedrate = 0;
-    for (PerExtruderAdjustments *adj : by_min_print_speed) {
-        adj->idx_line_begin = 0;
-        adj->idx_line_end   = 0;
-        assert(adj->idx_line_begin < adj->n_lines_adjustable);
-        if (adj->lines[adj->idx_line_begin].feedrate > feedrate)
-            feedrate = adj->lines[adj->idx_line_begin].feedrate;
-    }
-    assert(feedrate > 0.f);
+	for (PerExtruderAdjustments *adj : by_min_print_speed) {
+		adj->idx_line_begin = 0;
+		adj->idx_line_end   = 0;
+		assert(adj->idx_line_begin < adj->n_lines_adjustable);
+		if (adj->lines[adj->idx_line_begin].feedrate > feedrate)
+			feedrate = adj->lines[adj->idx_line_begin].feedrate;
+	}
+	assert(feedrate > 0.f);
     // Sort by min_print_speed, maximum speed first.
     std::sort(by_min_print_speed.begin(), by_min_print_speed.end(), 
         [](const PerExtruderAdjustments *p1, const PerExtruderAdjustments *p2){ return p1->min_print_speed > p2->min_print_speed; });

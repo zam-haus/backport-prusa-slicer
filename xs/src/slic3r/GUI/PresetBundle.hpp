@@ -4,7 +4,14 @@
 #include "AppConfig.hpp"
 #include "Preset.hpp"
 
+#include <set>
+#include <boost/filesystem/path.hpp>
+
 namespace Slic3r {
+
+namespace GUI {
+    class BitmapCache;
+};
 
 class PlaceholderParser;
 
@@ -22,11 +29,10 @@ public:
     void            setup_directories();
 
     // Load ini files of all types (print, filament, printer) from Slic3r::data_dir() / presets.
-    void            load_presets();
-
     // Load selections (current print, current filaments, current printer) from config.ini
     // This is done just once on application start up.
-    void            load_selections(const AppConfig &config);
+    void            load_presets(const AppConfig &config);
+
     // Export selections (current print, current filaments, current printer) into config.ini
     void            export_selections(AppConfig &config);
     // Export selections (current print, current filaments, current printer) into a placeholder parser.
@@ -38,6 +44,22 @@ public:
     // Filament preset names for a multi-extruder or multi-material print.
     // extruders.size() should be the same as printers.get_edited_preset().config.nozzle_diameter.size()
     std::vector<std::string>    filament_presets;
+
+    // The project configuration values are kept separated from the print/filament/printer preset,
+    // they are being serialized / deserialized from / to the .amf, .3mf, .config, .gcode, 
+    // and they are being used by slicing core.
+    DynamicPrintConfig          project_config;
+
+    // There will be an entry for each system profile loaded, 
+    // and the system profiles will point to the VendorProfile instances owned by PresetBundle::vendors.
+    std::set<VendorProfile>     vendors;
+
+    struct ObsoletePresets {
+        std::vector<std::string> prints;
+        std::vector<std::string> filaments;
+        std::vector<std::string> printers;
+    };
+    ObsoletePresets             obsolete_presets;
 
     bool                        has_defauls_only() const 
         { return prints.size() <= 1 && filaments.size() <= 1 && printers.size() <= 1; }
@@ -55,6 +77,11 @@ public:
     // If the file is loaded successfully, its print / filament / printer profiles will be activated.
     void                        load_config_file(const std::string &path);
 
+    // Load an external config source containing the print, filament and printer presets.
+    // The given string must contain the full set of parameters (same as those exported to gcode).
+    // If the string is parsed successfully, its print / filament / printer profiles will be activated.
+    void                        load_config_string(const char* str, const char* source_filename = nullptr);
+
     // Load a config bundle file, into presets and store the loaded presets into separate files
     // of the local configuration directory.
     // Load settings into the provided settings instance.
@@ -64,7 +91,10 @@ public:
         // Save the profiles, which have been loaded.
         LOAD_CFGBNDLE_SAVE = 1, 
         // Delete all old config profiles before loading.
-        LOAD_CFGBNDLE_RESET_USER_PROFILE = 2
+        LOAD_CFGBNDLE_RESET_USER_PROFILE = 2,
+        // Load a system config bundle.
+        LOAD_CFGBNDLE_SYSTEM = 4,
+        LOAD_CFGBUNDLE_VENDOR_ONLY = 8,
     };
     // Load the config bundle, store it to the user profile directory by default.
     size_t                      load_configbundle(const std::string &path, unsigned int flags = LOAD_CFGBNDLE_SAVE);
@@ -93,7 +123,22 @@ public:
     // preset if the current print or filament preset is not compatible.
     void                        update_compatible_with_printer(bool select_other_if_incompatible);
 
+    static bool                 parse_color(const std::string &scolor, unsigned char *rgb_out);
+
 private:
+    std::string                 load_system_presets();
+    // Merge one vendor's presets with the other vendor's presets, report duplicates.
+    std::vector<std::string>    merge_presets(PresetBundle &&other);
+
+    // Set the "enabled" flag for printer vendors, printer models and printer variants
+    // based on the user configuration.
+    // If the "vendor" section is missing, enable all models and variants of the particular vendor.
+    void                        load_installed_printers(const AppConfig &config);
+
+    // Load selections (current print, current filaments, current printer) from config.ini
+    // This is done just once on application start up.
+    void                        load_selections(const AppConfig &config);
+
     // Load print, filament & printer presets from a config. If it is an external config, then the name is extracted from the external path.
     // and the external config is just referenced, not stored into user profile directory.
     // If it is not an external config, then the config will be stored into the user profile directory.
@@ -105,8 +150,12 @@ private:
     wxBitmap                            *m_bitmapCompatible;
     // Indicator, that the preset is NOT compatible with the selected printer.
     wxBitmap                            *m_bitmapIncompatible;
-    // Caching color bitmaps for the 
-    std::map<std::string, wxBitmap*>     m_mapColorToBitmap;
+    // Indicator, that the preset is system and not modified.
+    wxBitmap                            *m_bitmapLock;
+    // Indicator, that the preset is system and user modified.
+    wxBitmap                            *m_bitmapLockOpen;
+    // Caching color bitmaps for the filament combo box.
+    GUI::BitmapCache                    *m_bitmapCache;
 };
 
 } // namespace Slic3r

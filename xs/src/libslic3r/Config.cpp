@@ -185,7 +185,7 @@ void ConfigBase::apply_only(const ConfigBase &other, const t_config_option_keys 
             // This is only possible if other is of DynamicConfig type.
             if (ignore_nonexistent)
                 continue;
-            throw UnknownOptionException();
+            throw UnknownOptionException(opt_key);
         }
 		const ConfigOption *other_opt = other.option(opt_key);
         if (other_opt != nullptr)
@@ -204,6 +204,56 @@ t_config_option_keys ConfigBase::diff(const ConfigBase &other) const
             diff.emplace_back(opt_key);
     }
     return diff;
+}
+
+template<class T>
+void add_correct_opts_to_diff(const std::string &opt_key, t_config_option_keys& vec, const ConfigBase &other, const ConfigBase *this_c)
+{
+	const T* opt_init = static_cast<const T*>(other.option(opt_key));
+	const T* opt_cur = static_cast<const T*>(this_c->option(opt_key));
+	int opt_init_max_id = opt_init->values.size() - 1;
+	for (int i = 0; i < opt_cur->values.size(); i++)
+	{
+		int init_id = i <= opt_init_max_id ? i : 0;
+		if (opt_cur->values[i] != opt_init->values[init_id])
+			vec.emplace_back(opt_key + "#" + std::to_string(i));
+	}
+}
+
+t_config_option_keys ConfigBase::deep_diff(const ConfigBase &other) const
+{
+    t_config_option_keys diff;
+    for (const t_config_option_key &opt_key : this->keys()) {
+        const ConfigOption *this_opt  = this->option(opt_key);
+        const ConfigOption *other_opt = other.option(opt_key);
+		if (this_opt != nullptr && other_opt != nullptr && *this_opt != *other_opt)
+		{
+			if (opt_key == "bed_shape"){ diff.emplace_back(opt_key);		continue; }
+			switch (other_opt->type())
+			{
+			case coInts:	add_correct_opts_to_diff<ConfigOptionInts		>(opt_key, diff, other, this);	break;
+			case coBools:	add_correct_opts_to_diff<ConfigOptionBools		>(opt_key, diff, other, this);	break;
+			case coFloats:	add_correct_opts_to_diff<ConfigOptionFloats		>(opt_key, diff, other, this);	break;
+			case coStrings:	add_correct_opts_to_diff<ConfigOptionStrings	>(opt_key, diff, other, this);	break;
+			case coPercents:add_correct_opts_to_diff<ConfigOptionPercents	>(opt_key, diff, other, this);	break;
+			case coPoints:	add_correct_opts_to_diff<ConfigOptionPoints		>(opt_key, diff, other, this);	break;
+			default:		diff.emplace_back(opt_key);		break;
+			}
+		}
+    }
+    return diff;
+}
+
+t_config_option_keys ConfigBase::equal(const ConfigBase &other) const
+{
+    t_config_option_keys equal;
+    for (const t_config_option_key &opt_key : this->keys()) {
+        const ConfigOption *this_opt  = this->option(opt_key);
+        const ConfigOption *other_opt = other.option(opt_key);
+        if (this_opt != nullptr && other_opt != nullptr && *this_opt == *other_opt)
+            equal.emplace_back(opt_key);
+    }
+    return equal;
 }
 
 std::string ConfigBase::serialize(const t_config_option_key &opt_key) const
@@ -232,7 +282,7 @@ bool ConfigBase::set_deserialize_raw(const t_config_option_key &opt_key_src, con
     // Try to deserialize the option by its name.
     const ConfigDef       *def    = this->def();
     if (def == nullptr)
-        throw NoDefinitionException();
+        throw NoDefinitionException(opt_key);
     const ConfigOptionDef *optdef = def->get(opt_key);
     if (optdef == nullptr) {
         // If we didn't find an option, look for any other option having this as an alias.
@@ -248,7 +298,7 @@ bool ConfigBase::set_deserialize_raw(const t_config_option_key &opt_key_src, con
                 break;
         }
         if (optdef == nullptr)
-            throw UnknownOptionException();
+            throw UnknownOptionException(opt_key);
     }
     
     if (! optdef->shortcut.empty()) {
@@ -278,7 +328,7 @@ double ConfigBase::get_abs_value(const t_config_option_key &opt_key) const
         // Get option definition.
         const ConfigDef *def = this->def();
         if (def == nullptr)
-            throw NoDefinitionException();
+            throw NoDefinitionException(opt_key);
         const ConfigOptionDef *opt_def = def->get(opt_key);
         assert(opt_def != nullptr);
         // Compute absolute value over the absolute value of the base option.
@@ -324,7 +374,7 @@ void ConfigBase::setenv_()
 void ConfigBase::load(const std::string &file)
 {
     if (boost::iends_with(file, ".gcode") || boost::iends_with(file, ".g"))
-        this->load_from_gcode(file);
+        this->load_from_gcode_file(file);
     else
         this->load_from_ini(file);
 }
@@ -349,10 +399,10 @@ void ConfigBase::load(const boost::property_tree::ptree &tree)
     }
 }
 
-// Load the config keys from the tail of a G-code.
-void ConfigBase::load_from_gcode(const std::string &file)
+// Load the config keys from the tail of a G-code file.
+void ConfigBase::load_from_gcode_file(const std::string &file)
 {
-    // 1) Read a 64k block from the end of the G-code.
+    // Read a 64k block from the end of the G-code.
 	boost::nowide::ifstream ifs(file);
 	{
 		const char slic3r_gcode_header[] = "; generated by Slic3r ";
@@ -365,30 +415,39 @@ void ConfigBase::load_from_gcode(const std::string &file)
 	auto file_length = ifs.tellg();
 	auto data_length = std::min<std::fstream::streampos>(65535, file_length);
 	ifs.seekg(file_length - data_length, ifs.beg);
-	std::vector<char> data(size_t(data_length) + 1, 0);
-	ifs.read(data.data(), data_length);
+    std::vector<char> data(size_t(data_length) + 1, 0);
+    ifs.read(data.data(), data_length);
     ifs.close();
 
-    // 2) Walk line by line in reverse until a non-configuration key appears.
-    char *data_start = data.data();
+    load_from_gcode_string(data.data());
+}
+
+// Load the config keys from the given string.
+void ConfigBase::load_from_gcode_string(const char* str)
+{
+    if (str == nullptr)
+        return;
+
+    // Walk line by line in reverse until a non-configuration key appears.
+    char *data_start = const_cast<char*>(str);
     // boost::nowide::ifstream seems to cook the text data somehow, so less then the 64k of characters may be retrieved.
-	char *end = data_start + strlen(data.data());
+    char *end = data_start + strlen(str);
     size_t num_key_value_pairs = 0;
     for (;;) {
         // Extract next line.
-        for (-- end; end > data_start && (*end == '\r' || *end == '\n'); -- end);
+        for (--end; end > data_start && (*end == '\r' || *end == '\n'); --end);
         if (end == data_start)
             break;
         char *start = end;
-        *(++ end) = 0;
-        for (; start > data_start && *start != '\r' && *start != '\n'; -- start);
+        *(++end) = 0;
+        for (; start > data_start && *start != '\r' && *start != '\n'; --start);
         if (start == data_start)
             break;
         // Extracted a line from start to end. Extract the key = value pair.
-        if (end - (++ start) < 10 || start[0] != ';' || start[1] != ' ')
+        if (end - (++start) < 10 || start[0] != ';' || start[1] != ' ')
             break;
         char *key = start + 2;
-        if (! (*key >= 'a' && *key <= 'z') || (*key >= 'A' && *key <= 'Z'))
+        if (!(*key >= 'a' && *key <= 'z') || (*key >= 'A' && *key <= 'Z'))
             // A key must start with a letter.
             break;
         char *sep = strchr(key, '=');
@@ -402,8 +461,8 @@ void ConfigBase::load_from_gcode(const std::string &file)
             break;
         *key_end = 0;
         // The key may contain letters, digits and underscores.
-        for (char *c = key; c != key_end; ++ c)
-            if (! ((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '_')) {
+        for (char *c = key; c != key_end; ++c)
+            if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '_')) {
                 key = nullptr;
                 break;
             }
@@ -411,8 +470,9 @@ void ConfigBase::load_from_gcode(const std::string &file)
             break;
         try {
             this->set_deserialize(key, value);
-            ++ num_key_value_pairs;
-        } catch (UnknownOptionException & /* e */) {
+            ++num_key_value_pairs;
+        }
+        catch (UnknownOptionException & /* e */) {
             // ignore
         }
         end = start;
@@ -458,7 +518,7 @@ ConfigOption* DynamicConfig::optptr(const t_config_option_key &opt_key, bool cre
     // Try to create a new ConfigOption.
     const ConfigDef       *def    = this->def();
     if (def == nullptr)
-        throw NoDefinitionException();
+        throw NoDefinitionException(opt_key);
     const ConfigOptionDef *optdef = def->get(opt_key);
     if (optdef == nullptr)
 //        throw std::runtime_error(std::string("Invalid option name: ") + opt_key);
