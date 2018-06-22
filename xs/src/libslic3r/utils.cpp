@@ -1,5 +1,13 @@
+#include "Utils.hpp"
+
 #include <locale>
 #include <ctime>
+
+#ifdef WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
@@ -87,7 +95,7 @@ const std::string& var_dir()
 
 std::string var(const std::string &file_name)
 {
-    auto file = boost::filesystem::canonical(boost::filesystem::path(g_var_dir) / file_name).make_preferred();
+    auto file = (boost::filesystem::path(g_var_dir) / file_name).make_preferred();
     return file.string();
 }
 
@@ -103,6 +111,18 @@ const std::string& resources_dir()
     return g_resources_dir;
 }
 
+static std::string g_local_dir;
+
+void set_local_dir(const std::string &dir)
+{
+    g_local_dir = dir;
+}
+
+const std::string& localization_dir()
+{
+	return g_local_dir;
+}
+
 static std::string g_data_dir;
 
 void set_data_dir(const std::string &dir)
@@ -116,44 +136,6 @@ const std::string& data_dir()
 }
 
 } // namespace Slic3r
-
-#ifdef SLIC3R_HAS_BROKEN_CROAK
-
-// Some Strawberry Perl builds (mainly the latest 64bit builds) have a broken mechanism
-// for emiting Perl exception after handling a C++ exception. Perl interpreter
-// simply hangs. Better to show a message box in that case and stop the application.
-
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#ifdef WIN32
-#include <Windows.h>
-#endif
-
-void confess_at(const char *file, int line, const char *func, const char *format, ...)
-{
-    char dest[1024*8];
-    va_list argptr;
-    va_start(argptr, format);
-    vsprintf(dest, format, argptr);
-    va_end(argptr);
-
-    char filelinefunc[1024*8];
-    sprintf(filelinefunc, "\r\nin function: %s\r\nfile: %s\r\nline: %d\r\n", func, file, line);
-    strcat(dest, filelinefunc);
-    strcat(dest, "\r\n Closing the application.\r\n");
-    #ifdef WIN32
-    ::MessageBoxA(NULL, dest, "Slic3r Prusa Edition", MB_OK | MB_ICONERROR);
-    #endif
-
-    // Give up.
-    printf(dest);
-    exit(-1);
-}
-
-#else
 
 #include <xsinit.h>
 
@@ -184,7 +166,88 @@ confess_at(const char *file, int line, const char *func,
     #endif
 }
 
-#endif
+void PerlCallback::register_callback(void *sv)
+{ 
+    if (! SvROK((SV*)sv) || SvTYPE(SvRV((SV*)sv)) != SVt_PVCV)
+        croak("Not a Callback %_ for PerlFunction", (SV*)sv);
+    if (m_callback)
+        SvSetSV((SV*)m_callback, (SV*)sv);
+    else
+        m_callback = newSVsv((SV*)sv);
+}
+
+void PerlCallback::deregister_callback()
+{
+	if (m_callback) {
+		sv_2mortal((SV*)m_callback);
+		m_callback = nullptr;
+	}
+}
+
+void PerlCallback::call()
+{
+    if (! m_callback)
+        return;
+    dSP;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    PUTBACK; 
+    perl_call_sv(SvRV((SV*)m_callback), G_DISCARD);
+    FREETMPS;
+    LEAVE;
+}
+
+void PerlCallback::call(int i)
+{
+    if (! m_callback)
+        return;
+    dSP;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    XPUSHs(sv_2mortal(newSViv(i)));
+    PUTBACK; 
+    perl_call_sv(SvRV((SV*)m_callback), G_DISCARD);
+    FREETMPS;
+    LEAVE;
+}
+
+void PerlCallback::call(int i, int j)
+{
+    if (! m_callback)
+        return;
+    dSP;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    XPUSHs(sv_2mortal(newSViv(i)));
+    XPUSHs(sv_2mortal(newSViv(j)));
+    PUTBACK; 
+    perl_call_sv(SvRV((SV*)m_callback), G_DISCARD);
+    FREETMPS;
+    LEAVE;
+}
+
+/*
+void PerlCallback::call(const std::vector<int> &ints)
+{
+    if (! m_callback)
+        return;
+    dSP;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    AV* av = newAV();
+    for (int i : ints)
+        av_push(av, newSViv(i));
+    XPUSHs(av);
+    PUTBACK;
+    perl_call_sv(SvRV((SV*)m_callback), G_DISCARD);
+    FREETMPS;
+    LEAVE;
+}
+*/
 
 #ifdef WIN32
     #ifndef NOMINMAX
@@ -251,7 +314,6 @@ namespace PerlUtils {
 std::string timestamp_str()
 {
     const auto now = boost::posix_time::second_clock::local_time();
-    const auto date = now.date();
     char buf[2048];
     sprintf(buf, "on %04d-%02d-%02d at %02d:%02d:%02d",
         // Local date in an ANSII format.
@@ -260,31 +322,13 @@ std::string timestamp_str()
     return buf;
 }
 
-std::string octoprint_encode_file_send_request_content(const char *cpath, bool select, bool print, const char *boundary)
+unsigned get_current_pid()
 {
-    // Read the complete G-code string into a string buffer.
-    // It will throw if the file cannot be open or read.
-    std::stringstream str_stream;
-    {
-        boost::nowide::ifstream ifs(cpath);
-        str_stream << ifs.rdbuf();
-    }
-
-    boost::filesystem::path path(cpath);
-    std::string request = boundary + '\n';
-    request += "Content-Disposition: form-data; name=\"";
-    request += path.stem().string() + "\"; filename=\"" + path.filename().string() + "\"\n";
-    request += "Content-Type: application/octet-stream\n\n";
-    request += str_stream.str();
-    request += boundary + '\n';
-    request += "Content-Disposition: form-data; name=\"select\"\n\n";
-    request += select ? "true\n" : "false\n";
-    request += boundary + '\n';
-    request += "Content-Disposition: form-data; name=\"print\"\n\n";
-    request += print ? "true\n" : "false\n";
-    request += boundary + '\n';
-
-    return request;
+#ifdef WIN32
+    return GetCurrentProcessId();
+#else
+    return ::getpid();
+#endif
 }
 
 }; // namespace Slic3r

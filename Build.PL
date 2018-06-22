@@ -12,6 +12,7 @@ my %prereqs = qw(
     ExtUtils::ParseXS               3.22
     ExtUtils::XSpp                  0
     ExtUtils::Typemaps              0
+    ExtUtils::Typemaps::Basic       0
     File::Basename                  0
     File::Spec                      0
     Getopt::Long                    0
@@ -40,10 +41,7 @@ if ($gui) {
     Socket                          2.016
     );
     %recommends = qw(
-    Growl::GNTP                     0.15
     Wx::GLCanvas                    0
-    LWP::UserAgent                  0
-    Net::Bonjour                    0
     );
     if ($^O eq 'MSWin32') {
         $recommends{"Win32::TieRegistry"} = 0;

@@ -26,10 +26,10 @@ public:
     void        reset();
     void        set_current_extruder(unsigned int extruder_id) { m_current_extruder = extruder_id; }
     std::string process_layer(const std::string &gcode, size_t layer_id);
-    GCode*      gcodegen() { return &m_gcodegen; }
+    GCode* 	    gcodegen() { return &m_gcodegen; }
 
 private:
-    CoolingBuffer& operator=(const CoolingBuffer&) = delete;
+	CoolingBuffer& operator=(const CoolingBuffer&) = delete;
     std::vector<PerExtruderAdjustments> parse_layer_gcode(const std::string &gcode, std::vector<float> &current_pos) const;
     float       calculate_layer_slowdown(std::vector<PerExtruderAdjustments> &per_extruder_adjustments);
     // Apply slow down over G-code lines stored in per_extruder_adjustments, enable fan if needed.

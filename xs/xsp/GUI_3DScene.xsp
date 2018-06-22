@@ -19,6 +19,9 @@
     void enable() const;
     void disable() const;
 
+    int shader_program_id() const
+        %code%{ RETVAL = THIS->shader_program_id; %};
+
     std::string last_error() const
         %code%{ RETVAL = THIS->last_error; %};
 };
@@ -42,6 +45,11 @@
         %code%{ RETVAL = THIS->hover; %};
     void                set_hover(int i)
         %code%{ THIS->hover = i; %};
+    int                 zoom_to_volumes()
+        %code%{ RETVAL = THIS->zoom_to_volumes; %};
+
+    void set_layer_height_texture_data(unsigned int texture_id, unsigned int shader_id, PrintObject* print_object, float z_cursor_relative, float edit_band_width);
+    void reset_layer_height_texture_data();
 
     int                 object_idx() const;
     int                 volume_idx() const;
@@ -76,13 +84,16 @@
 
     std::vector<int> load_object(ModelObject *object, int obj_idx, std::vector<int> instance_idxs, std::string color_by, std::string select_by, std::string drag_by, bool use_VBOs);
 
-    int load_wipe_tower_preview(int obj_idx, float pos_x, float pos_y, float width, float depth, float height, bool use_VBOs);
+    int load_wipe_tower_preview(int obj_idx, float pos_x, float pos_y, float width, float depth, float height, float rotation_angle, bool use_VBOs);
 
     void erase()
         %code{% THIS->clear(); %};
 
     int count()
         %code{% RETVAL = THIS->volumes.size(); %};
+        
+    std::vector<double> get_current_print_zs(bool active_only)
+        %code{% RETVAL = THIS->get_current_print_zs(active_only); %};
 
     void set_range(double low, double high);
 
@@ -90,6 +101,15 @@
     void render_legacy() const;
     void finalize_geometry(bool use_VBOs);
     void release_geometry();
+
+    void set_print_box(float min_x, float min_y, float min_z, float max_x, float max_y, float max_z);
+    bool check_outside_state(DynamicPrintConfig* config)
+        %code%{ 
+                RETVAL = THIS->check_outside_state(config);
+        %};
+    
+    void reset_outside_state();    
+    void update_colors_by_extruder(DynamicPrintConfig* config);
 
     bool move_volume_up(int idx)
         %code%{ 
@@ -141,6 +161,63 @@ _glew_init()
     CODE:
         _3DScene::_glew_init();
 
+unsigned int
+finalize_legend_texture()
+    CODE:
+        RETVAL = _3DScene::finalize_legend_texture();
+    OUTPUT:
+        RETVAL
+
+unsigned int
+get_legend_texture_width()
+    CODE:
+        RETVAL = _3DScene::get_legend_texture_width();
+    OUTPUT:
+        RETVAL
+
+unsigned int
+get_legend_texture_height()
+    CODE:
+        RETVAL = _3DScene::get_legend_texture_height();
+    OUTPUT:
+        RETVAL
+             
+void
+reset_legend_texture()
+    CODE:
+        _3DScene::reset_legend_texture();
+
+void
+generate_warning_texture(std::string msg)
+    CODE:
+        _3DScene::generate_warning_texture(msg);
+
+unsigned int
+finalize_warning_texture()
+    CODE:
+        RETVAL = _3DScene::finalize_warning_texture();
+    OUTPUT:
+        RETVAL
+
+unsigned int
+get_warning_texture_width()
+    CODE:
+        RETVAL = _3DScene::get_warning_texture_width();
+    OUTPUT:
+        RETVAL
+
+unsigned int
+get_warning_texture_height()
+    CODE:
+        RETVAL = _3DScene::get_warning_texture_height();
+    OUTPUT:
+        RETVAL
+
+void
+reset_warning_texture()
+    CODE:
+        _3DScene::reset_warning_texture();
+
 void
 _load_print_toolpaths(print, volumes, tool_colors, use_VBOs)
         Print               *print;
@@ -168,4 +245,14 @@ _load_wipe_tower_toolpaths(print, volumes, tool_colors, use_VBOs)
     CODE:
         _3DScene::_load_wipe_tower_toolpaths(print, volumes, tool_colors, use_VBOs != 0);
 
+void 
+load_gcode_preview(print, preview_data, volumes, str_tool_colors, use_VBOs)
+        Print                    *print;
+        GCodePreviewData         *preview_data;
+        GLVolumeCollection       *volumes;
+        std::vector<std::string> str_tool_colors;
+        int                      use_VBOs;
+    CODE:
+        _3DScene::load_gcode_preview(print, preview_data, volumes, str_tool_colors, use_VBOs != 0);
+        
 %}

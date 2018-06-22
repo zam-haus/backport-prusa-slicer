@@ -3,8 +3,12 @@
 
 #include <deque>
 
+#include <boost/filesystem/path.hpp>
+#include <boost/property_tree/ptree_fwd.hpp>
+
 #include "../../libslic3r/libslic3r.h"
 #include "../../libslic3r/PrintConfig.hpp"
+#include "slic3r/Utils/Semver.hpp"
 
 class wxBitmap;
 class wxChoice;
@@ -12,6 +16,13 @@ class wxBitmapComboBox;
 class wxItemContainer;
 
 namespace Slic3r {
+
+class AppConfig;
+class PresetBundle;
+
+namespace GUI {
+	class BitmapCache;
+}
 
 enum ConfigFileType
 {
@@ -22,6 +33,47 @@ enum ConfigFileType
 };
 
 extern ConfigFileType guess_config_file_type(const boost::property_tree::ptree &tree);
+
+class VendorProfile
+{
+public:
+    std::string                     name;
+    std::string                     id;
+    Semver                          config_version;
+    std::string                     config_update_url;
+
+    struct PrinterVariant {
+        PrinterVariant() {}
+        PrinterVariant(const std::string &name) : name(name) {}
+        std::string                 name;
+    };
+
+    struct PrinterModel {
+        PrinterModel() {}
+        std::string                 id;
+        std::string                 name;
+        std::vector<PrinterVariant> variants;
+        PrinterVariant*       variant(const std::string &name) {
+            for (auto &v : this->variants)
+                if (v.name == name)
+                    return &v;
+            return nullptr;
+        }
+        const PrinterVariant* variant(const std::string &name) const { return const_cast<PrinterModel*>(this)->variant(name); }
+    };
+    std::vector<PrinterModel>          models;
+
+    VendorProfile() {}
+    VendorProfile(std::string id) : id(std::move(id)) {}
+
+    static VendorProfile from_ini(const boost::filesystem::path &path, bool load_all=true);
+    static VendorProfile from_ini(const boost::property_tree::ptree &tree, const boost::filesystem::path &path, bool load_all=true);
+
+    size_t      num_variants() const { size_t n = 0; for (auto &model : models) n += model.variants.size(); return n; }
+
+    bool        operator< (const VendorProfile &rhs) const { return this->id <  rhs.id; }
+    bool        operator==(const VendorProfile &rhs) const { return this->id == rhs.id; }
+};
 
 class Preset
 {
@@ -44,7 +96,10 @@ public:
     // External preset points to a configuration, which has been loaded but not imported
     // into the Slic3r default configuration location.
     bool                is_external = false;
-    // Preset is visible, if it is compatible with the active Printer.
+    // System preset is read-only.
+    bool                is_system   = false;
+    // Preset is visible, if it is associated with a printer model / variant that is enabled in the AppConfig
+    // or if it has no printer model / variant association.
     // Also the "default" preset is only visible, if it is the only preset in the list.
     bool                is_visible  = true;
     // Has this preset been modified?
@@ -55,9 +110,14 @@ public:
     // Name of the preset, usually derived form the file name.
     std::string         name;
     // File name of the preset. This could be a Print / Filament / Printer preset, 
-    // or a Configuration file bundling the Print + Filament + Printer presets (in that case is_external will be true),
+    // or a Configuration file bundling the Print + Filament + Printer presets (in that case is_external and possibly is_system will be true),
     // or it could be a G-code (again, is_external will be true).
     std::string         file;
+    // A user profile may inherit its settings either from a system profile, or from a user profile.
+    // A system profile shall never derive from any other profile, as the system profile hierarchy is being flattened during loading.
+    std::string         inherits;
+    // If this is a system profile, then there should be a vendor data available to display at the UI.
+    const VendorProfile *vendor      = nullptr;
 
     // Has this profile been loaded?
     bool                loaded      = false;
@@ -84,6 +144,9 @@ public:
 
     // Mark this preset as compatible if it is compatible with active_printer.
     bool                update_compatible_with_printer(const Preset &active_printer, const DynamicPrintConfig *extra_config);
+
+    // Set is_visible according to application config
+    void                set_visible_from_appconfig(const AppConfig &app_config);
 
     // Resize the extruder specific fields, initialize them with the content of the 1st extruder.
     void                set_num_extruders(unsigned int n) { set_num_extruders(this->config, n); }
@@ -116,6 +179,13 @@ public:
     PresetCollection(Preset::Type type, const std::vector<std::string> &keys);
     ~PresetCollection();
 
+    typedef std::deque<Preset>::iterator Iterator;
+    typedef std::deque<Preset>::const_iterator ConstIterator;
+    Iterator begin() { return m_presets.begin() + 1; }
+    ConstIterator begin() const { return m_presets.begin() + 1; }
+    Iterator end() { return m_presets.end(); }
+    ConstIterator end() const { return m_presets.end(); }
+
     void            reset(bool delete_files);
 
     Preset::Type    type() const { return m_type; }
@@ -144,6 +214,8 @@ public:
     // Compatible & incompatible marks, to be placed at the wxBitmapComboBox items.
     void            set_bitmap_compatible  (const wxBitmap *bmp) { m_bitmap_compatible   = bmp; }
     void            set_bitmap_incompatible(const wxBitmap *bmp) { m_bitmap_incompatible = bmp; }
+    void            set_bitmap_lock        (const wxBitmap *bmp) { m_bitmap_lock         = bmp; }
+    void            set_bitmap_lock_open   (const wxBitmap *bmp) { m_bitmap_lock_open    = bmp; }
 
     // Enable / disable the "- default -" preset.
     void            set_default_suppressed(bool default_suppressed);
@@ -155,10 +227,24 @@ public:
     Preset&         get_selected_preset()       { return m_presets[m_idx_selected]; }
     const Preset&   get_selected_preset() const { return m_presets[m_idx_selected]; }
     int             get_selected_idx()    const { return m_idx_selected; }
-    // Return the selected preset including the user modifications.
+    // For the current edited preset, return the parent preset if there is one.
+    // If there is no parent preset, nullptr is returned.
+    // The parent preset may be a system preset or a user preset, which will be
+    // reflected by the UI.
+    const Preset*   get_selected_preset_parent() const;
+	// get parent preset for some child preset
+	const Preset*	get_preset_parent(const Preset& child) const;
+	// Return the selected preset including the user modifications.
     Preset&         get_edited_preset()         { return m_edited_preset; }
     const Preset&   get_edited_preset() const   { return m_edited_preset; }
+
+	// used to update preset_choice from Tab
+	const std::deque<Preset>&	get_presets()	{ return m_presets; }
+	int						get_idx_selected()	{ return m_idx_selected; }
+	const std::string&		get_suffix_modified();
+
     // Return a preset possibly with modifications.
+	Preset&			default_preset()			{ return m_presets.front(); }
     const Preset&   default_preset() const      { return m_presets.front(); }
     // Return a preset by an index. If the preset is active, a temporary copy is returned.
     Preset&         preset(size_t idx)          { return (int(idx) == m_idx_selected) ? m_edited_preset : m_presets[idx]; }
@@ -172,31 +258,67 @@ public:
         { return const_cast<PresetCollection*>(this)->find_preset(name, first_visible_if_not_found); }
 
     size_t          first_visible_idx() const;
-    size_t          first_compatible_idx() const;
+    // Return index of the first compatible preset. Certainly at least the '- default -' preset shall be compatible.
+    // If one of the prefered_alternates is compatible, select it.
+    template<typename PreferedCondition>
+    size_t          first_compatible_idx(PreferedCondition prefered_condition) const
+    {
+        size_t i = m_default_suppressed ? 1 : 0;
+        size_t n = this->m_presets.size();
+        size_t i_compatible = n;
+        for (; i < n; ++ i)
+            if (m_presets[i].is_compatible) {
+                if (prefered_condition(m_presets[i].name))
+                    return i;
+                if (i_compatible == n)
+                    // Store the first compatible profile into i_compatible.
+                    i_compatible = i;
+            }
+        return (i_compatible == n) ? 0 : i_compatible;
+    }
+    // Return index of the first compatible preset. Certainly at least the '- default -' preset shall be compatible.
+    size_t          first_compatible_idx() const { return this->first_compatible_idx([](const std::string&){return true;}); }
+
     // Return index of the first visible preset. Certainly at least the '- default -' preset shall be visible.
     // Return the first visible preset. Certainly at least the '- default -' preset shall be visible.
     Preset&         first_visible()             { return this->preset(this->first_visible_idx()); }
     const Preset&   first_visible() const       { return this->preset(this->first_visible_idx()); }
     Preset&         first_compatible()          { return this->preset(this->first_compatible_idx()); }
+    template<typename PreferedCondition>
+    Preset&         first_compatible(PreferedCondition prefered_condition) { return this->preset(this->first_compatible_idx(prefered_condition)); }
     const Preset&   first_compatible() const    { return this->preset(this->first_compatible_idx()); }
 
     // Return number of presets including the "- default -" preset.
     size_t          size() const                { return this->m_presets.size(); }
 
     // For Print / Filament presets, disable those, which are not compatible with the printer.
-    void            update_compatible_with_printer(const Preset &active_printer, bool select_other_if_incompatible);
+    template<typename PreferedCondition>
+    void            update_compatible_with_printer(const Preset &active_printer, bool select_other_if_incompatible, PreferedCondition prefered_condition)
+    {
+        if (this->update_compatible_with_printer_internal(active_printer, select_other_if_incompatible) == (size_t)-1)
+            // Find some other compatible preset, or the "-- default --" preset.
+            this->select_preset(this->first_compatible_idx(prefered_condition));        
+    }
+    void            update_compatible_with_printer(const Preset &active_printer, bool select_other_if_incompatible)
+        { this->update_compatible_with_printer(active_printer, select_other_if_incompatible, [](const std::string&){return true;}); }
 
     size_t          num_visible() const { return std::count_if(m_presets.begin(), m_presets.end(), [](const Preset &preset){return preset.is_visible;}); }
 
     // Compare the content of get_selected_preset() with get_edited_preset() configs, return true if they differ.
     bool                        current_is_dirty() const { return ! this->current_dirty_options().empty(); }
     // Compare the content of get_selected_preset() with get_edited_preset() configs, return the list of keys where they differ.
-    std::vector<std::string>    current_dirty_options() const;
+    std::vector<std::string>    current_dirty_options(const bool is_printer_type = false) const
+        { return dirty_options(&this->get_edited_preset(), &this->get_selected_preset(), is_printer_type); }
+    // Compare the content of get_selected_preset() with get_edited_preset() configs, return the list of keys where they differ.
+    std::vector<std::string>    current_different_from_parent_options(const bool is_printer_type = false) const
+        { return dirty_options(&this->get_edited_preset(), this->get_selected_preset_parent(), is_printer_type); }
+    // Compare the content of get_selected_preset() with get_selected_preset_parent() configs, return the list of keys where they equal.
+	std::vector<std::string>    system_equal_options() const;
 
     // Update the choice UI from the list of presets.
     // If show_incompatible, all presets are shown, otherwise only the compatible presets are shown.
     // If an incompatible preset is selected, it is shown as well.
-    void            update_tab_ui(wxBitmapComboBox *ui, bool show_incompatible);
+    size_t          update_tab_ui(wxBitmapComboBox *ui, bool show_incompatible);
     // Update the choice UI from the list of presets.
     // Only the compatible presets are shown.
     // If an incompatible preset is selected, it is shown as well.
@@ -213,6 +335,14 @@ public:
 
     // Generate a file path from a profile name. Add the ".ini" suffix if it is missing.
     std::string     path_from_name(const std::string &new_name) const;
+
+protected:
+    // Select a preset, if it exists. If it does not exist, select an invalid (-1) index.
+    // This is a temporary state, which shall be fixed immediately by the following step.
+    bool            select_preset_by_name_strict(const std::string &name);
+
+    // Merge one vendor's presets with the other vendor's presets, report duplicates.
+    std::vector<std::string> merge_presets(PresetCollection &&other, const std::set<VendorProfile> &new_vendors);
 
 private:
     PresetCollection();
@@ -231,6 +361,10 @@ private:
     std::deque<Preset>::const_iterator find_preset_internal(const std::string &name) const
         { return const_cast<PresetCollection*>(this)->find_preset_internal(name); }
 
+    size_t update_compatible_with_printer_internal(const Preset &active_printer, bool unselect_if_incompatible);
+
+    static std::vector<std::string> dirty_options(const Preset *edited, const Preset *reference, const bool is_printer_type = false);
+
     // Type of this PresetCollection: TYPE_PRINT, TYPE_FILAMENT or TYPE_PRINTER.
     Preset::Type            m_type;
     // List of presets, starting with the "- default -" preset.
@@ -245,13 +379,21 @@ private:
     bool                    m_default_suppressed = true;
     // Compatible & incompatible marks, to be placed at the wxBitmapComboBox items of a Platter.
     // These bitmaps are not owned by PresetCollection, but by a PresetBundle.
-    const wxBitmap         *m_bitmap_compatible = nullptr;
+    const wxBitmap         *m_bitmap_compatible   = nullptr;
     const wxBitmap         *m_bitmap_incompatible = nullptr;
+    const wxBitmap         *m_bitmap_lock         = nullptr;
+    const wxBitmap         *m_bitmap_lock_open    = nullptr;
     // Marks placed at the wxBitmapComboBox of a MainFrame.
     // These bitmaps are owned by PresetCollection.
     wxBitmap               *m_bitmap_main_frame;
     // Path to the directory to store the config files into.
     std::string             m_dir_path;
+
+	// Caching color bitmaps for the filament combo box.
+	GUI::BitmapCache       *m_bitmap_cache = nullptr;
+
+    // to access select_preset_by_name_strict()
+    friend class PresetBundle;
 };
 
 } // namespace Slic3r

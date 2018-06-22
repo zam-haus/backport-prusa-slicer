@@ -19,6 +19,7 @@ class ModelInstance;
 class ModelMaterial;
 class ModelObject;
 class ModelVolume;
+class PresetBundle;
 
 typedef std::string t_model_material_id;
 typedef std::string t_model_material_attribute;
@@ -101,8 +102,12 @@ public:
 
     // Returns the bounding box of the transformed instances.
     // This bounding box is approximate and not snug.
-    BoundingBoxf3 bounding_box();
+    // This bounding box is being cached.
+    const BoundingBoxf3& bounding_box();
     void invalidate_bounding_box() { m_bounding_box_valid = false; }
+    // Returns a snug bounding box of the transformed instances.
+    // This bounding box is not being cached.
+    BoundingBoxf3 tight_bounding_box(bool include_modifiers) const;
 
     // A mesh containing all transformed instances of this object.
     TriangleMesh mesh() const;
@@ -119,6 +124,7 @@ public:
     void translate(coordf_t x, coordf_t y, coordf_t z);
     void scale(const Pointf3 &versor);
     void rotate(float angle, const Axis &axis);
+    void transform(const float* matrix3x4);
     void mirror(const Axis &axis);
     size_t materials_count() const;
     size_t facets_count() const;
@@ -167,8 +173,8 @@ public:
     // Split this volume, append the result to the object owning this volume.
     // Return the number of volumes created from this one.
     // This is useful to assign different materials to different volumes of an object.
-    size_t split();
-    
+    size_t split(unsigned int max_extruders);
+
     ModelMaterial* assign_unique_material();
     
 private:
@@ -224,6 +230,8 @@ private:
 // all objects may share mutliple materials.
 class Model
 {
+    static unsigned int s_auto_extruder_id;
+
 public:
     // Materials are owned by a model and referenced by objects through t_model_material_id.
     // Single material may be shared by multiple models.
@@ -238,12 +246,14 @@ public:
     ~Model() { this->clear_objects(); this->clear_materials(); }
 
     static Model read_from_file(const std::string &input_file, bool add_default_instances = true);
+    static Model read_from_archive(const std::string &input_file, PresetBundle* bundle, bool add_default_instances = true);
 
     ModelObject* add_object();
     ModelObject* add_object(const char *name, const char *path, const TriangleMesh &mesh);
     ModelObject* add_object(const char *name, const char *path, TriangleMesh &&mesh);
     ModelObject* add_object(const ModelObject &other, bool copy_volumes = true);
     void delete_object(size_t idx);
+    void delete_object(ModelObject* object);
     void clear_objects();
     
     ModelMaterial* add_material(t_model_material_id material_id);
@@ -256,7 +266,10 @@ public:
     void delete_material(t_model_material_id material_id);
     void clear_materials();
     bool add_default_instances();
-    BoundingBoxf3 bounding_box();
+    // Returns approximate axis aligned bounding box of this model
+    BoundingBoxf3 bounding_box() const;
+    // Returns tight axis aligned bounding box of this model
+    BoundingBoxf3 transformed_bounding_box() const;
     void center_instances_around_point(const Pointf &point);
     void translate(coordf_t x, coordf_t y, coordf_t z) { for (ModelObject *o : this->objects) o->translate(x, y, z); }
     TriangleMesh mesh() const;
@@ -267,9 +280,16 @@ public:
     void duplicate_objects_grid(size_t x, size_t y, coordf_t dist);
 
     bool looks_like_multipart_object() const;
-    void convert_multipart_object();
+    void convert_multipart_object(unsigned int max_extruders);
+
+    // Ensures that the min z of the model is not negative
+    void adjust_min_z();
 
     void print_info() const { for (const ModelObject *o : this->objects) o->print_info(); }
+
+    static unsigned int get_auto_extruder_id(unsigned int max_extruders);
+    static std::string get_auto_extruder_id_as_string(unsigned int max_extruders);
+    static void reset_auto_extruder_id();
 };
 
 }
