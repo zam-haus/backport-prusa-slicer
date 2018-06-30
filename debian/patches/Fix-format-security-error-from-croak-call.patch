@@ -2,60 +2,23 @@ From: Chow Loong Jin <hyperair@debian.org>
 Date: Mon, 19 Mar 2018 02:36:57 +0800
 Subject: Fix format-security error from croak call
 
-Bug: https://github.com/prusa3d/Slic3r/pull/802
+Bug: https://github.com/prusa3d/Slic3r/pull/997
 Bug-Debian: https://bugs.debian.org/892959
 Forwarded: yes
 ---
- xs/xsp/GCode.xsp             | 2 +-
- xs/xsp/PlaceholderParser.xsp | 4 ++--
- xs/xsp/Print.xsp             | 2 +-
- 3 files changed, 4 insertions(+), 4 deletions(-)
+ xs/xsp/GCode.xsp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/xs/xsp/GCode.xsp b/xs/xsp/GCode.xsp
-index 9e6df85..3438e0a 100644
+index 36b4327..c1856cc 100644
 --- a/xs/xsp/GCode.xsp
 +++ b/xs/xsp/GCode.xsp
-@@ -22,7 +22,7 @@
+@@ -31,7 +31,7 @@
              try {
-                 THIS->do_export(print, path);
+                 THIS->do_export(print, path, preview_data);
              } catch (std::exception& e) {
 -                croak(e.what());
 +                croak("%s\n", e.what());
              }
          %};
  
-diff --git a/xs/xsp/PlaceholderParser.xsp b/xs/xsp/PlaceholderParser.xsp
-index 244f89c..5fa4e33 100644
---- a/xs/xsp/PlaceholderParser.xsp
-+++ b/xs/xsp/PlaceholderParser.xsp
-@@ -18,7 +18,7 @@
-             try {
-                 RETVAL = THIS->process(str, 0);
-             } catch (std::exception& e) {
--                croak(e.what());
-+                croak("%s\n", e.what());
-             }
-         %};
- 
-@@ -27,7 +27,7 @@
-             try {
-                 RETVAL = THIS->evaluate_boolean_expression(str, THIS->config());
-             } catch (std::exception& e) {
--                croak(e.what());
-+                croak("%s\n", e.what());
-             }
-         %};        
- };
-diff --git a/xs/xsp/Print.xsp b/xs/xsp/Print.xsp
-index cbc04a8..ef9c534 100644
---- a/xs/xsp/Print.xsp
-+++ b/xs/xsp/Print.xsp
-@@ -212,7 +212,7 @@ _constant()
-             try {
-                 RETVAL = THIS->output_filepath(path);
-             } catch (std::exception& e) {
--                croak(e.what());
-+                croak("%s\n", e.what());
-             }
-         %};
-     

@@ -7,7 +7,7 @@ Subject: Use system libs
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/xs/src/libslic3r/Format/AMF.cpp b/xs/src/libslic3r/Format/AMF.cpp
-index b8abf03..88e996c 100644
+index 83b50ec..470ce26 100644
 --- a/xs/src/libslic3r/Format/AMF.cpp
 +++ b/xs/src/libslic3r/Format/AMF.cpp
 @@ -1,7 +1,7 @@

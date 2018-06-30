@@ -7,7 +7,7 @@ Subject: Move Slic3r data to /usr/share/slic3r-prusa
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/lib/Slic3r.pm b/lib/Slic3r.pm
-index 66039dd..a37c716 100644
+index 0c6c81b..f2a292e 100644
 --- a/lib/Slic3r.pm
 +++ b/lib/Slic3r.pm
 @@ -41,7 +41,7 @@ warn "Running Slic3r under Perl 5.16 is neither supported nor recommended\n"
@@ -17,5 +17,5 @@ index 66039dd..a37c716 100644
 -set_resources_dir(decode_path($FindBin::Bin) . (($^O eq 'darwin') ? '/../Resources' : '/resources'));
 +set_resources_dir("/usr/share/slic3r-prusa3d");
  set_var_dir(resources_dir() . "/icons");
+ set_local_dir(resources_dir() . "/localization/");
  
- use Moo 1.003001;
