@@ -12,6 +12,185 @@ Files: var/*.png
 Copyright: Mark James
 License: CC-BY-3.0
 
+Files: xs/src/avrdude/*
+Copyright: 1990-2008 Brian S. Dean  <bsd@bdmicro.com>
+           2005-2016, Jorerg Wunsdch <j@uriah.heep.sax.de>
+           2012, Kirill Levchenko
+License: GPL-2+
+
+Files: xs/src/avrdude/wiring.c
+       xs/src/avrdude/wiring.h
+Copyright: 2011, Brett Hagman
+License: GPL-2+
+
+Files: xs/src/avrdude/bitbang.c
+       xs/src/avrdude/bitbang.h
+Copyright: 2000-2003, Brian S. Dean <bsd@bsdhome.com>
+           2005, Michael Holzt <kju-avr@fqdn.org>
+           2011, Darell Tan <darell.tan@gmail.com>
+License: GPL-2+
+
+Files: xs/src/avrdude/pickit2.c
+       xs/src/avrdude/stk500v2.c
+Copyright: 2002-2004, Brian S. Dean <bsd@bsdhome.com>
+           2005, Erik Walthinsen
+           2006, David Moore
+           2006-2007, 2010, Joerg Wunsch <j@uriah.heep.sax.de>
+           2006-2007, Joerg Wunsch <j@uriah.heep.sax.de>
+License: GPL-2+
+
+Files: xs/src/avrdude/stk500.c
+       xs/src/avrdude/update.c
+Copyright: 2000-2005, Brian S. Dean <bsd@bsdhome.com>
+           2002-2004, Brian S. Dean <bsd@bsdhome.com>
+           2007, Joerg Wunsch
+           2008, 2014, Joerg Wunsch
+License: GPL-2+
+
+Files: xs/src/avrdude/avrftdi.c
+       xs/src/avrdude/avrftdi.h
+Copyright: 2011, Hannes Weisbach, Doug Springer
+License: GPL-2+
+
+Files: xs/src/avrdude/butterfly.c
+       xs/src/avrdude/ser_posix.c
+Copyright: 2003-2004, Theodore A. Roth <troth@openavr.org>
+           2005, 2007, Joerg Wunsch <j@uriah.heep.sax.de>
+           2006, Joerg Wunsch <j@uriah.heep.sax.de>
+License: GPL-2+
+
+Files: xs/src/avrdude/arduino.c
+       xs/src/avrdude/arduino.h
+Copyright: 2009, Lars Immisch
+License: GPL-2+
+
+Files: xs/src/avrdude/buspirate.c
+       xs/src/avrdude/buspirate.h
+Copyright: 2009, Michal Ludvig <mludvig@logix.net.nz>
+License: GPL-2+
+
+Files: xs/src/avrdude/avr910.h
+       xs/src/avrdude/butterfly.h
+Copyright: 2003-2004, Theodore A. Roth <troth@openavr.org>
+License: GPL-2+
+
+Files: xs/src/avrdude/pickit2.h
+       xs/src/avrdude/usbasp.h
+Copyright: 2006, Thomas Fischl
+License: GPL-2+
+
+Files: xs/src/avrdude/linuxgpio.c
+       xs/src/avrdude/linuxgpio.h
+Copyright: 2013, Radoslav Kolev <radoslav@kolev.info>
+License: GPL-2+ (with incorrect FSF address)
+
+Files: xs/src/avrdude/config_gram.c
+       xs/src/avrdude/config_gram.h
+Copyright: 1984, 1989-1990, 2000-2015, Free Software Foundation, Inc.
+License: GPL-3+
+
+Files: xs/src/avrdude/jtag3_private.h
+Copyright: 2012, Joerg Wunsch <j@uriah.heep.sax.de>
+License: CC0 GPL-2+
+
+Files: xs/src/avrdude/safemode.c
+Copyright: 2000-2004, Brian S. Dean <bsd@bsdhome.com>
+           2005-2007, Colin O'Flynn <coflynn@newae.com>
+License: GPL-2+
+
+Files: xs/src/avrdude/avr.c
+Copyright: 2000-2004, Brian S. Dean <bsd@bsdhome.com>
+           2011, Darell Tan <darell.tan@gmail.com>
+License: GPL-2+
+
+Files: xs/src/avrdude/jtagmkII.c
+Copyright: 2002-2004, Brian S. Dean <bsd@bsdhome.com>
+           2005, Erik Walthinsen
+           2005-2007, Joerg Wunsch <j@uriah.heep.sax.de>
+License: GPL-2+
+
+Files: xs/src/avrdude/serbb_posix.c
+Copyright: 2000-2003, Brian S. Dean <bsd@bsdhome.com>
+           2005, Michael Holzt <kju-avr@fqdn.org>
+           2006, Joerg Wunsch <j@uriah.heep.sax.de>
+License: GPL-2+
+
+Files: xs/src/avrdude/serbb.h
+Copyright: 2000-2003, Brian S. Dean <bsd@bsdhome.com>
+           2005, Michael Holzt <kju-avr@fqdn.org>
+License: GPL-2+
+
+Files: xs/src/avrdude/my_ddk_hidsdi.h
+Copyright: 2006, Christian Starkjohann
+License: GPL-2+
+
+Files: xs/src/avrdude/ser_avrdoper.c
+Copyright: 2003-2004, Theodore A. Roth <troth@openavr.org>
+           2006, Christian Starkjohann
+           2006, Joerg Wunsch <j@uriah.heep.sax.de>
+License: GPL-2+
+
+Files: tpi.h
+Copyright: 2011, Darell Tan <darell.tan@gmail.com>
+License: GPL-2+
+
+Files: xs/src/avrdude/usb_libusb.c
+Copyright: 2005-2006, Joerg Wunsch
+           2006, David Moore
+License: GPL-2+
+
+Files: xs/src/avrdude/usbtiny.c
+Copyright: 2007, Dick Streefland, adapted for 5.4 by Limor Fried
+License: GPL-2+
+
+Files: xs/src/avrdude/confwin.c
+Copyright: 2003-2004, Eric B. Weddington <eric@ecentral.com>
+License: GPL-2+
+
+Files: xs/src/avrdude/ppiwin.c
+Copyright: 2003-2004, 2006, Eric B. Weddington <eweddington@cso.atmel.com>
+           2008, Joerg Wunsch
+License: GPL-2+
+
+Files: xs/src/avrdude/avr910.c
+Copyright: 2003-2004, Theodore A. Roth <troth@openavr.org>
+           2007, Joerg Wunsch <j@uriah.heep.sax.de>
+           2008, Klaus Leidinger <klaus@mikrocontroller-projekte.de>
+License: GPL-2+
+
+Files: xs/src/avrdude/ser_win32.c
+Copyright: 2003-2004, Martin J. Thomas <mthomas@rhrk.uni-kl.de>
+           2006, Joerg Wunsch <j@uriah.heep.sax.de>
+License: GPL-2+
+
+Files: xs/src/avrdude/serbb_win32.c
+Copyright: 2003-2004, Martin J. Thomas <mthomas@rhrk.uni-kl.de>
+           2005, Michael Holzt <kju-avr@fqdn.org>
+           2005-2006, Joerg Wunsch <j@uriah.heep.sax.de>
+License: GPL-2+
+
+Files: xs/src/avrdude/usbasp.c
+Copyright: 2006, Thomas Fischl
+           2007, Joerg Wunsch <j@uriah.heep.sax.de>
+License: GPL-2+
+
+Files: xs/src/avrdude/usbtiny.h
+Copyright: 2007, Limor Fried
+License: GPL-2+
+
+Files: xs/src/avrdude/ft245r.c
+Copyright: 2003-2004, Theodore A. Roth <troth@openavr.org>
+           2011-2012, Roger E. Wolff <R.E.Wolff@BitWizard.nl>
+License: GPL-2+
+
+Files: xs/src/avrdude/linux_ppdev.h
+Copyright: 2003, 2005, Theodore A. Roth
+License: GPL-2+
+
+Files: xs/src/avrdude/libavrdude.h
+Copyright: Joerg Wunsch
+License: GPL-2+
+
 Files: xs/src/Shiny/*
 Copyright: 2007-2010 Albin Abedi
 License: Expat
