@@ -81,6 +81,17 @@ inline Point operator*(double scalar, const Point& point2) { return Point(scalar
 inline int64_t cross(const Point &v1, const Point &v2) { return int64_t(v1.x) * int64_t(v2.y) - int64_t(v1.y) * int64_t(v2.x); }
 inline int64_t dot(const Point &v1, const Point &v2) { return int64_t(v1.x) * int64_t(v2.x) + int64_t(v1.y) * int64_t(v2.y); }
 
+namespace int128 {
+
+// Exact orientation predicate,
+// returns +1: CCW, 0: collinear, -1: CW.
+int orient(const Point &p1, const Point &p2, const Point &p3);
+
+// Exact orientation predicate,
+// returns +1: CCW, 0: collinear, -1: CW.
+int cross(const Point &v1, const Slic3r::Point &v2);
+}
+
 // To be used by std::unordered_map, std::unordered_multimap and friends.
 struct PointHash {
     size_t operator()(const Point &pt) const {
@@ -210,6 +221,7 @@ public:
     static Pointf new_unscale(const Point &p) {
         return Pointf(unscale(p.x), unscale(p.y));
     };
+    double ccw(const Pointf &p1, const Pointf &p2) const;
     std::string wkt() const;
     std::string dump_perl() const;
     void scale(double factor);
@@ -238,6 +250,11 @@ inline coordf_t dot(const Pointf &v1, const Pointf &v2) { return v1.x * v2.x + v
 inline coordf_t dot(const Pointf &v) { return v.x * v.x + v.y * v.y; }
 inline double length(const Vectorf &v) { return sqrt(dot(v)); }
 inline double l2(const Vectorf &v) { return dot(v); }
+inline Vectorf normalize(const Vectorf& v)
+{
+    coordf_t len = ::sqrt(sqr(v.x) + sqr(v.y));
+    return (len != 0.0) ? 1.0 / len * v : Vectorf(0.0, 0.0);
+}
 
 class Pointf3 : public Pointf
 {

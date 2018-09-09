@@ -8,6 +8,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # Workaround for an old CMake, which does not understand CMAKE_CXX_STANDARD.
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall" )
+    find_package(PkgConfig REQUIRED)
 endif()
 
 if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUXX)
@@ -25,8 +26,15 @@ include_directories(${LIBDIR}/libslic3r)
 
 if(WIN32)
     # BOOST_ALL_NO_LIB: Avoid the automatic linking of Boost libraries on Windows. Rather rely on explicit linking.
-    add_definitions(-D_USE_MATH_DEFINES -D_WIN32 -DBOOST_ALL_NO_LIB)
+    add_definitions(-D_USE_MATH_DEFINES -D_WIN32 -DBOOST_ALL_NO_LIB -DBOOST_USE_WINAPI_VERSION=0x601)
     # -D_ITERATOR_DEBUG_LEVEL)
+    if(WIN10SDK_PATH)
+        message("Building with Win10 Netfabb STL fixing service support")
+        add_definitions(-DHAS_WIN10SDK)
+        include_directories("${WIN10SDK_PATH}/Include")
+    else()
+        message("Building without Win10 Netfabb STL fixing service support")
+    endif()
 endif()
 
 add_definitions(-DwxUSE_UNICODE -D_UNICODE -DUNICODE -DWXINTL_NO_GETTEXT_MACRO)
@@ -128,6 +136,7 @@ add_library(libslic3r STATIC
     ${LIBDIR}/libslic3r/Line.hpp
     ${LIBDIR}/libslic3r/Model.cpp
     ${LIBDIR}/libslic3r/Model.hpp
+    ${LIBDIR}/libslic3r/ModelArrange.hpp
     ${LIBDIR}/libslic3r/MotionPlanner.cpp
     ${LIBDIR}/libslic3r/MotionPlanner.hpp
     ${LIBDIR}/libslic3r/MultiPoint.cpp
@@ -181,7 +190,15 @@ add_library(libslic3r_gui STATIC
     ${LIBDIR}/slic3r/GUI/3DScene.cpp
     ${LIBDIR}/slic3r/GUI/3DScene.hpp
     ${LIBDIR}/slic3r/GUI/GLShader.cpp
-    ${LIBDIR}/slic3r/GUI/GLShader.hpp
+    ${LIBDIR}/slic3r/GUI/GLShader.hpp    
+    ${LIBDIR}/slic3r/GUI/GLCanvas3D.hpp
+    ${LIBDIR}/slic3r/GUI/GLCanvas3D.cpp
+    ${LIBDIR}/slic3r/GUI/GLCanvas3DManager.hpp
+    ${LIBDIR}/slic3r/GUI/GLCanvas3DManager.cpp
+    ${LIBDIR}/slic3r/GUI/GLGizmo.hpp
+    ${LIBDIR}/slic3r/GUI/GLGizmo.cpp    
+    ${LIBDIR}/slic3r/GUI/GLTexture.hpp
+    ${LIBDIR}/slic3r/GUI/GLTexture.cpp    
     ${LIBDIR}/slic3r/GUI/Preferences.cpp
     ${LIBDIR}/slic3r/GUI/Preferences.hpp
     ${LIBDIR}/slic3r/GUI/Preset.cpp
@@ -232,14 +249,29 @@ add_library(libslic3r_gui STATIC
     ${LIBDIR}/slic3r/GUI/FirmwareDialog.hpp
     ${LIBDIR}/slic3r/Utils/Http.cpp
     ${LIBDIR}/slic3r/Utils/Http.hpp
+    ${LIBDIR}/slic3r/Utils/FixModelByWin10.cpp
+    ${LIBDIR}/slic3r/Utils/FixModelByWin10.hpp
+    ${LIBDIR}/slic3r/Utils/PrintHostSendDialog.cpp
+    ${LIBDIR}/slic3r/Utils/PrintHostSendDialog.hpp
     ${LIBDIR}/slic3r/Utils/OctoPrint.cpp
     ${LIBDIR}/slic3r/Utils/OctoPrint.hpp
+    ${LIBDIR}/slic3r/Utils/Duet.cpp
+    ${LIBDIR}/slic3r/Utils/Duet.hpp
+    ${LIBDIR}/slic3r/Utils/PrintHost.cpp
+    ${LIBDIR}/slic3r/Utils/PrintHost.hpp
     ${LIBDIR}/slic3r/Utils/Bonjour.cpp
     ${LIBDIR}/slic3r/Utils/Bonjour.hpp
     ${LIBDIR}/slic3r/Utils/PresetUpdater.cpp
     ${LIBDIR}/slic3r/Utils/PresetUpdater.hpp
     ${LIBDIR}/slic3r/Utils/Time.cpp
     ${LIBDIR}/slic3r/Utils/Time.hpp
+    ${LIBDIR}/slic3r/Utils/HexFile.cpp
+    ${LIBDIR}/slic3r/Utils/HexFile.hpp
+    ${LIBDIR}/slic3r/IProgressIndicator.hpp
+    ${LIBDIR}/slic3r/AppController.hpp
+    ${LIBDIR}/slic3r/AppController.cpp
+    ${LIBDIR}/slic3r/AppControllerWx.cpp
+    ${LIBDIR}/slic3r/Strings.hpp
 )
 
 add_library(admesh STATIC
@@ -336,14 +368,12 @@ add_library(semver STATIC
 )
 
 
-add_subdirectory(src/avrdude)
-
 # Generate the Slic3r Perl module (XS) typemap file.
 set(MyTypemap ${CMAKE_CURRENT_BINARY_DIR}/typemap)
 add_custom_command(
         OUTPUT ${MyTypemap}
         DEPENDS ${CMAKE_CURRENT_LIST_DIR}/xsp/my.map
-        COMMAND ${PERL_EXECUTABLE} -MExtUtils::Typemaps -MExtUtils::Typemaps::Basic -e "$typemap = ExtUtils::Typemaps->new(file => \"${CMAKE_CURRENT_LIST_DIR}/xsp/my.map\"); $typemap->merge(typemap => ExtUtils::Typemaps::Basic->new); $typemap->write(file => \"${MyTypemap}\")"
+        COMMAND ${PERL5LIB_ENV_CMD} ${PERL_EXECUTABLE} -MExtUtils::Typemaps -MExtUtils::Typemaps::Basic -e "$typemap = ExtUtils::Typemaps->new(file => \"${CMAKE_CURRENT_LIST_DIR}/xsp/my.map\"); $typemap->merge(typemap => ExtUtils::Typemaps::Basic->new); $typemap->write(file => \"${MyTypemap}\")"
         VERBATIM
 )
 
@@ -387,8 +417,9 @@ set(XS_XSP_FILES
     ${XSP_DIR}/Surface.xsp
     ${XSP_DIR}/SurfaceCollection.xsp
     ${XSP_DIR}/TriangleMesh.xsp
-    ${XSP_DIR}/Utils_OctoPrint.xsp
+    ${XSP_DIR}/Utils_PrintHost.xsp
     ${XSP_DIR}/Utils_PresetUpdater.xsp
+    ${XSP_DIR}/AppController.xsp
     ${XSP_DIR}/XS.xsp
 )
 foreach (file ${XS_XSP_FILES})
@@ -407,7 +438,8 @@ set(XS_MAIN_CPP ${CMAKE_CURRENT_BINARY_DIR}/XS.cpp)
 add_custom_command(
         OUTPUT ${XS_MAIN_CPP}
         DEPENDS ${MyTypemap} ${XS_XSP_FILES} ${CMAKE_CURRENT_LIST_DIR}/xsp/typemap.xspt
-        COMMAND COMMAND xsubpp -typemap typemap -output ${XS_MAIN_CPP} -hiertype ${XS_MAIN_XS}
+        COMMAND ${PERL5LIB_ENV_CMD} xsubpp -typemap typemap -output ${XS_MAIN_CPP} -hiertype ${XS_MAIN_XS}
+        VERBATIM
 )
 
 # Define the Perl XS shared library.
@@ -434,7 +466,7 @@ if(APPLE)
     # Ignore undefined symbols of the perl interpreter, they will be found in the caller image.
     target_link_libraries(XS "-undefined dynamic_lookup")
 endif()
-target_link_libraries(XS libslic3r libslic3r_gui admesh miniz clipper nowide polypartition poly2tri semver avrdude)
+target_link_libraries(XS libslic3r libslic3r_gui admesh miniz clipper nowide polypartition poly2tri semver avrdude qhull)
 if(SLIC3R_PROFILE)
     target_link_libraries(XS Shiny)
 endif()
@@ -471,6 +503,14 @@ if (WIN32)
     target_compile_definitions(XS PRIVATE -DNOGDI -DNOMINMAX -DHAS_BOOL)
 endif ()
 
+# SLIC3R_MSVC_PDB
+if (MSVC AND SLIC3R_MSVC_PDB AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
+    set_target_properties(XS PROPERTIES
+        COMPILE_FLAGS "/Zi"
+        LINK_FLAGS "/DEBUG /OPT:REF /OPT:ICF"
+    )
+endif()
+
 ## Configuration flags
 if (SLIC3R_GUI)
     message("Slic3r will be built with GUI support")
@@ -500,18 +540,24 @@ if (WIN32 AND ";${PerlEmbed_CCFLAGS};" MATCHES ";[-/]Od;")
     message("Old CMAKE_CXX_FLAGS_RELEASE: ${CMAKE_CXX_FLAGS_RELEASE}")
     message("Old CMAKE_CXX_FLAGS_RELWITHDEBINFO: ${CMAKE_CXX_FLAGS_RELEASE}")
     message("Old CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS_RELEASE}")
-    set(CMAKE_CXX_FLAGS_RELEASE "/MD /Od /Zi /EHsc /DNDEBUG")
-    set(CMAKE_C_FLAGS_RELEASE "/MD /Od /Zi /DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/MD /Od /Zi /EHsc /DNDEBUG")
-    set(CMAKE_C_FLAGS_RELWITHDEBINFO "/MD /Od /Zi /DNDEBUG")
-    set(CMAKE_CXX_FLAGS "/MD /Od /Zi /EHsc /DNDEBUG")
-    set(CMAKE_C_FLAGS "/MD /Od /Zi /DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "/MD /Od /Zi /EHsc /DNDEBUG /DWIN32")
+    set(CMAKE_C_FLAGS_RELEASE "/MD /Od /Zi /DNDEBUG /DWIN32")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/MD /Od /Zi /EHsc /DNDEBUG /DWIN32")
+    set(CMAKE_C_FLAGS_RELWITHDEBINFO "/MD /Od /Zi /DNDEBUG /DWIN32")
+    set(CMAKE_CXX_FLAGS "/MD /Od /Zi /EHsc /DNDEBUG /DWIN32")
+    set(CMAKE_C_FLAGS "/MD /Od /Zi /DNDEBUG /DWIN32")
 endif()
 # The following line will add -fPIC on Linux to make the XS.so rellocable.
 add_definitions(${PerlEmbed_CCCDLFLAGS})
 if (WIN32)
     target_link_libraries(XS ${PERL_LIBRARY})
 endif()
+
+add_subdirectory(src/avrdude)
+
+add_subdirectory(src/qhull)
+include_directories(${LIBDIR}/qhull/src)
+message(STATUS ${LIBDIR}/qhull/src)
 
 ## REQUIRED packages
 
@@ -557,13 +603,22 @@ if (SLIC3R_PRUSACONTROL)
     set(wxWidgets_UseAlienWx 1)
     if (wxWidgets_UseAlienWx)
         set(AlienWx_DEBUG 1)
-        find_package(AlienWx REQUIRED COMPONENTS base core adv html)
+        find_package(AlienWx REQUIRED COMPONENTS base core adv html gl)
         include_directories(${AlienWx_INCLUDE_DIRS})
         #add_compile_options(${AlienWx_CXX_FLAGS})
         add_definitions(${AlienWx_DEFINITIONS})
         set(wxWidgets_LIBRARIES ${AlienWx_LIBRARIES})
+        # On Linux / gtk, we need to have a direct access to gtk+ for some workarounds.
+        if (AlienWx_GUI_TOOLKIT STREQUAL "gtk2")
+            pkg_check_modules(GTK2 gtk+-2.0)
+            include_directories(${GTK2_INCLUDE_DIRS})
+        endif()
+        if (AlienWx_GUI_TOOLKIT STREQUAL "gtk3")
+            pkg_check_modules(GTK3 gtk+-3.0)
+            include_directories(${GTK3_INCLUDE_DIRS})
+        endif()
     else ()
-        find_package(wxWidgets REQUIRED COMPONENTS base core adv html)
+        find_package(wxWidgets REQUIRED COMPONENTS base core adv html gl)
         include(${wxWidgets_USE_FILE})
     endif ()
     add_definitions(-DSLIC3R_GUI -DSLIC3R_PRUS)
@@ -685,6 +740,20 @@ add_custom_target(pot
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     COMMENT "Generate pot file from strings in the source tree"
 )
+
+# ##############################################################################
+# Adding libnest2d project for bin packing...
+# ##############################################################################
+
+set(LIBNEST2D_UNITTESTS ON CACHE BOOL "Force generating unittests for libnest2d")
+
+add_subdirectory(${LIBDIR}/libnest2d)
+target_include_directories(libslic3r PUBLIC BEFORE ${LIBNEST2D_INCLUDES})
+target_include_directories(libslic3r_gui PUBLIC BEFORE ${LIBNEST2D_INCLUDES})
+
+message(STATUS "Libnest2D Libraries: ${LIBNEST2D_LIBRARIES}")
+target_link_libraries(libslic3r ${LIBNEST2D_LIBRARIES})
+# ##############################################################################
 
 # Installation
 install(TARGETS XS DESTINATION ${PERL_VENDORARCH}/auto/Slic3r/XS)

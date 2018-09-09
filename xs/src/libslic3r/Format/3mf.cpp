@@ -603,6 +603,8 @@ namespace Slic3r {
 
             if (!_generate_volumes(*object.second, obj_geometry->second, *volumes_ptr))
                 return false;
+
+            object.second->center_around_origin();
         }
 
         // fixes the min z of the model if negative
@@ -1271,6 +1273,7 @@ namespace Slic3r {
         if ((std::abs(sx - sy) > 0.00001) || (std::abs(sx - sz) > 0.00001))
             return;
 
+#if 0 // use quaternions
         // rotations (extracted using quaternion)
         double inv_sx = 1.0 / sx;
         double inv_sy = 1.0 / sy;
@@ -1331,6 +1334,25 @@ namespace Slic3r {
             if (angle_z < 0.0)
                 angle_z += 2.0 * PI;
         }
+#else // use eigen library
+        double inv_sx = 1.0 / sx;
+        double inv_sy = 1.0 / sy;
+        double inv_sz = 1.0 / sz;
+
+        Eigen::Matrix3d m3x3;
+        m3x3 << (double)matrix(0, 0) * inv_sx, (double)matrix(0, 1) * inv_sy, (double)matrix(0, 2) * inv_sz,
+                (double)matrix(1, 0) * inv_sx, (double)matrix(1, 1) * inv_sy, (double)matrix(1, 2) * inv_sz,
+                (double)matrix(2, 0) * inv_sx, (double)matrix(2, 1) * inv_sy, (double)matrix(2, 2) * inv_sz;
+
+        Eigen::AngleAxisd rotation;
+        rotation.fromRotationMatrix(m3x3);
+
+        // invalid rotation axis, we currently handle only rotations around Z axis
+        if ((rotation.angle() != 0.0) && (rotation.axis() != Eigen::Vector3d::UnitZ()) && (rotation.axis() != -Eigen::Vector3d::UnitZ()))
+            return;
+
+        double angle_z = (rotation.axis() == Eigen::Vector3d::UnitZ()) ? rotation.angle() : -rotation.angle();
+#endif 
 
         instance.offset.x = offset_x;
         instance.offset.y = offset_y;
@@ -1471,6 +1493,7 @@ namespace Slic3r {
 
             stl_get_size(&stl);
             volume->mesh.repair();
+            volume->calculate_convex_hull();
 
             // apply volume's name and config data
             for (const Metadata& metadata : volume_data.metadata)
@@ -1969,7 +1992,7 @@ namespace Slic3r {
 
                 // stores object's name
                 if (!obj->name.empty())
-                    stream << "  <" << METADATA_TAG << " " << TYPE_ATTR << "=\"" << OBJECT_TYPE << "\" " << KEY_ATTR << "=\"name\" " << VALUE_ATTR << "=\"" << obj->name << "\"/>\n";
+                    stream << "  <" << METADATA_TAG << " " << TYPE_ATTR << "=\"" << OBJECT_TYPE << "\" " << KEY_ATTR << "=\"name\" " << VALUE_ATTR << "=\"" << xml_escape(obj->name) << "\"/>\n";
 
                 // stores object's config data
                 for (const std::string& key : obj->config.keys())
@@ -1992,7 +2015,7 @@ namespace Slic3r {
 
                             // stores volume's name
                             if (!volume->name.empty())
-                                stream << "   <" << METADATA_TAG << " " << TYPE_ATTR << "=\"" << VOLUME_TYPE << "\" " << KEY_ATTR << "=\"" << NAME_KEY << "\" " << VALUE_ATTR << "=\"" << volume->name << "\"/>\n";
+                                stream << "   <" << METADATA_TAG << " " << TYPE_ATTR << "=\"" << VOLUME_TYPE << "\" " << KEY_ATTR << "=\"" << NAME_KEY << "\" " << VALUE_ATTR << "=\"" << xml_escape(volume->name) << "\"/>\n";
 
                             // stores volume's modifier field
                             if (volume->modifier)
