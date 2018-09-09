@@ -19,6 +19,7 @@ use Wx::Locale gettext => 'L';
 our $qs_last_input_file;
 our $qs_last_output_file;
 our $last_config;
+our $appController;
 
 # Events to be sent from a C++ Tab implementation:
 # 1) To inform about a change of a configuration value.
@@ -28,9 +29,12 @@ our $PRESETS_CHANGED_EVENT = Wx::NewEventType;
 
 sub new {
     my ($class, %params) = @_;
-    
+        
     my $self = $class->SUPER::new(undef, -1, $Slic3r::FORK_NAME . ' - ' . $Slic3r::VERSION, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE);
-    Slic3r::GUI::set_main_frame($self);
+        Slic3r::GUI::set_main_frame($self);
+    
+    $appController = Slic3r::AppController->new();
+
     if ($^O eq 'MSWin32') {
         # Load the icon either from the exe, or from the ico file.
         my $iconfile = Slic3r::decode_path($FindBin::Bin) . '\slic3r.exe';
@@ -39,7 +43,7 @@ sub new {
     } else {
         $self->SetIcon(Wx::Icon->new(Slic3r::var("Slic3r_128px.png"), wxBITMAP_TYPE_PNG));        
     }
-    
+        
     # store input params
     # If set, the "Controller" tab for the control of the printer over serial line and the serial port settings are hidden.
     $self->{no_controller} = $params{no_controller};
@@ -47,7 +51,7 @@ sub new {
     $self->{loaded} = 0;
     $self->{lang_ch_event} = $params{lang_ch_event};
     $self->{preferences_event} = $params{preferences_event};
-
+    
     # initialize tabpanel and menubar
     $self->_init_tabpanel;
     $self->_init_menubar;
@@ -58,12 +62,23 @@ sub new {
     eval { Wx::ToolTip::SetAutoPop(32767) };
     
     # initialize status bar
-    $self->{statusbar} = Slic3r::GUI::ProgressStatusBar->new($self, -1);
+    $self->{statusbar} = Slic3r::GUI::ProgressStatusBar->new($self, Wx::NewId);
     $self->{statusbar}->SetStatusText(L("Version ").$Slic3r::VERSION.L(" - Remember to check for updates at http://github.com/prusa3d/slic3r/releases"));
     $self->SetStatusBar($self->{statusbar});
     
+    # Make the global status bar and its progress indicator available in C++
+    $appController->set_global_progress_indicator(
+        $self->{statusbar}->{prog}->GetId(),
+        $self->{statusbar}->GetId(),
+    );
+
+    $appController->set_model($self->{plater}->{model});
+    $appController->set_print($self->{plater}->{print});
+
+    $self->{plater}->{appController} = $appController;
+
     $self->{loaded} = 1;
-    
+        
     # initialize layout
     {
         my $sizer = Wx::BoxSizer->new(wxVERTICAL);
@@ -90,6 +105,9 @@ sub new {
         # Save the slic3r.ini. Usually the ini file is saved from "on idle" callback,
         # but in rare cases it may not have been called yet.
         wxTheApp->{app_config}->save;
+        $self->{plater}->{print} = undef if($self->{plater});
+        Slic3r::GUI::_3DScene::remove_all_canvases();
+        Slic3r::GUI::deregister_on_request_update_callback();
         # propagate event
         $event->Skip;
     });
@@ -108,6 +126,10 @@ sub _init_tabpanel {
     EVT_NOTEBOOK_PAGE_CHANGED($self, $self->{tabpanel}, sub {
         my $panel = $self->{tabpanel}->GetCurrentPage;
         $panel->OnActivate if $panel->can('OnActivate');
+
+        for my $tab_name (qw(print filament printer)) {
+            Slic3r::GUI::get_preset_tab("$tab_name")->OnActivate if ("$tab_name" eq $panel->GetName);
+        }
     });
     
     if (!$self->{no_plater}) {

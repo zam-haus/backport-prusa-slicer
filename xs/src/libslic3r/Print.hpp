@@ -24,6 +24,7 @@ class Print;
 class PrintObject;
 class ModelObject;
 
+
 // Print step IDs for keeping track of the print state.
 enum PrintStep {
     psSkirt, psBrim, psWipeTower, psCount,
@@ -184,6 +185,8 @@ public:
 
     void reset_layer_height_profile();
 
+    void adjust_layer_height_profile(coordf_t z, coordf_t layer_thickness_delta, coordf_t band_width, int action);
+
     // Collect the slicing parameters, to be used by variable layer thickness algorithm,
     // by the interactive layer height editor and by the printing process itself.
     // The slicing parameters are dependent on various configuration values
@@ -205,6 +208,8 @@ public:
     void discover_horizontal_shells();
     void combine_infill();
     void _generate_support_material();
+
+    bool is_printable() const { return !this->_shifted_copies.empty(); }
 
 private:
     Print* _print;
@@ -233,7 +238,8 @@ public:
     PrintRegionPtrs regions;
     PlaceholderParser placeholder_parser;
     // TODO: status_cb
-    std::string                     estimated_print_time;
+    std::string                     estimated_normal_print_time;
+    std::string                     estimated_silent_print_time;
     double                          total_used_filament, total_extruded_volume, total_cost, total_weight;
     std::map<size_t, float>         filament_stats;
     PrintState<PrintStep, psCount>  state;
@@ -253,6 +259,8 @@ public:
     void reload_object(size_t idx);
     bool reload_model_instances();
 
+    PrintObjectPtrs get_printable_objects() const;
+
     // methods for handling regions
     PrintRegion* get_region(size_t idx) { return regions.at(idx); }
     const PrintRegion* get_region(size_t idx) const  { return regions.at(idx); }
@@ -265,6 +273,7 @@ public:
     
     void add_model_object(ModelObject* model_object, int idx = -1);
     bool apply_config(DynamicPrintConfig config);
+    float get_wipe_tower_depth() const { return m_wipe_tower_depth; }
     bool has_infinite_skirt() const;
     bool has_skirt() const;
     // Returns an empty string if valid, otherwise returns an error message.
@@ -282,6 +291,9 @@ public:
     double max_allowed_layer_height() const;
     bool has_support_material() const;
     void auto_assign_extruders(ModelObject* model_object) const;
+
+    // Returns extruder this eec should be printed with, according to PrintRegion config:
+    static int get_extruder(const ExtrusionEntityCollection& fill, const PrintRegion &region);
 
     void _make_skirt();
     void _make_brim();
@@ -309,14 +321,19 @@ public:
     void restart() { m_canceled = false; }
     // Has the calculation been canceled?
     bool canceled() { return m_canceled; }
-    
+
+
 private:
     bool invalidate_state_by_config_options(const std::vector<t_config_option_key> &opt_keys);
     PrintRegionConfig _region_config_from_model_volume(const ModelVolume &volume);
 
+    // Depth of the wipe tower to pass to GLCanvas3D for exact bounding box:
+    float m_wipe_tower_depth = 0.f;
+
     // Has the calculation been canceled?
     tbb::atomic<bool>   m_canceled;
 };
+
 
 #define FOREACH_BASE(type, container, iterator) for (type::const_iterator iterator = (container).begin(); iterator != (container).end(); ++iterator)
 #define FOREACH_REGION(print, region)       FOREACH_BASE(PrintRegionPtrs, (print)->regions, region)

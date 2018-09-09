@@ -14,6 +14,14 @@
 #include <boost/nowide/iostream.hpp>
 #include <boost/algorithm/string/replace.hpp>
 
+#include "SVG.hpp"
+#include <Eigen/Dense>
+
+static const float UNIT_MATRIX[] = { 1.0f, 0.0f, 0.0f, 0.0f,
+                                     0.0f, 1.0f, 0.0f, 0.0f,
+                                     0.0f, 0.0f, 1.0f, 0.0f,
+                                     0.0f, 0.0f, 0.0f, 1.0f };
+
 namespace Slic3r {
 
     unsigned int Model::s_auto_extruder_id = 1;
@@ -232,14 +240,6 @@ BoundingBoxf3 Model::bounding_box() const
     return bb;
 }
 
-BoundingBoxf3 Model::transformed_bounding_box() const
-{
-    BoundingBoxf3 bb;
-    for (const ModelObject* obj : this->objects)
-        bb.merge(obj->tight_bounding_box(false));
-    return bb;
-}
-
 void Model::center_instances_around_point(const Pointf &point)
 {
 //    BoundingBoxf3 bb = this->bounding_box();
@@ -315,15 +315,16 @@ bool Model::arrange_objects(coordf_t dist, const BoundingBoxf* bb)
     Pointfs positions;
     if (! _arrange(instance_sizes, dist, bb, positions))
         return false;
-    
-	size_t idx = 0;
-	for (ModelObject *o : this->objects) {
+
+    size_t idx = 0;
+    for (ModelObject *o : this->objects) {
         for (ModelInstance *i : o->instances) {
             i->offset = positions[idx] - instance_centers[idx];
             ++ idx;
         }
         o->invalidate_bounding_box();
     }
+
     return true;
 }
 
@@ -603,7 +604,7 @@ void ModelObject::clear_instances()
 
 // Returns the bounding box of the transformed instances.
 // This bounding box is approximate and not snug.
-const BoundingBoxf3& ModelObject::bounding_box()
+const BoundingBoxf3& ModelObject::bounding_box() const
 {
     if (! m_bounding_box_valid) {
         BoundingBoxf3 raw_bbox;
@@ -617,54 +618,6 @@ const BoundingBoxf3& ModelObject::bounding_box()
         m_bounding_box_valid = true;
     }
     return m_bounding_box;
-}
-
-BoundingBoxf3 ModelObject::tight_bounding_box(bool include_modifiers) const
-{
-    BoundingBoxf3 bb;
-
-    for (const ModelVolume* vol : this->volumes)
-    {
-        if (include_modifiers || !vol->modifier)
-        {
-            for (const ModelInstance* inst : this->instances)
-            {
-                double c = cos(inst->rotation);
-                double s = sin(inst->rotation);
-
-                for (int f = 0; f < vol->mesh.stl.stats.number_of_facets; ++f)
-                {
-                    const stl_facet& facet = vol->mesh.stl.facet_start[f];
-
-                    for (int i = 0; i < 3; ++i)
-                    {
-                        // original point
-                        const stl_vertex& v = facet.vertex[i];
-                        Pointf3 p((double)v.x, (double)v.y, (double)v.z);
-
-                        // scale
-                        p.x *= inst->scaling_factor;
-                        p.y *= inst->scaling_factor;
-                        p.z *= inst->scaling_factor;
-
-                        // rotate Z
-                        double x = p.x;
-                        double y = p.y;
-                        p.x = c * x - s * y;
-                        p.y = s * x + c * y;
-
-                        // translate
-                        p.x += inst->offset.x;
-                        p.y += inst->offset.y;
-
-                        bb.merge(p);
-                    }
-                }
-            }
-        }
-    }
-
-    return bb;
 }
 
 // A mesh containing all transformed instances of this object.
@@ -751,25 +704,38 @@ void ModelObject::center_around_origin()
 void ModelObject::translate(coordf_t x, coordf_t y, coordf_t z)
 {
     for (ModelVolume *v : this->volumes)
+    {
         v->mesh.translate(float(x), float(y), float(z));
-    if (m_bounding_box_valid) 
+        v->m_convex_hull.translate(float(x), float(y), float(z));
+    }
+
+    if (m_bounding_box_valid)
         m_bounding_box.translate(x, y, z);
 }
 
 void ModelObject::scale(const Pointf3 &versor)
 {
     for (ModelVolume *v : this->volumes)
+    {
         v->mesh.scale(versor);
+        v->m_convex_hull.scale(versor);
+    }
     // reset origin translation since it doesn't make sense anymore
     this->origin_translation = Pointf3(0,0,0);
     this->invalidate_bounding_box();
 }
 
-void ModelObject::rotate(float angle, const Axis &axis)
+void ModelObject::rotate(float angle, const Pointf3& axis)
 {
     for (ModelVolume *v : this->volumes)
+    {
         v->mesh.rotate(angle, axis);
-    this->origin_translation = Pointf3(0,0,0);
+        v->m_convex_hull.rotate(angle, axis);
+    }
+
+    center_around_origin();
+
+    this->origin_translation = Pointf3(0, 0, 0);
     this->invalidate_bounding_box();
 }
 
@@ -781,6 +747,7 @@ void ModelObject::transform(const float* matrix3x4)
     for (ModelVolume* v : volumes)
     {
         v->mesh.transform(matrix3x4);
+        v->m_convex_hull.transform(matrix3x4);
     }
 
     origin_translation = Pointf3(0.0, 0.0, 0.0);
@@ -790,8 +757,12 @@ void ModelObject::transform(const float* matrix3x4)
 void ModelObject::mirror(const Axis &axis)
 {
     for (ModelVolume *v : this->volumes)
+    {
         v->mesh.mirror(axis);
-    this->origin_translation = Pointf3(0,0,0);
+        v->m_convex_hull.mirror(axis);
+    }
+
+    this->origin_translation = Pointf3(0, 0, 0);
     this->invalidate_bounding_box();
 }
 
@@ -893,6 +864,34 @@ void ModelObject::split(ModelObjectPtrs* new_objects)
     return;
 }
 
+void ModelObject::check_instances_print_volume_state(const BoundingBoxf3& print_volume)
+{
+    for (const ModelVolume* vol : this->volumes)
+    {
+        if (!vol->modifier)
+        {
+            for (ModelInstance* inst : this->instances)
+            {
+                std::vector<float> world_mat(UNIT_MATRIX, std::end(UNIT_MATRIX));
+                Eigen::Transform<float, 3, Eigen::Affine> m = Eigen::Transform<float, 3, Eigen::Affine>::Identity();
+                m.translate(Eigen::Vector3f((float)inst->offset.x, (float)inst->offset.y, 0.0f));
+                m.rotate(Eigen::AngleAxisf(inst->rotation, Eigen::Vector3f::UnitZ()));
+                m.scale(inst->scaling_factor);
+                ::memcpy((void*)world_mat.data(), (const void*)m.data(), 16 * sizeof(float));
+
+                BoundingBoxf3 bb = vol->get_convex_hull().transformed_bounding_box(world_mat);
+
+                if (print_volume.contains(bb))
+                    inst->print_volume_state = ModelInstance::PVS_Inside;
+                else if (print_volume.intersects(bb))
+                    inst->print_volume_state = ModelInstance::PVS_Partly_Outside;
+                else
+                    inst->print_volume_state = ModelInstance::PVS_Fully_Outside;
+            }
+        }
+    }
+}
+
 void ModelObject::print_info() const
 {
     using namespace std;
@@ -961,6 +960,16 @@ ModelMaterial* ModelVolume::assign_unique_material()
     // as material-id "0" is reserved by the AMF spec we start from 1
     this->_material_id = 1 + model->materials.size();  // watchout for implicit cast
     return model->add_material(this->_material_id);
+}
+
+void ModelVolume::calculate_convex_hull()
+{
+    m_convex_hull = mesh.convex_hull_3d();
+}
+
+const TriangleMesh& ModelVolume::get_convex_hull() const
+{
+    return m_convex_hull;
 }
 
 // Split this volume, append the result to the object owning this volume.
@@ -1045,32 +1054,16 @@ BoundingBoxf3 ModelInstance::transform_mesh_bounding_box(const TriangleMesh* mes
 
 BoundingBoxf3 ModelInstance::transform_bounding_box(const BoundingBoxf3 &bbox, bool dont_translate) const
 {
-    // rotate around mesh origin
-    double c = cos(this->rotation);
-    double s = sin(this->rotation);
-    Pointf3 pts[4] = {
-        bbox.min,
-        bbox.max,
-        Pointf3(bbox.min.x, bbox.max.y, bbox.min.z),
-        Pointf3(bbox.max.x, bbox.min.y, bbox.max.z)
-    };
-    BoundingBoxf3 out;
-    for (int i = 0; i < 4; ++ i) {
-        Pointf3 &v = pts[i];
-        double xold = v.x;
-        double yold = v.y;
-        v.x = float(c * xold - s * yold);
-        v.y = float(s * xold + c * yold);
-        v.x *= this->scaling_factor;
-        v.y *= this->scaling_factor;
-        v.z *= this->scaling_factor;
-        if (! dont_translate) {
-            v.x += this->offset.x;
-            v.y += this->offset.y;
-        }
-        out.merge(v);
-    }
-    return out;
+    Eigen::Transform<float, 3, Eigen::Affine> matrix = Eigen::Transform<float, 3, Eigen::Affine>::Identity();
+    if (!dont_translate)
+        matrix.translate(Eigen::Vector3f((float)offset.x, (float)offset.y, 0.0f));
+
+    matrix.rotate(Eigen::AngleAxisf(rotation, Eigen::Vector3f::UnitZ()));
+    matrix.scale(scaling_factor);
+
+    std::vector<float> m(16, 0.0f);
+    ::memcpy((void*)m.data(), (const void*)matrix.data(), 16 * sizeof(float));
+    return bbox.transformed(m);
 }
 
 void ModelInstance::transform_polygon(Polygon* polygon) const

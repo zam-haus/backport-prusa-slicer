@@ -52,6 +52,8 @@ _constant()
     int region_count()
         %code%{ RETVAL = THIS->print()->regions.size(); %};
 
+    int region_volumes_count()
+        %code%{ RETVAL = THIS->region_volumes.size(); %};
     Ref<Print> print();
     Ref<ModelObject> model_object();
     Ref<StaticPrintConfig> config()
@@ -119,15 +121,6 @@ _constant()
             RETVAL.push_back(slicing_params.layer_height);
         %};
 
-    void adjust_layer_height_profile(coordf_t z, coordf_t layer_thickness_delta, coordf_t band_width, int action)
-        %code%{
-            THIS->update_layer_height_profile(THIS->model_object()->layer_height_profile);
-            adjust_layer_height_profile(
-                THIS->slicing_parameters(), THIS->model_object()->layer_height_profile, z, layer_thickness_delta, band_width, LayerHeightEditActionType(action));
-            THIS->model_object()->layer_height_profile_valid = true;
-            THIS->layer_height_profile_valid = false;
-        %};
-
     void reset_layer_height_profile();
     
     int ptr()
@@ -140,7 +133,7 @@ _constant()
     ~Print();
 
     Ref<StaticPrintConfig> config()
-        %code%{ RETVAL = &THIS->config; %};
+        %code%{ RETVAL = static_cast<GCodeConfig*>(&THIS->config); %};
     Ref<StaticPrintConfig> default_object_config()
         %code%{ RETVAL = &THIS->default_object_config; %};
     Ref<StaticPrintConfig> default_region_config()
@@ -152,8 +145,10 @@ _constant()
         %code%{ RETVAL = &THIS->skirt; %};
     Ref<ExtrusionEntityCollection> brim()
         %code%{ RETVAL = &THIS->brim; %};
-    std::string estimated_print_time()
-        %code%{ RETVAL = THIS->estimated_print_time; %};
+    std::string estimated_normal_print_time()
+        %code%{ RETVAL = THIS->estimated_normal_print_time; %};
+    std::string estimated_silent_print_time()
+        %code%{ RETVAL = THIS->estimated_silent_print_time; %};
 
     PrintObjectPtrs* objects()
         %code%{ RETVAL = &THIS->objects; %};

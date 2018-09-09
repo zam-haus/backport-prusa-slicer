@@ -10,6 +10,7 @@ use File::Basename qw(basename);
 use Wx qw(:misc :sizer :treectrl :button :keycode wxTAB_TRAVERSAL wxSUNKEN_BORDER wxBITMAP_TYPE_PNG wxID_CANCEL wxMOD_CONTROL
     wxTheApp);
 use Wx::Event qw(EVT_BUTTON EVT_TREE_ITEM_COLLAPSING EVT_TREE_SEL_CHANGED EVT_TREE_KEY_DOWN EVT_KEY_DOWN);
+use List::Util qw(max);
 use base 'Wx::Panel';
 
 use constant ICON_OBJECT        => 0;
@@ -150,19 +151,19 @@ sub new {
     my $canvas;
     if ($Slic3r::GUI::have_OpenGL) {
         $canvas = $self->{canvas} = Slic3r::GUI::3DScene->new($self);
-        $canvas->enable_picking(1);
-        $canvas->select_by('volume');
-        
-        $canvas->on_select(sub {
+        Slic3r::GUI::_3DScene::enable_picking($canvas, 1);
+        Slic3r::GUI::_3DScene::set_select_by($canvas, 'volume');
+        Slic3r::GUI::_3DScene::register_on_select_object_callback($canvas, sub {
             my ($volume_idx) = @_;
-            # convert scene volume to model object volume
-            $self->reload_tree(($volume_idx == -1) ? undef : $canvas->volumes->[$volume_idx]->volume_idx);
+            $self->reload_tree($volume_idx);
         });
-        
-        $canvas->load_object($self->{model_object}, undef, undef, [0]);
-        $canvas->set_auto_bed_shape;
+        Slic3r::GUI::_3DScene::load_model_object($canvas, $self->{model_object}, 0, [0]);        
+        Slic3r::GUI::_3DScene::set_auto_bed_shape($canvas);
+        Slic3r::GUI::_3DScene::set_axes_length($canvas, 2.0 * max(@{ Slic3r::GUI::_3DScene::get_volumes_bounding_box($canvas)->size }));
         $canvas->SetSize([500,700]);
-        $canvas->update_volumes_colors_by_extruder($self->GetParent->GetParent->GetParent->{config});
+        Slic3r::GUI::_3DScene::set_config($canvas, $self->GetParent->GetParent->GetParent->{config});
+        Slic3r::GUI::_3DScene::update_volumes_colors_by_extruder($canvas);
+        Slic3r::GUI::_3DScene::enable_force_zoom_to_bed($canvas, 1);
     }
     
     $self->{sizer} = Wx::BoxSizer->new(wxHORIZONTAL);
@@ -262,7 +263,7 @@ sub selection_changed {
     
     # deselect all meshes
     if ($self->{canvas}) {
-        $_->set_selected(0) for @{$self->{canvas}->volumes};
+        Slic3r::GUI::_3DScene::deselect_volumes($self->{canvas});
     }
     
     # disable things as if nothing is selected
@@ -290,7 +291,7 @@ sub selection_changed {
         if ($itemData->{type} eq 'volume') {
             # select volume in 3D preview
             if ($self->{canvas}) {
-                $self->{canvas}->volumes->[ $itemData->{volume_id} ]->set_selected(1);
+                Slic3r::GUI::_3DScene::select_volume($self->{canvas}, $itemData->{volume_id});
             }
             $self->{btn_delete}->Enable;
             $self->{btn_split}->Enable;
@@ -321,7 +322,13 @@ sub selection_changed {
         }
         # get default values
         my $default_config = Slic3r::Config::new_from_defaults_keys(\@opt_keys);
-        
+
+       # decide which settings will be shown by default
+        if ($itemData->{type} eq 'object') {
+            $config->set_ifndef('wipe_into_objects', 0);
+            $config->set_ifndef('wipe_into_infill', 0);
+        }
+
         # append default extruder
         push @opt_keys, 'extruder';
         $default_config->set('extruder', 0);
@@ -329,11 +336,18 @@ sub selection_changed {
         $self->{settings_panel}->set_default_config($default_config);
         $self->{settings_panel}->set_config($config);
         $self->{settings_panel}->set_opt_keys(\@opt_keys);
-        $self->{settings_panel}->set_fixed_options([qw(extruder)]);
+
+        # disable minus icon to remove the settings
+        if ($itemData->{type} eq 'object') {
+            $self->{settings_panel}->set_fixed_options([qw(extruder), qw(wipe_into_infill), qw(wipe_into_objects)]);
+	} else {
+            $self->{settings_panel}->set_fixed_options([qw(extruder)]);
+        }
+
         $self->{settings_panel}->enable;
     }
     
-    $self->{canvas}->Render if $self->{canvas};
+    Slic3r::GUI::_3DScene::render($self->{canvas}) if $self->{canvas};
 }
 
 sub on_btn_load {
@@ -363,7 +377,8 @@ sub on_btn_load {
             }
         }
     }
-    
+
+    $self->{model_object}->center_around_origin if $self->{parts_changed};
     $self->_parts_changed;
 }
 
@@ -429,7 +444,7 @@ sub on_btn_move_up {
     if ($itemData && $itemData->{type} eq 'volume') {
         my $volume_id = $itemData->{volume_id};
         if ($self->{model_object}->move_volume_up($volume_id)) {
-            $self->{canvas}->volumes->move_volume_up($volume_id);
+            Slic3r::GUI::_3DScene::move_volume_up($self->{canvas}, $volume_id);
             $self->{parts_changed} = 1;
             $self->reload_tree($volume_id - 1);
         }
@@ -442,7 +457,7 @@ sub on_btn_move_down {
     if ($itemData && $itemData->{type} eq 'volume') {
         my $volume_id = $itemData->{volume_id};
         if ($self->{model_object}->move_volume_down($volume_id)) {
-            $self->{canvas}->volumes->move_volume_down($volume_id);
+            Slic3r::GUI::_3DScene::move_volume_down($self->{canvas}, $volume_id);
             $self->{parts_changed} = 1;
             $self->reload_tree($volume_id + 1);
         }
@@ -465,7 +480,8 @@ sub on_btn_delete {
         $self->{model_object}->delete_volume($itemData->{volume_id});
         $self->{parts_changed} = 1;
     }
-    
+
+    $self->{model_object}->center_around_origin if $self->{parts_changed};
     $self->_parts_changed;
 }
 
@@ -487,11 +503,11 @@ sub _parts_changed {
     
     $self->reload_tree;
     if ($self->{canvas}) {
-        $self->{canvas}->reset_objects;
-        $self->{canvas}->load_object($self->{model_object});
-        $self->{canvas}->zoom_to_volumes;
-        $self->{canvas}->update_volumes_colors_by_extruder($self->GetParent->GetParent->GetParent->{config});
-        $self->{canvas}->Render;
+        Slic3r::GUI::_3DScene::reset_volumes($self->{canvas});
+        Slic3r::GUI::_3DScene::load_model_object($self->{canvas}, $self->{model_object}, 0, [0]);
+        Slic3r::GUI::_3DScene::zoom_to_volumes($self->{canvas});
+        Slic3r::GUI::_3DScene::update_volumes_colors_by_extruder($self->{canvas});
+        Slic3r::GUI::_3DScene::render($self->{canvas});        
     }
 }
 
@@ -511,6 +527,11 @@ sub CanClose {
     return ! Slic3r::GUI::catch_error($self);
 }
 
+sub Destroy {
+    my ($self) = @_;
+    $self->{canvas}->Destroy if ($self->{canvas});
+}
+
 sub PartsChanged {
     my ($self) = @_;
     return $self->{parts_changed};
@@ -525,18 +546,18 @@ sub _update_canvas {
     my ($self) = @_;
     
     if ($self->{canvas}) {
-        $self->{canvas}->reset_objects;
-        $self->{canvas}->load_object($self->{model_object});
+        Slic3r::GUI::_3DScene::reset_volumes($self->{canvas});
+        Slic3r::GUI::_3DScene::load_model_object($self->{canvas}, $self->{model_object}, 0, [0]);
 
         # restore selection, if any
         if (my $itemData = $self->get_selection) {
             if ($itemData->{type} eq 'volume') {
-                $self->{canvas}->volumes->[ $itemData->{volume_id} ]->set_selected(1);
+                Slic3r::GUI::_3DScene::select_volume($self->{canvas}, $itemData->{volume_id});
             }
         }
-                
-        $self->{canvas}->update_volumes_colors_by_extruder($self->GetParent->GetParent->GetParent->{config});
-        $self->{canvas}->Render;
+
+        Slic3r::GUI::_3DScene::update_volumes_colors_by_extruder($self->{canvas});
+        Slic3r::GUI::_3DScene::render($self->{canvas});
     }
 }
 
@@ -558,10 +579,10 @@ sub _update {
     $self->{parts_changed} = 1;
     my @objects = ();
     push @objects, $self->{model_object};
-    $self->{canvas}->reset_objects;
-    $self->{canvas}->load_object($_, undef, [0]) for @objects;
-    $self->{canvas}->update_volumes_colors_by_extruder($self->GetParent->GetParent->GetParent->{config});
-    $self->{canvas}->Render;
+    Slic3r::GUI::_3DScene::reset_volumes($self->{canvas});
+    Slic3r::GUI::_3DScene::load_model_object($self->{canvas}, $_, 0, [0]) for @objects;
+    Slic3r::GUI::_3DScene::update_volumes_colors_by_extruder($self->{canvas});
+    Slic3r::GUI::_3DScene::render($self->{canvas});
 }
 
 1;

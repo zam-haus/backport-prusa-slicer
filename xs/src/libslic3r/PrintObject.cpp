@@ -4,6 +4,7 @@
 #include "Geometry.hpp"
 #include "SupportMaterial.hpp"
 #include "Surface.hpp"
+#include "Slicing.hpp"
 
 #include <utility>
 #include <boost/log/trivial.hpp>
@@ -74,6 +75,7 @@ bool PrintObject::delete_last_copy()
 
 bool PrintObject::set_copies(const Points &points)
 {
+    bool copies_num_changed = this->_copies.size() != points.size();
     this->_copies = points;
     
     // order copies with a nearest neighbor search and translate them by _copies_shift
@@ -92,6 +94,8 @@ bool PrintObject::set_copies(const Points &points)
     
     bool invalidated = this->_print->invalidate_step(psSkirt);
     invalidated |= this->_print->invalidate_step(psBrim);
+    if (copies_num_changed)
+        invalidated |= this->_print->invalidate_step(psWipeTower);
     return invalidated;
 }
 
@@ -100,7 +104,10 @@ bool PrintObject::reload_model_instances()
     Points copies;
     copies.reserve(this->_model_object->instances.size());
     for (const ModelInstance *mi : this->_model_object->instances)
-        copies.emplace_back(Point::new_scale(mi->offset.x, mi->offset.y));
+    {
+        if (mi->is_printable())
+            copies.emplace_back(Point::new_scale(mi->offset.x, mi->offset.y));
+    }
     return this->set_copies(copies);
 }
 
@@ -231,7 +238,10 @@ bool PrintObject::invalidate_state_by_config_options(const std::vector<t_config_
             || opt_key == "perimeter_speed"
             || opt_key == "small_perimeter_speed"
             || opt_key == "solid_infill_speed"
-            || opt_key == "top_solid_infill_speed") {
+            || opt_key == "top_solid_infill_speed"
+            || opt_key == "wipe_into_infill"    // when these these two are changed, we only need to invalidate the wipe tower,
+            || opt_key == "wipe_into_objects"   // which we already did at the very beginning - nothing more to be done
+            ) {
             // these options only affect G-code export, so nothing to invalidate
         } else {
             // for legacy, if we can't handle this option let's invalidate all steps
@@ -271,6 +281,8 @@ bool PrintObject::invalidate_step(PrintObjectStep step)
     }
 
     // Wipe tower depends on the ordering of extruders, which in turn depends on everything.
+    // It also decides about what the wipe_into_infill / wipe_into_object features will do,
+    // and that too depends on many of the settings.
     invalidated |= this->_print->invalidate_step(psWipeTower);
     return invalidated;
 }
@@ -284,6 +296,9 @@ bool PrintObject::has_support_material() const
 
 void PrintObject::_prepare_infill()
 {
+    if (!this->is_printable())
+        return;
+
     // This will assign a type (top/bottom/internal) to $layerm->slices.
     // Then the classifcation of $layerm->slices is transfered onto 
     // the $layerm->fill_surfaces by clipping $layerm->fill_surfaces
@@ -1170,8 +1185,8 @@ void PrintObject::_slice()
 
     this->typed_slices = false;
 
-#if 0
-    // Disable parallelization for debugging purposes.
+#ifdef SLIC3R_PROFILE
+    // Disable parallelization so the Shiny profiler works
     static tbb::task_scheduler_init *tbb_init = nullptr;
     tbb_init = new tbb::task_scheduler_init(1);
 #endif
@@ -1435,6 +1450,9 @@ void PrintObject::_simplify_slices(double distance)
 
 void PrintObject::_make_perimeters()
 {
+    if (!this->is_printable())
+        return;
+
     if (this->state.is_done(posPerimeters)) return;
     this->state.set_started(posPerimeters);
 
@@ -1543,6 +1561,9 @@ void PrintObject::_make_perimeters()
 
 void PrintObject::_infill()
 {
+    if (!this->is_printable())
+        return;
+
     if (this->state.is_done(posInfill)) return;
     this->state.set_started(posInfill);
     
@@ -1947,6 +1968,9 @@ void PrintObject::combine_infill()
 
 void PrintObject::_generate_support_material()
 {
+    if (!this->is_printable())
+        return;
+
     PrintObjectSupportMaterial support_material(this, PrintObject::slicing_parameters());
     support_material.generate(*this);
 }
@@ -1959,6 +1983,14 @@ void PrintObject::reset_layer_height_profile()
     // Reset the source layer_height_profile if it exists at the ModelObject.
     this->model_object()->layer_height_profile.clear();
     this->model_object()->layer_height_profile_valid = false;
+}
+
+void PrintObject::adjust_layer_height_profile(coordf_t z, coordf_t layer_thickness_delta, coordf_t band_width, int action)
+{
+    update_layer_height_profile(_model_object->layer_height_profile);
+    Slic3r::adjust_layer_height_profile(slicing_parameters(), _model_object->layer_height_profile, z, layer_thickness_delta, band_width, LayerHeightEditActionType(action));
+    _model_object->layer_height_profile_valid = true;
+    layer_height_profile_valid = false;
 }
 
 } // namespace Slic3r

@@ -38,8 +38,9 @@ UPDATE * parse_op(char * s)
 
   upd = (UPDATE *)malloc(sizeof(UPDATE));
   if (upd == NULL) {
-    avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
-    exit(1);
+    // avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
+    // exit(1);
+    avrdude_oom("parse_op: out of memory\n");
   }
 
   i = 0;
@@ -53,8 +54,9 @@ UPDATE * parse_op(char * s)
     upd->op = DEVICE_WRITE;
     upd->filename = (char *)malloc(strlen(buf) + 1);
     if (upd->filename == NULL) {
-        avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
-        exit(1);
+        // avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
+        // exit(1);
+        avrdude_oom("parse_op: out of memory\n");
     }
     strcpy(upd->filename, buf);
     upd->format = FMT_AUTO;
@@ -63,8 +65,9 @@ UPDATE * parse_op(char * s)
 
   upd->memtype = (char *)malloc(strlen(buf)+1);
   if (upd->memtype == NULL) {
-    avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
-    exit(1);
+    // avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
+    // exit(1);
+    avrdude_oom("parse_op: out of memory\n");
   }
   strcpy(upd->memtype, buf);
 
@@ -99,6 +102,24 @@ UPDATE * parse_op(char * s)
     return NULL;
   }
 
+  p++;
+
+  // Extension: Parse file section number
+  unsigned section = 0;
+
+  for (; *p != ':'; p++) {
+    if (*p >= '0' && *p <= '9') {
+      section *= 10;
+      section += *p - 0x30;
+    } else {
+      avrdude_message(MSG_INFO, "%s: invalid update specification: <section> is not a number\n", progname);
+      free(upd->memtype);
+      free(upd);
+      return NULL;
+    }
+  }
+
+  upd->section = section;
   p++;
 
   /*
@@ -161,8 +182,9 @@ UPDATE * dup_update(UPDATE * upd)
 
   u = (UPDATE *)malloc(sizeof(UPDATE));
   if (u == NULL) {
-    avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
-    exit(1);
+    // avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
+    // exit(1);
+    avrdude_oom("dup_update: out of memory\n");
   }
 
   memcpy(u, upd, sizeof(UPDATE));
@@ -176,20 +198,22 @@ UPDATE * dup_update(UPDATE * upd)
   return u;
 }
 
-UPDATE * new_update(int op, char * memtype, int filefmt, char * filename)
+UPDATE * new_update(int op, char * memtype, int filefmt, char * filename, unsigned section)
 {
   UPDATE * u;
 
   u = (UPDATE *)malloc(sizeof(UPDATE));
   if (u == NULL) {
-    avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
-    exit(1);
+    // avrdude_message(MSG_INFO, "%s: out of memory\n", progname);
+    // exit(1);
+    avrdude_oom("new_update: out of memory\n");
   }
 
   u->memtype = strdup(memtype);
   u->filename = strdup(filename);
   u->op = op;
   u->format = filefmt;
+  u->section = section;
 
   return u;
 }
@@ -250,7 +274,7 @@ int do_op(PROGRAMMER * pgm, struct avrpart * p, UPDATE * upd, enum updateflags f
                       progname,
                       strcmp(upd->filename, "-")==0 ? "<stdout>" : upd->filename);
     }
-    rc = fileio(FIO_WRITE, upd->filename, upd->format, p, upd->memtype, size);
+    rc = fileio(FIO_WRITE, upd->filename, upd->format, p, upd->memtype, size, 0);
     if (rc < 0) {
       avrdude_message(MSG_INFO, "%s: write to file '%s' failed\n",
               progname, upd->filename);
@@ -267,7 +291,7 @@ int do_op(PROGRAMMER * pgm, struct avrpart * p, UPDATE * upd, enum updateflags f
                       progname,
                       strcmp(upd->filename, "-")==0 ? "<stdin>" : upd->filename);
     }
-    rc = fileio(FIO_READ, upd->filename, upd->format, p, upd->memtype, -1);
+    rc = fileio(FIO_READ, upd->filename, upd->format, p, upd->memtype, -1, upd->section);
     if (rc < 0) {
       avrdude_message(MSG_INFO, "%s: read from file '%s' failed\n",
               progname, upd->filename);
@@ -296,11 +320,11 @@ int do_op(PROGRAMMER * pgm, struct avrpart * p, UPDATE * upd, enum updateflags f
       report_progress(1,1,NULL);
     }
     else {
-      /*
-       * test mode, don't actually write to the chip, output the buffer
-       * to stdout in intel hex instead
-       */
-      rc = fileio(FIO_WRITE, "-", FMT_IHEX, p, upd->memtype, size);
+      // /*
+      //  * test mode, don't actually write to the chip, output the buffer
+      //  * to stdout in intel hex instead
+      //  */
+      // rc = fileio(FIO_WRITE, "-", FMT_IHEX, p, upd->memtype, size, 0);
     }
 
     if (rc < 0) {
@@ -332,7 +356,7 @@ int do_op(PROGRAMMER * pgm, struct avrpart * p, UPDATE * upd, enum updateflags f
             progname, mem->desc, upd->filename);
     }
 
-    rc = fileio(FIO_READ, upd->filename, upd->format, p, upd->memtype, -1);
+    rc = fileio(FIO_READ, upd->filename, upd->format, p, upd->memtype, -1, upd->section);
     if (rc < 0) {
       avrdude_message(MSG_INFO, "%s: read from file '%s' failed\n",
               progname, upd->filename);
