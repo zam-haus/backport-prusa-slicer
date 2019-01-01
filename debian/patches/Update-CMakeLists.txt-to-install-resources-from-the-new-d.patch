@@ -7,10 +7,10 @@ Subject: Update CMakeLists.txt to install resources from the new directory
  1 file changed, 4 insertions(+), 2 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index e8b2a6f..12e8116 100644
+index 8e3d8ad..9336c7d 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -69,7 +69,9 @@ add_test (NAME integration COMMAND "${PERL_EXECUTABLE}" ${PERL_PROVE} WORKING_DI
+@@ -94,7 +94,9 @@ add_test (NAME integration COMMAND "${PERL_EXECUTABLE}" ${PERL_PROVE} WORKING_DI
  
  install(PROGRAMS slic3r.pl DESTINATION bin RENAME slic3r-prusa3d)
  
