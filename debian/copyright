@@ -86,7 +86,7 @@ License: GPL-2+
 Files: xs/src/avrdude/linuxgpio.c
        xs/src/avrdude/linuxgpio.h
 Copyright: 2013, Radoslav Kolev <radoslav@kolev.info>
-License: GPL-2+ (with incorrect FSF address)
+License: GPL-2+
 
 Files: xs/src/avrdude/config_gram.c
        xs/src/avrdude/config_gram.h
@@ -95,7 +95,7 @@ License: GPL-3+
 
 Files: xs/src/avrdude/jtag3_private.h
 Copyright: 2012, Joerg Wunsch <j@uriah.heep.sax.de>
-License: CC0 GPL-2+
+License: GPL-2+
 
 Files: xs/src/avrdude/safemode.c
 Copyright: 2000-2004, Brian S. Dean <bsd@bsdhome.com>
@@ -1282,6 +1282,23 @@ License: GPL-2+
  .
  On Debian systems, the full text of this document can be found in
  /usr/share/common-licenses/GPL-2.
+
+License: GPL-3+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the full text of this document can be found in
+ /usr/share/common-licenses/GPL-3.
 
 License: BSD-3-clause
  Redistribution and use in source and binary forms, with or without modification,
