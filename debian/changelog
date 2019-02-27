@@ -1,3 +1,25 @@
+slic3r-prusa (1.41.2+dfsg-1) unstable; urgency=medium
+
+  * [8e0dd8b] Build-dep on libcurl4-gnutls-dev
+  * [6051ff5] Update debian/copyright to include bundled avrdude
+  * [c86a849] New upstream version 1.41.0+dfsg
+  * [f002bbb] Drop upstreamed patch
+  * [cd5213c] New upstream version 1.41.2+dfsg
+  * [1f0a4b0] New upstream version 1.41.2+dfsg
+  * [cf78089] Add new build-deps
+  * [b793385] Exclude precompiled windows binary in avrdude folder, and
+    atmel-docs. atmel-docs contains minified jquery files and other
+    source-is-missing files, but this isn't strictly necessary for slic3r-prusa
+    so toss the whole thing out.
+  * [62e4ee1] Fix licenses in debian/copyright
+  * [74a499e] Update vcs fields for salsa
+  * [290bfac] Refresh patches and fix hashbang of /usr/bin/slic3r-prusa3d
+  * [80c860f] Fix installation path of perl bits
+  * [2c210f6] Use optional build-dep for libnlopt-cxx-dev.
+    C++ interface was in libnlopt-dev before 2.4.2+dfsg-5.
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 27 Feb 2019 11:07:00 +0800
+
 slic3r-prusa (1.40.0+dfsg-1) unstable; urgency=medium
 
   * [ad2db45] New upstream version 1.40.0+dfsg
