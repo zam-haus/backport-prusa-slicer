@@ -8,8 +8,8 @@ Subject: Use system libs
 
 diff --git a/xs/src/libslic3r/Format/AMF.cpp b/xs/src/libslic3r/Format/AMF.cpp
 index 5aa922f..c7793a4 100644
---- a/xs/src/libslic3r/Format/AMF.cpp
-+++ b/xs/src/libslic3r/Format/AMF.cpp
+--- a/src/libslic3r/Format/AMF.cpp
++++ b/src/libslic3r/Format/AMF.cpp
 @@ -1,7 +1,7 @@
  #include <string.h>
  #include <map>
