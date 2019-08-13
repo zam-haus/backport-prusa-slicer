@@ -34,7 +34,8 @@ Build-Depends: debhelper (>= 9.20120312),
                libdevel-checklib-perl,
                xfonts-base,
                xvfb,
-               xauth
+               xauth,
+               zlib1g-dev
 Standards-Version: 4.1.1
 Homepage: http://github.com/prusa3d/slic3r
 Vcs-Git: https://salsa.debian.org/3dprinting-team/slic3r-prusa
