@@ -1,9 +1,21 @@
-slic3r-prusa (2.0.0-1) unstable; urgency=medium
+slic3r-prusa (2.0.0+dfsg-1) unstable; urgency=medium
 
   * [70aeaf2] New upstream version 2.0.0
   * [6978afd] Refresh patches
+  * [e9fd8a2] Update cmake flags
+  * [f8045cf] Build-dep on zlib1g-dev
+  * [3ef7df3] Update desktop file and icons
+  * [a95a6ac] Drop outdated patches
+  * [70a5346] Rename manpage
+  * [341fbe5] Rename desktop file
+  * [3016368] Drop perl dependencies
+  * [2e44831] Rename slic3r-prusa binary package to prusa-slicer
+  * [7fc8ceb] Drop dh_perl override in debian/rules
+  * [2d4d1dd] Update debian/copyright
+  * [5a6f513] New upstream version 2.0.0+dfsg
+  * [64482a7] Re-add slic3r-prusa as a transitional package
 
- -- Chow Loong Jin <hyperair@debian.org>  Tue, 13 Aug 2019 20:34:44 +0800
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 15 Aug 2019 17:17:24 +0800
 
 slic3r-prusa (1.41.3+dfsg-1) experimental; urgency=medium
 
