@@ -41,7 +41,7 @@ Homepage: http://github.com/prusa3d/slic3r
 Vcs-Git: https://salsa.debian.org/3dprinting-team/slic3r-prusa
 Vcs-Browser: https://salsa.debian.org/3dprinting-team/slic3r-prusa.git
 
-Package: slic3r-prusa
+Package: prusa-slicer
 Architecture: any
 Depends: ${misc:Depends}, ${shlibs:Depends}
 Description: G-code generator for 3D printers
