@@ -12,9 +12,17 @@ Files: *
 Copyright: 2011-2016, Alessandro Ranellucci <alessandro@unterwelt.it>
 License: AGPL-3
 
-Files: var/*.png
+Files: resources/icons/*.png
 Copyright: Mark James
 License: CC-BY-3.0
+
+Files: src/admesh/*
+Copyright: 1995-1996, Anthony D. Martin
+License: GPL-2+
+
+Files: src/agg/*
+Copyright: 2002-2005, Maxim Shemanarev (http:www.antigrain.com)
+License: AGG-2.4 or BSD-3-clause-AGG
 
 Files: src/avrdude/*
 Copyright: 1990-2008 Brian S. Dean  <bsd@bdmicro.com>
@@ -195,46 +203,288 @@ Files: src/avrdude/libavrdude.h
 Copyright: Joerg Wunsch
 License: GPL-2+
 
-Files: src/Shiny/*
-Copyright: 2007-2010 Albin Abedi
+Files: src/avrdude/windows/getopt.*
+Copyright: 1987-2001, Free Software Foundation, Inc.
+License: LGPL-2.1+
+
+Files: src/boost/nowide/*
+Copyright: 2012, 2015, Artyom Beilis (Tonkikh)
+License: BSL-1.0
+
+Files: src/clipper/*
+Copyright: 2015, Angus Johnson
+License: BSL-1.0
+
+Files: src/glu-libtess/*
+Copyright: 1991-2000, Silicon Graphics, Inc.
+License: SGI-B-2.0
+
+Files: src/igl/*
+Copyright: 2013-2018, Alec Jacobson <alecjacobson@gmail.com>
+           2013-2017, Daniele Panozzo <daniele.panozzo@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/copyleft/cgal/BinaryWindingNumberOperations.h
+       src/igl/copyleft/cgal/cell_adjacency.*
+       src/igl/copyleft/cgal/closest_facet.*
+       src/igl/copyleft/cgal/component_inside_component.*
+       src/igl/copyleft/cgal/extract_cells.*
+       src/igl/copyleft/cgal/extract_feature.*
+       src/igl/copyleft/cgal/order_facets_around_edge.h
+       src/igl/copyleft/cgal/outer_element.cpp
+       src/igl/copyleft/cgal/outer_facet.*
+       src/igl/copyleft/cgal/points_inside_component.*
+       src/igl/copyleft/cgal/propagate_winding_numbers.*
+       src/igl/copyleft/cgal/relabel_small_immersed_cells.*
+       src/igl/copyleft/cgal/remesh_intersections.*
+       src/igl/delaunay_triangulation.cpp
+       src/igl/outer_element.cpp
+       src/igl/resolve_duplicated_faces.*
+Copyright: 2015-2016, Qingnan Zhou <qnzhou@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/comb_cross_field.cpp
+       src/igl/comb_cross_field.h
+       src/igl/comb_frame_field.cpp
+       src/igl/compute_frame_field_bisectors.cpp
+       src/igl/compute_frame_field_bisectors.h
+       src/igl/cross_field_missmatch.cpp
+       src/igl/cross_field_missmatch.h
+       src/igl/cut_mesh_from_singularities.cpp
+       src/igl/cut_mesh_from_singularities.h
+       src/igl/find_cross_field_singularities.cpp
+       src/igl/find_cross_field_singularities.h
+       src/igl/rotation_matrix_from_directions.cpp
+Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>
+           2014, Olga Diamanti <olga.diam@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/flip_avoiding_line_search.*
+       src/igl/line_search.*
+       src/igl/slim.*
+Copyright: 2016, Michael Rabinovich
+License: MPL-2.0
+
+Files: src/igl/embree/embree2/rtcore.h
+       src/igl/embree/embree2/rtcore_geometry.h
+       src/igl/embree/embree2/rtcore_geometry_user.h
+       src/igl/embree/embree2/rtcore_ray.h
+       src/igl/embree/embree2/rtcore_scene.h
+Copyright: 2009-2015, Intel Corporation
+License: Apache-2.0
+
+Files: src/igl/Singular_Value_Decomposition_Givens_QR_Factorization_Kernel.hpp
+       src/igl/Singular_Value_Decomposition_Jacobi_Conjugation_Kernel.hpp
+       src/igl/Singular_Value_Decomposition_Kernel_Declarations.hpp
+       src/igl/Singular_Value_Decomposition_Main_Kernel_Body.hpp
+       src/igl/Singular_Value_Decomposition_Preamble.hpp
+Copyright: 2010-2011, Eftychios Sifakis.
+License: BSD-2-clause
+
+files: src/igl/lim/lim.cpp
+       src/igl/lim/lim.h
+       src/igl/serialize.h
+       src/igl/xml/serialize_xml.cpp
+Copyright: 2014, Christian SchÃ¼ller <schuellchr@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/comb_line_field.cpp
+       src/igl/comb_line_field.h
+       src/igl/line_field_missmatch.cpp
+       src/igl/line_field_missmatch.h
+Copyright: 2014, Nico Pietroni <nico.pietroni@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/isolines.cpp
+       src/igl/isolines.h
+       src/igl/loop.cpp
+       src/igl/loop.h
+Copyright: 2016, Oded Stein <oded.stein@columbia.edu>
+           2017, Oded Stein <oded.stein@columbia.edu>
+License: MPL-2.0
+
+Files: src/igl/cut_mesh.h
+       src/igl/dijkstra.h
+       src/igl/parallel_transport_angles.h
+       src/igl/sort_vectors_ccw.h
+Copyright: 2015, Olga Diamanti <olga.diam@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/opengl/glfw/imgui/ImGuiHelpers.h
+       src/igl/opengl/glfw/imgui/ImGuiMenu.cpp
+       src/igl/opengl/glfw/imgui/ImGuiMenu.h
+Copyright: 2018, Jérémie Dumas <jeremie.dumas@ens-lyon.org>
+License: MPL-2.0
+
+Files: src/igl/euler_characteristic.cpp
+       src/igl/flipped_triangles.cpp
+       src/igl/flipped_triangles.h
+Copyright: 2016, Michael Rabinovicnh <michaelrabinovich27@gmail.com@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/dot_row.cpp
+       src/igl/png/readPNG.cpp
+       src/igl/png/writePNG.cpp
+Copyright: 2014, 2016, Daniele Panozzo <daniele.panozzo@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/copyleft/marching_cubes.cpp
+       src/igl/copyleft/marching_cubes_tables.h
+Copyright: 2002, Computer Graphics Group, RWTH Aachen
+License: LGPL-2
+
+Files: src/igl/shapeup.*
+Copyright: 2017, Amir Vaxman <avaxman@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/copyleft/comiso/miq.cpp
+       src/igl/copyleft/comiso/miq.h
+Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>
+           2014, Olga Diamanti <olga.diam@gmail.com>
+           2014, Kevin Walliman <wkevin@student.ethz.ch>
+License: MPL-2.0
+
+Files: src/igl/segment_segment_intersect.cpp
+       src/igl/segment_segment_intersect.h
+Copyright: 2016, Francisca Gil Ureta <gilureta@cs.nyu.edu>
+License: MPL-2.0
+
+Files: src/igl/colormap.cpp
+       src/igl/colormap.h
+Copyright: 2017, Joe Graus <jgraus@gmu.edu>, Alec Jacobson <alecjacobson@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/nchoosek.cpp
+       src/igl/nchoosek.h
+Copyright: 2015, Olga Diamanti, Alec Jacobson
+License: MPL-2.0
+
+Files: src/igl/seam_edges.cpp
+       src/igl/seam_edges.h
+Copyright: 2016, Yotam Gingold <yotam@yotamgingold.com>
+License: MPL-2.0
+
+Files: src/igl/exact_geodesic.cpp
+       src/igl/exact_geodesic.h
+Copyright: 2017, Zhongshi Jiang <jiangzs@nyu.edu>
+           2018, Zhongshi Jiang <jiangzs@nyu.edu>
+License: MPL-2.0
+
+Files: src/igl/copyleft/opengl2/tga.cpp
+Copyright: 1995, Spencer Kimball and Peter Mattis
+           1997, Raphael FRANCOIS and Gordon Matzigkeit
+License: GPL-2+
+
+Files: src/igl/triangle/triangulate.h
+Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>
+  2017, Alec Jacobson
+License: MPL-2.0
+
+Files: src/igl/copyleft/cgal/delaunay_triangulation.cpp
+Copyright: 2016, Qingnan Zhou <qnzhou@gmail.com>
+  2018, Alec Jacobson
+License: MPL-2.0
+
+Files: src/igl/internal_angles.cpp
+Copyright: 2015, Alec Jacobson <alecjacobson@gmail.com>
+  2015, Daniele Panozzo <daniele.panozzo@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/euler_characteristic.h
+Copyright: 2016, Michael Rabinovich <michaelrabinovich27@gmail.com>
+  2017, Alec Jacobson <alecjacobson@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/rotation_matrix_from_directions.h
+Copyright: 2016, Alec Jacobson, Daniele Panozzo, Olga Diamanti
+License: MPL-2.0
+
+Files: src/igl/triangle_triangle_adjacency.cpp
+Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>
+  2018, Alec Jacobson, Marc Alexa
+License: MPL-2.0
+
+Files: src/igl/xml/serialize_xml.h
+Copyright: 2014, Christian Schï¿½ller <schuellchr@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/copyleft/cgal/submesh_aabb_tree.cpp
+Copyright: 2016, Alec Jacobson
+License: MPL-2.0
+
+Files: src/igl/comb_frame_field.h
+Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>, Olga Diamanti <olga.diam@gmail.com>
+License: MPL-2.0
+
+Files: src/igl/copyleft/quadprog.cpp
+Copyright: 2006, Luca Di Gaspero
+           2008, Angelo Furfaro
+           2010, Gael Guennebaud
+License: GPL-2+
+
+Files: src/igl/ply.h
+Copyright: 1994, The Board of Trustees of The Leland Stanford Junior University
+License: Expat
+
+Files: src/libnest2d/tools/benchmark.h
+Copyright: Tamás Mészáros
+License: GPL-2+
+
+Files: src/miniz/miniz.cpp
+       src/miniz/miniz_tdef.cpp
+       src/miniz/miniz_tinfl.cpp
+Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
+           2013-2014, RAD Game Tools and Valve Software
+License: Expat
+
+Files: src/miniz/miniz_zip.cpp
+Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
+           2013-2014, RAD Game Tools and Valve Software
+           2016, Martin Raiber
 License: Expat
 
 Files: src/poly2tri/*
 Copyright: 2009-2010, Mason Green <mason.green@gmail.com>
 License: BSD-3-clause
 
-Files: src/admesh/*
-Copyright: 1995, Anthony D. Martin
-License: GPL-2+
-
-Files: src/polypartition.*
+Files: src/polypartition/*
 Copyright: 2011, Ivan Fratric
 License: Expat
 
-Files: src/polypartition.cpp
-       src/polypartition.h
-Copyright: 2011, Ivan Fratric
+Files: src/qhull/*
+Copyright: 1993-2015, C.B. Barber.
+           1993-2015, The Geometry Center.
+License: qhull
+
+Files: src/qhull/src/qhulltest/QhullPointSet_test.cpp
+       src/qhull/src/qhulltest/QhullPoints_test.cpp
+Copyright: 2009-2015 C.B. Barber.
+License: qhull
+
+Files: src/semver/*
+Copyright: 2015-2017, Tomas Aparicio
 License: Expat
+
+Files: src/Shiny/*
+Copyright: 2007-2010 Albin Abedi
+License: Expat
+
+Files: src/nanosvg/nanosvg.h
+       src/nanosvg/nanosvgrast.h
+Copyright: 2013-2014 Mikko Mononen memon@inside.org
+License: zlib
 
 Files: src/libslic3r/Geometry.cpp
 Copyright: 2010-2012, Andrii Sydorchuk
-           2013-2016, Alessandro Ranellucci <alessandro@unterwelt.it>
 License: BSL-1.0
 
-Files: src/clipper.*
-Copyright: 2014, Angus Johnson
-License: BSL-1.0
-
-Files: src/glew/*
-Copyright: 2008-2015, Nigel Stewart <nigels@users.sourceforge.net>
-           2002-2008, Milan Ikits <milan ikits@ieee org>
-           2002-2008, Marcelo E. Magallon <mmagallo@debian org>
-           2002, Lev Povalahev
-License: BSL-1.0
+Files: src/libslic3r/clonable_ptr.hpp
+Copyright: 2014-2019, Sebastien Rombauts <sebastien.rombauts@gmail.com>
+License: Expat
 
 Files: debian/*
 Copyright: 2013, Nicolas Dandrimont <olasd@debian.org>
-           2014-2016, Chow Loong Jin <hyperair@debian.org>
+           2014-2019, Chow Loong Jin <hyperair@debian.org>
 License: AGPL-3
 
 License: AGPL-3
@@ -1324,3 +1574,202 @@ License: BSD-3-clause
  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: SGI-B-2.0
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the "Software"),
+ to deal in the Software without restriction, including without limitation
+ the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the
+ Software is furnished to do so, subject to the following conditions:
+.
+ The above copyright notice including the dates of first publication and
+ either this permission notice or a reference to
+ http://oss.sgi.com/projects/FreeB/
+ shall be included in all copies or substantial portions of the Software.
+.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ SILICON GRAPHICS, INC. BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+ OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+.
+ Except as contained in this notice, the name of Silicon Graphics, Inc.
+ shall not be used in advertising or otherwise to promote the sale, use or
+ other dealings in this Software without prior written authorization from
+ Silicon Graphics, Inc.
+
+License: qhull
+                     Qhull, Copyright (c) 1993-2015
+ .
+                             C.B. Barber
+                            Arlington, MA
+ .
+                                and
+ .
+        The National Science and Technology Research Center for
+         Computation and Visualization of Geometric Structures
+                         (The Geometry Center)
+                        University of Minnesota
+ .
+                        email: qhull@qhull.org
+ .
+ This software includes Qhull from C.B. Barber and The Geometry Center.
+ Qhull is copyrighted as noted above.  Qhull is free software and may
+ be obtained via http from www.qhull.org.  It may be freely copied, modified,
+ and redistributed under the following conditions:
+ .
+ 1. All copyright notices must remain intact in all files.
+ .
+ 2. A copy of this text file must be distributed along with any copies
+    of Qhull that you redistribute; this includes copies that you have
+    modified, or copies of programs or other software products that
+    include Qhull.
+ .
+ 3. If you modify Qhull, you must include a notice giving the
+    name of the person performing the modification, the date of
+    modification, and the reason for such modification.
+ .
+ 4. When distributing modified versions of Qhull, or other software
+    products that include Qhull, you must provide notice that the original
+    source code may be obtained as noted above.
+ .
+ 5. There is no warranty or other guarantee of fitness for Qhull, it is
+    provided solely "as is".  Bug reports or fixes may be sent to
+    qhull_bug@qhull.org; the authors may or may not act on them as
+    they desire.
+
+License: AGG-2.4
+ Permission to copy, use, modify, sell and distribute this software
+ is granted provided this copyright notice appears in all copies.
+ This software is provided "as is" without express or implied
+ warranty, and with no claim as to its suitability for any purpose.
+
+License: BSD-3-clause-AGG
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ .
+   1. Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+ .
+   2. Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in
+      the documentation and/or other materials provided with the
+      distribution.
+ .
+   3. The name of the author may not be used to endorse or promote
+      products derived from this software without specific prior
+      written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGE.
+
+License: BSL-1.0
+ Boost Software License - Version 1.0 - August 17th, 2003
+ .
+ Permission is hereby granted, free of charge, to any person or organization
+ obtaining a copy of the software and accompanying documentation covered by
+ this license (the "Software") to use, reproduce, display, distribute,
+ execute, and transmit the Software, and to prepare derivative works of the
+ Software, and to permit third-parties to whom the Software is furnished to
+ do so, all subject to the following:
+ .
+ The copyright notices in the Software and this entire statement, including
+ the above license grant, this restriction and the following disclaimer,
+ must be included in all copies of the Software, in whole or in part, and
+ all derivative works of the Software, unless such copies or derivative
+ works are solely in the form of machine-executable object code generated by
+ a source language processor.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT. IN NO EVENT
+ SHALL THE COPYRIGHT HOLDERS OR ANYONE DISTRIBUTING THE SOFTWARE BE LIABLE
+ FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
+ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ DEALINGS IN THE SOFTWARE.
+
+License: Apache-2.0
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ .
+     http://www.apache.org/licenses/LICENSE-2.0
+ .
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ .
+ On Debian systems, the full text of this licence can be found in
+ /usr/share/common-licenses/Apache-2.0.
+
+License: BSD-2-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are met:
+ .
+   * Redistributions of source code must retain the above copyright notice, this
+     list of conditions and the following disclaimer.
+ .
+   * Redistributions in binary form must reproduce the above copyright notice,
+     this list of conditions and the following disclaimer in the documentation
+     and/or other materials provided with the distribution.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: LGPL-2
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Library General Public
+ License as published by the Free Software Foundation; either
+ version 2 of the License, or (at your option) any later version.
+ .
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Library General Public License for more details.
+ .
+ You should have received a copy of the GNU Library General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ .
+ On Debian systems, the full text of this license can be found in
+ /usr/share/common-licenses/LGPL-2.
+
+License: zlib
+ This software is provided 'as-is', without any express or implied
+ warranty.  In no event will the authors be held liable for any damages
+ arising from the use of this software.
+ .
+ Permission is granted to anyone to use this software for any purpose,
+ including commercial applications, and to alter it and redistribute it
+ freely, subject to the following restrictions:
+ .
+ 1. The origin of this software must not be misrepresented; you must not
+ claim that you wrote the original software. If you use this software
+ in a product, an acknowledgment in the product documentation would be
+ appreciated but is not required.
+ 2. Altered source versions must be plainly marked as such, and must not be
+ misrepresented as being the original software.
+ 3. This notice may not be removed or altered from any source distribution.
