@@ -7,7 +7,7 @@
 #include <boost/filesystem.hpp>
 
 #include "libslic3r/FileParserError.hpp"
-#include "../Utils/Semver.hpp"
+#include "libslic3r/Semver.hpp"
 
 namespace Slic3r { 
 namespace GUI {
@@ -71,6 +71,11 @@ public:
 	// Returns configs().end() if such version does not exist in the index. This shall never happen
 	// if the index is valid.
 	const_iterator				recommended() const;
+	// Recommended config for a provided slic3r version. Used when checking for slic3r update (slic3r_version is the old one read out from PrusaSlicer.ini)
+	const_iterator				recommended(const Semver &slic3r_version) const;
+
+	// Returns the filesystem path from which this index has originally been loaded
+	const boost::filesystem::path& path() const { return m_path; }
 
 	// Load all vendor specific indices.
 	// Throws Slic3r::file_parser_error and the standard std file access exceptions.
@@ -79,6 +84,7 @@ public:
 private:
 	std::string 				m_vendor;
 	std::vector<Version>		m_configs;
+	boost::filesystem::path		m_path;
 };
 
 } // namespace Config

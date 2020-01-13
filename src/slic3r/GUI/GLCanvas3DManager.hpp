@@ -29,21 +29,46 @@ struct Camera;
 
 class GLCanvas3DManager
 {
-    struct GLInfo
+public:
+    enum EFramebufferType : unsigned char
     {
-        std::string version;
-        std::string glsl_version;
-        std::string vendor;
-        std::string renderer;
+        FB_None,
+        FB_Arb,
+        FB_Ext
+    };
 
+    class GLInfo
+    {
+        mutable bool m_detected;
+
+        mutable std::string m_version;
+        mutable std::string m_glsl_version;
+        mutable std::string m_vendor;
+        mutable std::string m_renderer;
+
+        mutable int m_max_tex_size;
+        mutable float m_max_anisotropy;
+
+    public:
         GLInfo();
 
-        void detect();
+        const std::string& get_version() const;
+        const std::string& get_glsl_version() const;
+        const std::string& get_vendor() const;
+        const std::string& get_renderer() const;
+
+        int get_max_tex_size() const;
+        float get_max_anisotropy() const;
+
         bool is_version_greater_or_equal_to(unsigned int major, unsigned int minor) const;
 
         std::string to_string(bool format_as_html, bool extensions) const;
+
+    private:
+        void detect() const;
     };
 
+private:
     enum EMultisampleState : unsigned char
     {
         MS_Unknown,
@@ -55,11 +80,11 @@ class GLCanvas3DManager
 
     CanvasesMap m_canvases;
     wxGLContext* m_context;
-    GLInfo m_gl_info;
+    static GLInfo s_gl_info;
     bool m_gl_initialized;
-    bool m_use_legacy_opengl;
-    bool m_use_VBOs;
     static EMultisampleState s_multisample;
+    static bool s_compressed_textures_supported;
+    static EFramebufferType s_framebuffers_type;
 
 public:
     GLCanvas3DManager();
@@ -72,21 +97,27 @@ public:
     unsigned int count() const;
 
     void init_gl();
-    std::string get_gl_info(bool format_as_html, bool extensions) const;
 
     bool init(wxGLCanvas* canvas);
+    void destroy();
 
     GLCanvas3D* get_canvas(wxGLCanvas* canvas);
 
     static bool can_multisample() { return s_multisample == MS_Enabled; }
+    static bool are_compressed_textures_supported() { return s_compressed_textures_supported; }
+    static bool are_framebuffers_supported() { return (s_framebuffers_type != FB_None); }
+    static EFramebufferType get_framebuffers_type() { return s_framebuffers_type; }
+
     static wxGLCanvas* create_wxglcanvas(wxWindow *parent);
 
-private:
-    CanvasesMap::iterator _get_canvas(wxGLCanvas* canvas);
-    CanvasesMap::const_iterator _get_canvas(wxGLCanvas* canvas) const;
+    static const GLInfo& get_gl_info() { return s_gl_info; }
 
-    bool _init(GLCanvas3D& canvas);
-    static void _detect_multisample(int* attribList);
+private:
+    CanvasesMap::iterator do_get_canvas(wxGLCanvas* canvas);
+    CanvasesMap::const_iterator do_get_canvas(wxGLCanvas* canvas) const;
+
+    bool init(GLCanvas3D& canvas);
+    static void detect_multisample(int* attribList);
 };
 
 } // namespace GUI

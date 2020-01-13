@@ -4,9 +4,9 @@
 #include <string>
 #include <condition_variable>
 #include <mutex>
-#include <thread>
 
 #include <boost/filesystem.hpp>
+#include <boost/thread.hpp>
 
 #include <wx/event.h>
 
@@ -49,7 +49,10 @@ public:
 	void set_fff_print(Print *print) { m_fff_print = print; }
 	void set_sla_print(SLAPrint *print) { m_sla_print = print; }
 	void set_gcode_preview_data(GCodePreviewData *gpd) { m_gcode_preview_data = gpd; }
-	// The following wxCommandEvent will be sent to the UI thread / Platter window, when the slicing is finished
+#if ENABLE_THUMBNAIL_GENERATOR
+    void set_thumbnail_cb(ThumbnailsGeneratorCallback cb) { m_thumbnail_cb = cb; }
+#endif // ENABLE_THUMBNAIL_GENERATOR
+    // The following wxCommandEvent will be sent to the UI thread / Platter window, when the slicing is finished
 	// and the background processing will transition into G-code export.
 	// The wxCommandEvent is sent to the UI thread asynchronously without waiting for the event to be processed.
 	void set_slicing_completed_event(int event_id) { m_event_slicing_completed_id = event_id; }
@@ -151,7 +154,11 @@ private:
 	SLAPrint 				   *m_sla_print			 = nullptr;
 	// Data structure, to which the G-code export writes its annotations.
 	GCodePreviewData 		   *m_gcode_preview_data = nullptr;
-	// Temporary G-code, there is one defined for the BackgroundSlicingProcess, differentiated from the other processes by a process ID.
+#if ENABLE_THUMBNAIL_GENERATOR
+    // Callback function, used to write thumbnails into gcode.
+    ThumbnailsGeneratorCallback m_thumbnail_cb = nullptr;
+#endif // ENABLE_THUMBNAIL_GENERATOR
+    // Temporary G-code, there is one defined for the BackgroundSlicingProcess, differentiated from the other processes by a process ID.
 	std::string 				m_temp_output_path;
 	// Output path provided by the user. The output path may be set even if the slicing is running,
 	// but once set, it cannot be re-set.
@@ -161,7 +168,7 @@ private:
 	PrintHostJob                m_upload_job;
 	// Thread, on which the background processing is executed. The thread will always be present
 	// and ready to execute the slicing process.
-	std::thread		 			m_thread;
+	boost::thread		 		m_thread;
 	// Mutex and condition variable to synchronize m_thread with the UI thread.
 	std::mutex 		 			m_mutex;
 	std::condition_variable		m_condition;

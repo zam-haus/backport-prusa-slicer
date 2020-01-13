@@ -15,7 +15,6 @@ namespace Slic3r {
 namespace GUI {
 namespace Config {
 
-static const Semver s_current_slic3r_semver(SLIC3R_VERSION);
 
 // Optimized lexicographic compare of two pre-release versions, ignoring the numeric suffix.
 static int compare_prerelease(const char *p1, const char *p2)
@@ -64,7 +63,7 @@ bool Version::is_slic3r_supported(const Semver &slic3r_version) const
 
 bool Version::is_current_slic3r_supported() const
 {
-	return this->is_slic3r_supported(s_current_slic3r_semver);
+	return this->is_slic3r_supported(Slic3r::SEMVER);
 }
 
 #if 0
@@ -192,12 +191,18 @@ size_t Index::load(const boost::filesystem::path &path)
 {
 	m_configs.clear();
 	m_vendor = path.stem().string();
+	m_path = path;
 
     boost::nowide::ifstream ifs(path.string());
     std::string line;
     size_t idx_line = 0;
     Version ver;
     while (std::getline(ifs, line)) {
+#ifndef _MSVCVER
+		// On a Unix system, getline does not remove the trailing carriage returns, if the index is shared over a Windows filesystem. Remove them manually.
+		while (! line.empty() && line.back() == '\r')
+			line.pop_back();
+#endif
     	++ idx_line;
     	// Skip the initial white spaces.
     	char *key = left_trim(const_cast<char*>(line.data()));
@@ -281,15 +286,20 @@ Index::const_iterator Index::find(const Semver &ver) const
 	return (it == m_configs.end() || it->config_version == ver) ? it : m_configs.end();
 }
 
-Index::const_iterator Index::recommended() const
+Index::const_iterator Index::recommended(const Semver &slic3r_version) const
 {
 	int idx = -1;
 	const_iterator highest = this->end();
 	for (const_iterator it = this->begin(); it != this->end(); ++ it)
-		if (it->is_current_slic3r_supported() &&
+		if (it->is_slic3r_supported(slic3r_version) &&
 			(highest == this->end() || highest->config_version < it->config_version))
 			highest = it;
 	return highest;
+}
+
+Index::const_iterator Index::recommended() const
+{
+	return this->recommended(Slic3r::SEMVER);
 }
 
 std::vector<Index> Index::load_db()
