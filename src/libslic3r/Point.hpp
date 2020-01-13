@@ -38,6 +38,7 @@ typedef std::vector<Point*>                             PointPtrs;
 typedef std::vector<const Point*>                       PointConstPtrs;
 typedef std::vector<Vec3crd>                            Points3;
 typedef std::vector<Vec2d>                              Pointfs;
+typedef std::vector<Vec2d>                              Vec2ds;
 typedef std::vector<Vec3d>                              Pointf3s;
 
 typedef Eigen::Matrix<float,  2, 2, Eigen::DontAlign> Matrix2f;
@@ -62,8 +63,8 @@ inline Vec2i64 to_2d(const Vec3i64 &pt3) { return Vec2i64(pt3(0), pt3(1)); }
 inline Vec2f   to_2d(const Vec3f   &pt3) { return Vec2f  (pt3(0), pt3(1)); }
 inline Vec2d   to_2d(const Vec3d   &pt3) { return Vec2d  (pt3(0), pt3(1)); }
 
-inline Vec3d to_3d(const Vec2d &v, double z) { return Vec3d(v(0), v(1), z); }
-inline Vec3f to_3d(const Vec2f &v, float z) { return Vec3f(v(0), v(1), z); }
+inline Vec3d   to_3d(const Vec2d &v, double z) { return Vec3d(v(0), v(1), z); }
+inline Vec3f   to_3d(const Vec2f &v, float z) { return Vec3f(v(0), v(1), z); }
 inline Vec3i64 to_3d(const Vec2i64 &v, float z) { return Vec3i64(int64_t(v(0)), int64_t(v(1)), int64_t(z)); }
 inline Vec3crd to_3d(const Vec3crd &p, coord_t z) { return Vec3crd(p(0), p(1), z); }
 
@@ -87,11 +88,12 @@ class Point : public Vec2crd
 public:
     typedef coord_t coord_type;
 
-    Point() : Vec2crd() { (*this)(0) = 0; (*this)(1) = 0; }
-    Point(coord_t x, coord_t y) { (*this)(0) = x; (*this)(1) = y; }
-    Point(int64_t x, int64_t y) { (*this)(0) = coord_t(x); (*this)(1) = coord_t(y); } // for Clipper
-    Point(double x, double y) { (*this)(0) = coord_t(lrint(x)); (*this)(1) = coord_t(lrint(y)); }
-    Point(const Point &rhs) { *this = rhs; }
+    Point() : Vec2crd(0, 0) {}
+    Point(coord_t x, coord_t y) : Vec2crd(x, y) {}
+    Point(int64_t x, int64_t y) : Vec2crd(coord_t(x), coord_t(y)) {} // for Clipper
+    Point(double x, double y) : Vec2crd(coord_t(lrint(x)), coord_t(lrint(y))) {}
+    Point(const Point& rhs) { *this = rhs; }
+    explicit Point(const Vec2d& rhs) : Vec2crd(coord_t(lrint(rhs.x())), coord_t(lrint(rhs.y()))) {}
     // This constructor allows you to construct Point from Eigen expressions
     template<typename OtherDerived>
     Point(const Eigen::MatrixBase<OtherDerived> &other) : Vec2crd(other) {}
@@ -290,5 +292,22 @@ namespace boost { namespace polygon {
     };
 } }
 // end Boost
+
+// Serialization through the Cereal library
+namespace cereal {
+//	template<class Archive> void serialize(Archive& archive, Slic3r::Vec2crd &v) { archive(v.x(), v.y()); }
+//	template<class Archive> void serialize(Archive& archive, Slic3r::Vec3crd &v) { archive(v.x(), v.y(), v.z()); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::Vec2i   &v) { archive(v.x(), v.y()); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::Vec3i   &v) { archive(v.x(), v.y(), v.z()); }
+//	template<class Archive> void serialize(Archive& archive, Slic3r::Vec2i64 &v) { archive(v.x(), v.y()); }
+//	template<class Archive> void serialize(Archive& archive, Slic3r::Vec3i64 &v) { archive(v.x(), v.y(), v.z()); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::Vec2f   &v) { archive(v.x(), v.y()); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::Vec3f   &v) { archive(v.x(), v.y(), v.z()); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::Vec2d   &v) { archive(v.x(), v.y()); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::Vec3d   &v) { archive(v.x(), v.y(), v.z()); }
+
+	template<class Archive> void load(Archive& archive, Slic3r::Matrix2f &m) { archive.loadBinary((char*)m.data(), sizeof(float) * 4); }
+	template<class Archive> void save(Archive& archive, Slic3r::Matrix2f &m) { archive.saveBinary((char*)m.data(), sizeof(float) * 4); }
+}
 
 #endif

@@ -25,11 +25,16 @@
 #include "PresetBundle.hpp"
 #include "GUI.hpp"
 #include "GUI_Utils.hpp"
+#include "slic3r/Config/Snapshot.hpp"
 #include "slic3r/Utils/PresetUpdater.hpp"
 
 
 namespace Slic3r {
 namespace GUI {
+
+
+using Config::Snapshot;
+using Config::SnapshotDB;
 
 
 // Printer model picker GUI control
@@ -79,6 +84,8 @@ PrinterPicker::PrinterPicker(wxWindow *parent, const VendorProfile &vendor, wxSt
     int max_row_width = 0;
     int current_row_width = 0;
 
+    bool is_variants = false;
+
     for (const auto &model : models) {
         if (! filter(model)) { continue; }
 
@@ -122,6 +129,7 @@ PrinterPicker::PrinterPicker(wxWindow *parent, const VendorProfile &vendor, wxSt
                 auto *alt_label = new wxStaticText(variants_panel, wxID_ANY, _(L("Alternate nozzles:")));
                 alt_label->SetFont(font_alt_nozzle);
                 variants_sizer->Add(alt_label, 0, wxBOTTOM, 3);
+                is_variants = true;
             }
 
             auto *cbox = new Checkbox(variants_panel, label, model_id, variant.name);
@@ -182,10 +190,10 @@ PrinterPicker::PrinterPicker(wxWindow *parent, const VendorProfile &vendor, wxSt
     }
     title_sizer->AddStretchSpacer();
 
-    if (titles.size() > 1) {
+    if (/*titles.size() > 1*/is_variants) {
         // It only makes sense to add the All / None buttons if there's multiple printers
 
-        auto *sel_all_std = new wxButton(this, wxID_ANY, _(L("All standard")));
+        auto* sel_all_std = new wxButton(this, wxID_ANY, titles.size() > 1 ? _(L("All standard")) : _(L("Standard")));
         auto *sel_all = new wxButton(this, wxID_ANY, _(L("All")));
         auto *sel_none = new wxButton(this, wxID_ANY, _(L("None")));
         sel_all_std->Bind(wxEVT_BUTTON, [this](const wxCommandEvent &event) { this->select_all(true, false); });
@@ -330,8 +338,8 @@ PagePrinters::PagePrinters(ConfigWizard *parent, wxString title, wxString shortn
     const auto families = vendor.families();
     for (const auto &family : families) {
         const auto filter = [&](const VendorProfile::PrinterModel &model) {
-            return (model.technology == ptFFF && technology & T_FFF
-                    || model.technology == ptSLA && technology & T_SLA)
+            return ((model.technology == ptFFF && technology & T_FFF)
+                    || (model.technology == ptSLA && technology & T_SLA))
                 && model.family == family;
         };
 
@@ -532,15 +540,21 @@ PageBedShape::PageBedShape(ConfigWizard *parent)
 {
     append_text(_(L("Set the shape of your printer's bed.")));
 
-    shape_panel->build_panel(wizard_p()->custom_config->option<ConfigOptionPoints>("bed_shape"));
+    shape_panel->build_panel(*wizard_p()->custom_config->option<ConfigOptionPoints>("bed_shape"),
+        *wizard_p()->custom_config->option<ConfigOptionString>("bed_custom_texture"),
+        *wizard_p()->custom_config->option<ConfigOptionString>("bed_custom_model"));
+
     append(shape_panel);
 }
 
 void PageBedShape::apply_custom_config(DynamicPrintConfig &config)
 {
-    const auto points(shape_panel->GetValue());
-    auto *opt = new ConfigOptionPoints(points);
-    config.set_key_value("bed_shape", opt);
+    const std::vector<Vec2d>& points = shape_panel->get_shape();
+    const std::string& custom_texture = shape_panel->get_custom_texture();
+    const std::string& custom_model = shape_panel->get_custom_model();
+    config.set_key_value("bed_shape", new ConfigOptionPoints(points));
+    config.set_key_value("bed_custom_texture", new ConfigOptionString(custom_texture));
+    config.set_key_value("bed_custom_model", new ConfigOptionString(custom_model));
 }
 
 PageDiameters::PageDiameters(ConfigWizard *parent)
@@ -810,7 +824,7 @@ void ConfigWizardIndex::on_paint(wxPaintEvent & evt)
         const Item& item = items[i];
         unsigned x = em_w/2 + item.indent * em_w;
 
-        if (i == item_active || item_hover >= 0 && i == (size_t)item_hover) {
+        if (i == item_active || (item_hover >= 0 && i == (size_t)item_hover)) {
             dc.DrawBitmap(bullet_blue.bmp(), x, y + yoff_icon, false);
         }
         else if (i < item_active)  { dc.DrawBitmap(bullet_black.bmp(), x, y + yoff_icon, false); }
@@ -1019,15 +1033,33 @@ void ConfigWizard::priv::apply_config(AppConfig *app_config, PresetBundle *prese
 
     // Decide whether to create snapshot based on run_reason and the reset profile checkbox
     bool snapshot = true;
+    Snapshot::Reason snapshot_reason = Snapshot::SNAPSHOT_UPGRADE;
     switch (run_reason) {
-        case ConfigWizard::RR_DATA_EMPTY:    snapshot = false; break;
-        case ConfigWizard::RR_DATA_LEGACY:   snapshot = true; break;
-        case ConfigWizard::RR_DATA_INCOMPAT: snapshot = false; break;      // In this case snapshot is done by PresetUpdater with the appropriate reason
-        case ConfigWizard::RR_USER:          snapshot = page_welcome->reset_user_profile(); break;
+        case ConfigWizard::RR_DATA_EMPTY:
+            snapshot = false;
+            break;
+        case ConfigWizard::RR_DATA_LEGACY:
+            snapshot = true;
+            break;
+        case ConfigWizard::RR_DATA_INCOMPAT:
+            // In this case snapshot has already been taken by
+            // PresetUpdater with the appropriate reason
+            snapshot = false;
+            break;
+        case ConfigWizard::RR_USER:
+            snapshot = page_welcome->reset_user_profile();
+            snapshot_reason = Snapshot::SNAPSHOT_USER;
+            break;
     }
+
+    if (snapshot) {
+        SnapshotDB::singleton().take_snapshot(*app_config, snapshot_reason);
+    }
+
     if (install_bundles.size() > 0) {
         // Install bundles from resources.
-        updater->install_bundles_rsrc(std::move(install_bundles), snapshot);
+        // Don't create snapshot - we've already done that above if applicable.
+        updater->install_bundles_rsrc(std::move(install_bundles), false);
     } else {
         BOOST_LOG_TRIVIAL(info) << "No bundles need to be installed from resources";
     }
@@ -1086,7 +1118,7 @@ ConfigWizard::ConfigWizard(wxWindow *parent, RunReason reason)
 
     p->load_vendors();
     p->custom_config.reset(DynamicPrintConfig::new_from_defaults_keys({
-        "gcode_flavor", "bed_shape", "nozzle_diameter", "filament_diameter", "temperature", "bed_temperature",
+        "gcode_flavor", "bed_shape", "bed_custom_texture", "bed_custom_model", "nozzle_diameter", "filament_diameter", "temperature", "bed_temperature",
     }));
 
     p->index = new ConfigWizardIndex(this);

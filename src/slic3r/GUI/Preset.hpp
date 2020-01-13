@@ -8,7 +8,7 @@
 
 #include "libslic3r/libslic3r.h"
 #include "libslic3r/PrintConfig.hpp"
-#include "slic3r/Utils/Semver.hpp"
+#include "libslic3r/Semver.hpp"
 
 class wxBitmap;
 class wxBitmapComboBox;
@@ -73,6 +73,8 @@ public:
 
     VendorProfile() {}
     VendorProfile(std::string id) : id(std::move(id)) {}
+
+    bool 		valid() const { return ! name.empty() && ! id.empty() && config_version.valid(); }
 
     static VendorProfile from_ini(const boost::filesystem::path &path, bool load_all=true);
     static VendorProfile from_ini(const boost::property_tree::ptree &tree, const boost::filesystem::path &path, bool load_all=true);
