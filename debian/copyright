@@ -219,210 +219,210 @@ Files: src/glu-libtess/*
 Copyright: 1991-2000, Silicon Graphics, Inc.
 License: SGI-B-2.0
 
-Files: src/igl/*
+Files: src/libigl/igl/*
 Copyright: 2013-2018, Alec Jacobson <alecjacobson@gmail.com>
            2013-2017, Daniele Panozzo <daniele.panozzo@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/copyleft/cgal/BinaryWindingNumberOperations.h
-       src/igl/copyleft/cgal/cell_adjacency.*
-       src/igl/copyleft/cgal/closest_facet.*
-       src/igl/copyleft/cgal/component_inside_component.*
-       src/igl/copyleft/cgal/extract_cells.*
-       src/igl/copyleft/cgal/extract_feature.*
-       src/igl/copyleft/cgal/order_facets_around_edge.h
-       src/igl/copyleft/cgal/outer_element.cpp
-       src/igl/copyleft/cgal/outer_facet.*
-       src/igl/copyleft/cgal/points_inside_component.*
-       src/igl/copyleft/cgal/propagate_winding_numbers.*
-       src/igl/copyleft/cgal/relabel_small_immersed_cells.*
-       src/igl/copyleft/cgal/remesh_intersections.*
-       src/igl/delaunay_triangulation.cpp
-       src/igl/outer_element.cpp
-       src/igl/resolve_duplicated_faces.*
+Files: src/libigl/igl/copyleft/cgal/BinaryWindingNumberOperations.h
+       src/libigl/igl/copyleft/cgal/cell_adjacency.*
+       src/libigl/igl/copyleft/cgal/closest_facet.*
+       src/libigl/igl/copyleft/cgal/component_inside_component.*
+       src/libigl/igl/copyleft/cgal/extract_cells.*
+       src/libigl/igl/copyleft/cgal/extract_feature.*
+       src/libigl/igl/copyleft/cgal/order_facets_around_edge.h
+       src/libigl/igl/copyleft/cgal/outer_element.cpp
+       src/libigl/igl/copyleft/cgal/outer_facet.*
+       src/libigl/igl/copyleft/cgal/points_inside_component.*
+       src/libigl/igl/copyleft/cgal/propagate_winding_numbers.*
+       src/libigl/igl/copyleft/cgal/relabel_small_immersed_cells.*
+       src/libigl/igl/copyleft/cgal/remesh_intersections.*
+       src/libigl/igl/delaunay_triangulation.cpp
+       src/libigl/igl/outer_element.cpp
+       src/libigl/igl/resolve_duplicated_faces.*
 Copyright: 2015-2016, Qingnan Zhou <qnzhou@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/comb_cross_field.cpp
-       src/igl/comb_cross_field.h
-       src/igl/comb_frame_field.cpp
-       src/igl/compute_frame_field_bisectors.cpp
-       src/igl/compute_frame_field_bisectors.h
-       src/igl/cross_field_missmatch.cpp
-       src/igl/cross_field_missmatch.h
-       src/igl/cut_mesh_from_singularities.cpp
-       src/igl/cut_mesh_from_singularities.h
-       src/igl/find_cross_field_singularities.cpp
-       src/igl/find_cross_field_singularities.h
-       src/igl/rotation_matrix_from_directions.cpp
+Files: src/libigl/igl/comb_cross_field.cpp
+       src/libigl/igl/comb_cross_field.h
+       src/libigl/igl/comb_frame_field.cpp
+       src/libigl/igl/compute_frame_field_bisectors.cpp
+       src/libigl/igl/compute_frame_field_bisectors.h
+       src/libigl/igl/cross_field_missmatch.cpp
+       src/libigl/igl/cross_field_missmatch.h
+       src/libigl/igl/cut_mesh_from_singularities.cpp
+       src/libigl/igl/cut_mesh_from_singularities.h
+       src/libigl/igl/find_cross_field_singularities.cpp
+       src/libigl/igl/find_cross_field_singularities.h
+       src/libigl/igl/rotation_matrix_from_directions.cpp
 Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>
            2014, Olga Diamanti <olga.diam@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/flip_avoiding_line_search.*
-       src/igl/line_search.*
-       src/igl/slim.*
+Files: src/libigl/igl/flip_avoiding_line_search.*
+       src/libigl/igl/line_search.*
+       src/libigl/igl/slim.*
 Copyright: 2016, Michael Rabinovich
 License: MPL-2.0
 
-Files: src/igl/embree/embree2/rtcore.h
-       src/igl/embree/embree2/rtcore_geometry.h
-       src/igl/embree/embree2/rtcore_geometry_user.h
-       src/igl/embree/embree2/rtcore_ray.h
-       src/igl/embree/embree2/rtcore_scene.h
+Files: src/libigl/igl/embree/embree2/rtcore.h
+       src/libigl/igl/embree/embree2/rtcore_geometry.h
+       src/libigl/igl/embree/embree2/rtcore_geometry_user.h
+       src/libigl/igl/embree/embree2/rtcore_ray.h
+       src/libigl/igl/embree/embree2/rtcore_scene.h
 Copyright: 2009-2015, Intel Corporation
 License: Apache-2.0
 
-Files: src/igl/Singular_Value_Decomposition_Givens_QR_Factorization_Kernel.hpp
-       src/igl/Singular_Value_Decomposition_Jacobi_Conjugation_Kernel.hpp
-       src/igl/Singular_Value_Decomposition_Kernel_Declarations.hpp
-       src/igl/Singular_Value_Decomposition_Main_Kernel_Body.hpp
-       src/igl/Singular_Value_Decomposition_Preamble.hpp
+Files: src/libigl/igl/Singular_Value_Decomposition_Givens_QR_Factorization_Kernel.hpp
+       src/libigl/igl/Singular_Value_Decomposition_Jacobi_Conjugation_Kernel.hpp
+       src/libigl/igl/Singular_Value_Decomposition_Kernel_Declarations.hpp
+       src/libigl/igl/Singular_Value_Decomposition_Main_Kernel_Body.hpp
+       src/libigl/igl/Singular_Value_Decomposition_Preamble.hpp
 Copyright: 2010-2011, Eftychios Sifakis.
 License: BSD-2-clause
 
-files: src/igl/lim/lim.cpp
-       src/igl/lim/lim.h
-       src/igl/serialize.h
-       src/igl/xml/serialize_xml.cpp
+files: src/libigl/igl/lim/lim.cpp
+       src/libigl/igl/lim/lim.h
+       src/libigl/igl/serialize.h
+       src/libigl/igl/xml/serialize_xml.cpp
 Copyright: 2014, Christian SchÃ¼ller <schuellchr@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/comb_line_field.cpp
-       src/igl/comb_line_field.h
-       src/igl/line_field_missmatch.cpp
-       src/igl/line_field_missmatch.h
+Files: src/libigl/igl/comb_line_field.cpp
+       src/libigl/igl/comb_line_field.h
+       src/libigl/igl/line_field_missmatch.cpp
+       src/libigl/igl/line_field_missmatch.h
 Copyright: 2014, Nico Pietroni <nico.pietroni@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/isolines.cpp
-       src/igl/isolines.h
-       src/igl/loop.cpp
-       src/igl/loop.h
+Files: src/libigl/igl/isolines.cpp
+       src/libigl/igl/isolines.h
+       src/libigl/igl/loop.cpp
+       src/libigl/igl/loop.h
 Copyright: 2016, Oded Stein <oded.stein@columbia.edu>
            2017, Oded Stein <oded.stein@columbia.edu>
 License: MPL-2.0
 
-Files: src/igl/cut_mesh.h
-       src/igl/dijkstra.h
-       src/igl/parallel_transport_angles.h
-       src/igl/sort_vectors_ccw.h
+Files: src/libigl/igl/cut_mesh.h
+       src/libigl/igl/dijkstra.h
+       src/libigl/igl/parallel_transport_angles.h
+       src/libigl/igl/sort_vectors_ccw.h
 Copyright: 2015, Olga Diamanti <olga.diam@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/opengl/glfw/imgui/ImGuiHelpers.h
-       src/igl/opengl/glfw/imgui/ImGuiMenu.cpp
-       src/igl/opengl/glfw/imgui/ImGuiMenu.h
+Files: src/libigl/igl/opengl/glfw/imgui/ImGuiHelpers.h
+       src/libigl/igl/opengl/glfw/imgui/ImGuiMenu.cpp
+       src/libigl/igl/opengl/glfw/imgui/ImGuiMenu.h
 Copyright: 2018, Jérémie Dumas <jeremie.dumas@ens-lyon.org>
 License: MPL-2.0
 
-Files: src/igl/euler_characteristic.cpp
-       src/igl/flipped_triangles.cpp
-       src/igl/flipped_triangles.h
+Files: src/libigl/igl/euler_characteristic.cpp
+       src/libigl/igl/flipped_triangles.cpp
+       src/libigl/igl/flipped_triangles.h
 Copyright: 2016, Michael Rabinovicnh <michaelrabinovich27@gmail.com@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/dot_row.cpp
-       src/igl/png/readPNG.cpp
-       src/igl/png/writePNG.cpp
+Files: src/libigl/igl/dot_row.cpp
+       src/libigl/igl/png/readPNG.cpp
+       src/libigl/igl/png/writePNG.cpp
 Copyright: 2014, 2016, Daniele Panozzo <daniele.panozzo@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/copyleft/marching_cubes.cpp
-       src/igl/copyleft/marching_cubes_tables.h
+Files: src/libigl/igl/copyleft/marching_cubes.cpp
+       src/libigl/igl/copyleft/marching_cubes_tables.h
 Copyright: 2002, Computer Graphics Group, RWTH Aachen
 License: LGPL-2
 
-Files: src/igl/shapeup.*
+Files: src/libigl/igl/shapeup.*
 Copyright: 2017, Amir Vaxman <avaxman@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/copyleft/comiso/miq.cpp
-       src/igl/copyleft/comiso/miq.h
+Files: src/libigl/igl/copyleft/comiso/miq.cpp
+       src/libigl/igl/copyleft/comiso/miq.h
 Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>
            2014, Olga Diamanti <olga.diam@gmail.com>
            2014, Kevin Walliman <wkevin@student.ethz.ch>
 License: MPL-2.0
 
-Files: src/igl/segment_segment_intersect.cpp
-       src/igl/segment_segment_intersect.h
+Files: src/libigl/igl/segment_segment_intersect.cpp
+       src/libigl/igl/segment_segment_intersect.h
 Copyright: 2016, Francisca Gil Ureta <gilureta@cs.nyu.edu>
 License: MPL-2.0
 
-Files: src/igl/colormap.cpp
-       src/igl/colormap.h
+Files: src/libigl/igl/colormap.cpp
+       src/libigl/igl/colormap.h
 Copyright: 2017, Joe Graus <jgraus@gmu.edu>, Alec Jacobson <alecjacobson@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/nchoosek.cpp
-       src/igl/nchoosek.h
+Files: src/libigl/igl/nchoosek.cpp
+       src/libigl/igl/nchoosek.h
 Copyright: 2015, Olga Diamanti, Alec Jacobson
 License: MPL-2.0
 
-Files: src/igl/seam_edges.cpp
-       src/igl/seam_edges.h
+Files: src/libigl/igl/seam_edges.cpp
+       src/libigl/igl/seam_edges.h
 Copyright: 2016, Yotam Gingold <yotam@yotamgingold.com>
 License: MPL-2.0
 
-Files: src/igl/exact_geodesic.cpp
-       src/igl/exact_geodesic.h
+Files: src/libigl/igl/exact_geodesic.cpp
+       src/libigl/igl/exact_geodesic.h
 Copyright: 2017, Zhongshi Jiang <jiangzs@nyu.edu>
            2018, Zhongshi Jiang <jiangzs@nyu.edu>
 License: MPL-2.0
 
-Files: src/igl/copyleft/opengl2/tga.cpp
+Files: src/libigl/igl/copyleft/opengl2/tga.cpp
 Copyright: 1995, Spencer Kimball and Peter Mattis
            1997, Raphael FRANCOIS and Gordon Matzigkeit
 License: GPL-2+
 
-Files: src/igl/triangle/triangulate.h
+Files: src/libigl/igl/triangle/triangulate.h
 Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>
   2017, Alec Jacobson
 License: MPL-2.0
 
-Files: src/igl/copyleft/cgal/delaunay_triangulation.cpp
+Files: src/libigl/igl/copyleft/cgal/delaunay_triangulation.cpp
 Copyright: 2016, Qingnan Zhou <qnzhou@gmail.com>
   2018, Alec Jacobson
 License: MPL-2.0
 
-Files: src/igl/internal_angles.cpp
+Files: src/libigl/igl/internal_angles.cpp
 Copyright: 2015, Alec Jacobson <alecjacobson@gmail.com>
   2015, Daniele Panozzo <daniele.panozzo@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/euler_characteristic.h
+Files: src/libigl/igl/euler_characteristic.h
 Copyright: 2016, Michael Rabinovich <michaelrabinovich27@gmail.com>
   2017, Alec Jacobson <alecjacobson@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/rotation_matrix_from_directions.h
+Files: src/libigl/igl/rotation_matrix_from_directions.h
 Copyright: 2016, Alec Jacobson, Daniele Panozzo, Olga Diamanti
 License: MPL-2.0
 
-Files: src/igl/triangle_triangle_adjacency.cpp
+Files: src/libigl/igl/triangle_triangle_adjacency.cpp
 Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>
   2018, Alec Jacobson, Marc Alexa
 License: MPL-2.0
 
-Files: src/igl/xml/serialize_xml.h
+Files: src/libigl/igl/xml/serialize_xml.h
 Copyright: 2014, Christian Schï¿½ller <schuellchr@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/copyleft/cgal/submesh_aabb_tree.cpp
+Files: src/libigl/igl/copyleft/cgal/submesh_aabb_tree.cpp
 Copyright: 2016, Alec Jacobson
 License: MPL-2.0
 
-Files: src/igl/comb_frame_field.h
+Files: src/libigl/igl/comb_frame_field.h
 Copyright: 2014, Daniele Panozzo <daniele.panozzo@gmail.com>, Olga Diamanti <olga.diam@gmail.com>
 License: MPL-2.0
 
-Files: src/igl/copyleft/quadprog.cpp
+Files: src/libigl/igl/copyleft/quadprog.cpp
 Copyright: 2006, Luca Di Gaspero
            2008, Angelo Furfaro
            2010, Gael Guennebaud
 License: GPL-2+
 
-Files: src/igl/ply.h
+Files: src/libigl/igl/ply.h
 Copyright: 1994, The Board of Trustees of The Leland Stanford Junior University
 License: Expat
 
@@ -437,7 +437,7 @@ Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
            2013-2014, RAD Game Tools and Valve Software
 License: Expat
 
-Files: src/miniz/miniz_zip.cpp
+Files: src/miniz/miniz.c
 Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
            2013-2014, RAD Game Tools and Valve Software
            2016, Martin Raiber
