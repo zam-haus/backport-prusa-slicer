@@ -6,6 +6,8 @@ slic3r-prusa (2.1.1+dfsg-1) unstable; urgency=medium
   * [0fb7ef8] Update paths in debian/copyright
   * [93860ed] Update debian/copyright
   * [3807a67] New upstream version 2.1.1+dfsg
+  * [c8d7f4a] Update paths in debian/copyright
+  * [2b25f7d] Drop Use-system-libs.patch (upstreamed)
 
  -- Chow Loong Jin <hyperair@debian.org>  Tue, 14 Jan 2020 21:05:40 +0800
 
