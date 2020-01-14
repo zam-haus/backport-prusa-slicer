@@ -1,4 +1,15 @@
-slic3r-prusa (2.0.0+dfsg-1) unstable; urgency=medium
+slic3r-prusa (2.1.1+dfsg-1) unstable; urgency=medium
+
+  * [690563b] Install everything into debian/prusa-slicer
+  * [b1ee9a5] Override local copy of NotoSans-Regular.ttf with symlink
+  * [06d23bc] Update libgtest-dev build-dep to 1.7
+  * [0fb7ef8] Update paths in debian/copyright
+  * [93860ed] Update debian/copyright
+  * [3807a67] New upstream version 2.1.1+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 14 Jan 2020 21:05:40 +0800
+
+slic3r-prusa (2.0.0+dfsg-1) UNRELEASED; urgency=medium
 
   * [70aeaf2] New upstream version 2.0.0
   * [6978afd] Refresh patches
