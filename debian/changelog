@@ -8,8 +8,16 @@ slic3r-prusa (2.1.1+dfsg-1) unstable; urgency=medium
   * [3807a67] New upstream version 2.1.1+dfsg
   * [c8d7f4a] Update paths in debian/copyright
   * [2b25f7d] Drop Use-system-libs.patch (upstreamed)
+  * [8d6a3c0] Build-dep on libcereal-dev
+  * [a6c3472] Fix syntax error in debian/copyright
+  * [7bcede0] Fix license paragraphs in debian/copyright
+  * [e93c98d] Update exec command in desktop file
+    Drop --gui parameter, no longer exists
+  * [489c360] Redo manpage for new options
+  * [3ed4488] Amend references to Slic3r in package description.
+    Update them to PrusaSlicer
 
- -- Chow Loong Jin <hyperair@debian.org>  Tue, 14 Jan 2020 21:05:40 +0800
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 16 Jan 2020 11:21:02 +0800
 
 slic3r-prusa (2.0.0+dfsg-1) UNRELEASED; urgency=medium
 
