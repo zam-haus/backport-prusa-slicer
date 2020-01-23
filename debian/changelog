@@ -1,3 +1,10 @@
+slic3r-prusa (2.1.1+dfsg-2) unstable; urgency=medium
+
+  * [f44a47a] Reexport patches using gbp-pq
+  * [106ab86] Fix admesh compilation error on big-endian architectures
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 24 Jan 2020 04:51:23 +0800
+
 slic3r-prusa (2.1.1+dfsg-1) unstable; urgency=medium
 
   * [690563b] Install everything into debian/prusa-slicer
