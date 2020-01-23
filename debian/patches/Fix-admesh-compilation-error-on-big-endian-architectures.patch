@@ -1,0 +1,25 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Fri, 24 Jan 2020 04:36:48 +0800
+Subject: Fix admesh compilation error on big-endian architectures
+
+Patch taken from
+https://github.com/prusa3d/PrusaSlicer/issues/2879#issuecomment-532994564
+---
+ src/admesh/stl_io.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/admesh/stl_io.cpp b/src/admesh/stl_io.cpp
+index af9bb4f..ddf377c 100644
+--- a/src/admesh/stl_io.cpp
++++ b/src/admesh/stl_io.cpp
+@@ -151,8 +151,8 @@ bool stl_write_binary(stl_file *stl, const char *file, const char *label)
+ 	memcpy(buffer, &stl->stats.number_of_facets, 4);
+ 	stl_internal_reverse_quads(buffer, 4);
+ 	fwrite(buffer, 4, 1, fp);
+-	for (size_t i = 0; i < stl->stats.number_of_facets; ++ i) {
+-		memcpy(buffer, stl->facet_start + i, 50);
++	for (const stl_facet &facet : stl->facet_start) {
++		memcpy(buffer, &facet, 50);
+ 		// Convert to little endian.
+ 		stl_internal_reverse_quads(buffer, 48);
+ 		fwrite(buffer, SIZEOF_STL_FACET, 1, fp);

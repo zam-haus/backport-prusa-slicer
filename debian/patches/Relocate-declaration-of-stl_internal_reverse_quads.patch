@@ -1,0 +1,39 @@
+From: Jason Tibbitts <j@tib.bs>
+Date: Mon, 23 Sep 2019 12:10:02 -0500
+Subject: Relocate declaration of stl_internal_reverse_quads
+
+On little-endian hosts, stl_internal_reverse_quads will be called before
+it is declared.  Move the declaration up to the beginning of the file to
+fix build breakage seen on an s390x host.
+
+Patch taken from https://github.com/prusa3d/PrusaSlicer/pull/2981
+---
+ src/admesh/stlinit.cpp | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/admesh/stlinit.cpp b/src/admesh/stlinit.cpp
+index 693aad0..390fe56 100644
+--- a/src/admesh/stlinit.cpp
++++ b/src/admesh/stlinit.cpp
+@@ -36,6 +36,10 @@
+ #error "SEEK_SET not defined"
+ #endif
+ 
++#ifndef BOOST_LITTLE_ENDIAN
++extern void stl_internal_reverse_quads(char *buf, size_t cnt);
++#endif /* BOOST_LITTLE_ENDIAN */
++
+ static FILE* stl_open_count_facets(stl_file *stl, const char *file) 
+ {
+   	// Open the file in binary mode first.
+@@ -238,10 +242,6 @@ bool stl_open(stl_file *stl, const char *file)
+   	return result;
+ }
+ 
+-#ifndef BOOST_LITTLE_ENDIAN
+-extern void stl_internal_reverse_quads(char *buf, size_t cnt);
+-#endif /* BOOST_LITTLE_ENDIAN */
+-
+ void stl_allocate(stl_file *stl) 
+ {
+   	//  Allocate memory for the entire .STL file.
