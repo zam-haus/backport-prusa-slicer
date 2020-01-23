@@ -7,10 +7,10 @@ Subject: Move Slic3r data to /usr/share/slic3r-prusa
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/lib/Slic3r.pm b/lib/Slic3r.pm
-index 4662731..76d9eaa 100644
+index 94f0b56..9b4f13c 100644
 --- a/lib/Slic3r.pm
 +++ b/lib/Slic3r.pm
-@@ -41,7 +41,7 @@ warn "Running Slic3r under Perl 5.16 is neither supported nor recommended\n"
+@@ -29,7 +29,7 @@ BEGIN {
  use FindBin;
  
  # Let the XS module know where the GUI resources reside.
