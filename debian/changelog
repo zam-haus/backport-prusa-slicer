@@ -1,3 +1,9 @@
+slic3r-prusa (2.2.0+dfsg-1) unstable; urgency=medium
+
+  * [922dd32] New upstream version 2.2.0+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 26 Mar 2020 00:21:06 +0800
+
 slic3r-prusa (2.1.1+dfsg-3) unstable; urgency=medium
 
   * [a3155f2] Build against gtk2 instead of gtk3
