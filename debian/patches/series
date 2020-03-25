@@ -1,4 +1,2 @@
 Move-Slic3r-data-to-usr-share-slic3r-prusa.patch
 Install-XS-files-into-usr-lib-slic3r-prusa3d.patch
-Fix-admesh-compilation-error-on-big-endian-architectures.patch
-Relocate-declaration-of-stl_internal_reverse_quads.patch
