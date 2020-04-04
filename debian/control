@@ -1,5 +1,5 @@
 Source: slic3r-prusa
-Section: perl
+Section: misc
 Priority: optional
 Maintainer: Debian 3-D Printing Packages <3dprinter-general@lists.alioth.debian.org>
 Uploaders: Chow Loong Jin <hyperair@debian.org>
@@ -16,25 +16,7 @@ Build-Depends: debhelper (>= 9.20120312),
                libopenvdb-dev (>= 5.0),
                libopenvdb-tools,
                libgtest-dev (>= 1.7),
-               libboost-geometry-utils-perl,
-               libclass-xsaccessor-perl,
-               libencode-locale-perl,
-               perl (>= 5.19.1) | libextutils-parsexs-perl (>= 3.180004),
-               libextutils-typemaps-default-perl,
-               perl,
-               libio-stringy-perl,
-               liblocal-lib-perl,
-               libmath-convexhull-monotonechain-perl,
-               libmath-geometry-voronoi-perl,
-               libmath-planepath-perl,
-               libmodule-build-withxspp-perl,
-               libmoo-perl,
-               libopengl-perl,
-               libstorable-perl,
-               libtime-hires-perl,
                libwxgtk3.0-gtk3-dev,
-               libxml-sax-expatxs-perl,
-               libdevel-checklib-perl,
                xfonts-base,
                xvfb,
                xauth,
