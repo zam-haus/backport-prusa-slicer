@@ -16,7 +16,7 @@ override_dh_auto_configure:
 		-DCMAKE_BUILD_TYPE=Release \
 		-DSLIC3R_FHS=1 \
 		-DSLIC3R_WX_STABLE=1 \
-		-DSLIC3R_GTK=2
+		-DSLIC3R_GTK=3
 
 override_dh_auto_install:
 	dh_auto_install --destdir=debian/prusa-slicer
