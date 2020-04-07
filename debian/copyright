@@ -2,7 +2,8 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Source: http://slic3r.org/
 Upstream-Contact: Vojtech Bubnik <bubnikv@gmail.com>
 Upstream-Name: prusa-slicer
-Files-Excluded: src/eigen
+Files-Excluded: deps
+                src/eigen
                 src/expat
                 src/glew
                 src/avrdude/windows/*.sys
