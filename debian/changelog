@@ -1,4 +1,21 @@
-slic3r-prusa (2.2.0+dfsg-1) unstable; urgency=medium
+slic3r-prusa (2.2.0+dfsg1-1) unstable; urgency=medium
+
+  * [187c962] Drop upstreamed patches
+  * [efbc72c] Update libwxgtk3.0-dev build-dep to libwxgtk3.0-gtk3-dev.
+    Update SLIC3R_GTK cmake option to 3 as well. We no longer have a gtk2
+    version of wxgtk around.
+  * [4d21963] Build-dep on libopenvdb-dev
+  * [4c977a3] Drop perl build-dep.
+    We're no longer a perl program
+  * [954c058] Build-dep on libcgal-dev
+  * [6353674] Build-dep on libudev-dev
+  * [f4377be] Exclude deps folder.
+    Upstream seems to have bundled the world.
+  * [12cf549] New upstream version 2.2.0+dfsg1
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 07 Apr 2020 23:08:57 +0800
+
+slic3r-prusa (2.2.0+dfsg-1) UNRELEASED; urgency=medium
 
   * [922dd32] New upstream version 2.2.0+dfsg
 
