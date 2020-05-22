@@ -1,3 +1,10 @@
+slic3r-prusa (2.2.0+dfsg1-2) unstable; urgency=medium
+
+  * [38942b0] Fix FTBFS on mips, and mipsel (oom), and i386 (float issues)
+    Thanks to Adrian Bunk <bunk@debian.org> (Closes: #961107)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 22 May 2020 12:40:15 +0800
+
 slic3r-prusa (2.2.0+dfsg1-1) unstable; urgency=medium
 
   * [187c962] Drop upstreamed patches
