@@ -1,0 +1,90 @@
+From: Antoni Villalonga <antoni@friki.cat>
+Date: Sun, 09 Aug 2020 00:15:17 +0200
+Subject: Secure self-updates and disable by default
+Bug-Debian: http://bugs.debian.org/961903
+Forwarded: not-needed
+
+--- a/src/slic3r/GUI/AppConfig.cpp
++++ b/src/slic3r/GUI/AppConfig.cpp
+@@ -57,9 +57,9 @@
+         set("show_incompatible_presets", "0");
+ 
+     if (get("version_check").empty())
+-        set("version_check", "1");
++        set("version_check", "0");
+     if (get("preset_update").empty())
+-        set("preset_update", "1");
++        set("preset_update", "0");
+ 
+     if (get("export_sources_full_pathnames").empty())
+         set("export_sources_full_pathnames", "0");
+--- a/resources/profiles/BIBO.ini
++++ b/resources/profiles/BIBO.ini
+@@ -7,7 +7,7 @@
+ # This means, the server may force the PrusaSlicer configuration to be downgraded.
+ config_version = 0.0.1
+ # Where to get the updates from?
+-config_update_url = http://files.prusa3d.com/wp-content/uploads/repository/PrusaSlicer-settings-master/live/BIBO/
++config_update_url = https://files.prusa3d.com/wp-content/uploads/repository/PrusaSlicer-settings-master/live/BIBO/
+ 
+ # The printer models will be shown by the Configuration Wizard in this order,
+ # also the first model installed & the first nozzle installed will be activated after install.
+--- a/resources/profiles/Creality.ini
++++ b/resources/profiles/Creality.ini
+@@ -7,8 +7,8 @@
+ # This means, the server may force the PrusaSlicer configuration to be downgraded.
+ config_version = 0.0.2
+ # Where to get the updates from?
+-config_update_url = http://files.prusa3d.com/wp-content/uploads/repository/PrusaSlicer-settings-master/live/Creality/
+-# changelog_url = http://files.prusa3d.com/?latest=slicer-profiles&lng=%1%
++config_update_url = https://files.prusa3d.com/wp-content/uploads/repository/PrusaSlicer-settings-master/live/Creality/
++# changelog_url = https://files.prusa3d.com/?latest=slicer-profiles&lng=%1%
+ 
+ # The printer models will be shown by the Configuration Wizard in this order,
+ # also the first model installed & the first nozzle installed will be activated after install.
+--- a/resources/profiles/LulzBot.ini
++++ b/resources/profiles/LulzBot.ini
+@@ -4,7 +4,7 @@
+ # Vendor name will be shown by the Config Wizard.
+ name = LulzBot
+ config_version = 0.0.1
+-config_update_url = http://files.prusa3d.com/wp-content/uploads/repository/PrusaSlicer-settings-master/live/LulzBot/
++config_update_url = https://files.prusa3d.com/wp-content/uploads/repository/PrusaSlicer-settings-master/live/LulzBot/
+ 
+ [printer_model:MINI_AERO]
+ name = Mini Aero
+--- a/resources/profiles/PrusaResearch.ini
++++ b/resources/profiles/PrusaResearch.ini
+@@ -7,8 +7,8 @@
+ # This means, the server may force the PrusaSlicer configuration to be downgraded.
+ config_version = 1.1.2
+ # Where to get the updates from?
+-config_update_url = http://files.prusa3d.com/wp-content/uploads/repository/PrusaSlicer-settings-master/live/PrusaResearch/
+-changelog_url = http://files.prusa3d.com/?latest=slicer-profiles&lng=%1%
++config_update_url = https://files.prusa3d.com/wp-content/uploads/repository/PrusaSlicer-settings-master/live/PrusaResearch/
++changelog_url = https://files.prusa3d.com/?latest=slicer-profiles&lng=%1%
+ 
+ # The printer models will be shown by the Configuration Wizard in this order,
+ # also the first model installed & the first nozzle installed will be activated after install.
+--- a/src/slic3r/GUI/UpdateDialogs.cpp
++++ b/src/slic3r/GUI/UpdateDialogs.cpp
+@@ -25,7 +25,7 @@
+ namespace GUI {
+ 
+ 
+-static const char* URL_CHANGELOG = "http://files.prusa3d.com/?latest=slicer-stable&lng=%1%";
++static const char* URL_CHANGELOG = "https://files.prusa3d.com/?latest=slicer-stable&lng=%1%";
+ static const char* URL_DOWNLOAD = "https://www.prusa3d.com/downloads&lng=%1%";
+ static const char* URL_DEV = "https://github.com/prusa3d/PrusaSlicer/releases/tag/version_%1%";
+ 
+--- a/src/slic3r/Utils/PresetUpdater.cpp
++++ b/src/slic3r/Utils/PresetUpdater.cpp
+@@ -301,7 +301,7 @@
+ 		const std::string idx_path = (cache_path / (vendor.id + ".idx")).string();
+ 		const std::string idx_path_temp = idx_path + "-update";
+ 		//check if idx_url is leading to our site 
+-		if (! boost::starts_with(idx_url, "http://files.prusa3d.com/wp-content/uploads/repository/"))
++		if (! boost::starts_with(idx_url, "https://files.prusa3d.com/wp-content/uploads/repository/"))
+ 		{
+ 			BOOST_LOG_TRIVIAL(warning) << "unsafe url path for vendor \"" << vendor.name << "\" rejected: " << idx_url;
+ 			continue;
