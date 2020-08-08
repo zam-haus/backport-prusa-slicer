@@ -841,8 +841,6 @@ void GUI_App::post_init()
                 // sees something else than "we want something" on the first start.
                 show_send_system_info_dialog_if_needed();   
             }  
-            // app version check is asynchronous and triggers blocking dialog window, better call it last
-            this->app_version_check(false);
         });
     }
 
