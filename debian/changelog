@@ -1,3 +1,10 @@
+slic3r-prusa (2.2.0+dfsg1-3) unstable; urgency=medium
+
+  * [4bab085] Reduce debug info on armhf.
+    Apparently 90MB is too much for armhf. (Closes: #961373)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 28 Sep 2020 01:13:24 +0800
+
 slic3r-prusa (2.2.0+dfsg1-2) unstable; urgency=medium
 
   * [38942b0] Fix FTBFS on mips, and mipsel (oom), and i386 (float issues)
