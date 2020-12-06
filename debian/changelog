@@ -1,3 +1,9 @@
+slic3r-prusa (2.2.0+dfsg1-4) unstable; urgency=medium
+
+  * [3b6500e] Fix alpha channel issues in icons (Closes: #949333)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sun, 06 Dec 2020 15:12:30 +0800
+
 slic3r-prusa (2.2.0+dfsg1-3) unstable; urgency=medium
 
   * [4bab085] Reduce debug info on armhf.
