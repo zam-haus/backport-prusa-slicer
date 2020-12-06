@@ -1,0 +1,47 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Sun, 6 Dec 2020 15:08:00 +0800
+Subject: Fix alpha issues in icons
+
+Origin: https://github.com/prusa3d/PrusaSlicer/pull/5298
+Bug: https://github.com/prusa3d/PrusaSlicer/issues/3571
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=949333
+---
+ src/slic3r/GUI/BitmapCache.cpp | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/slic3r/GUI/BitmapCache.cpp b/src/slic3r/GUI/BitmapCache.cpp
+index 8627ef4..93584e7 100644
+--- a/src/slic3r/GUI/BitmapCache.cpp
++++ b/src/slic3r/GUI/BitmapCache.cpp
+@@ -6,7 +6,7 @@
+ 
+ #include <boost/filesystem.hpp>
+ 
+-#if ! defined(WIN32) && ! defined(__APPLE__)
++#if ! defined(WIN32) && ! defined(__APPLE__) && ! defined(__WXGTK3__)
+ #define BROKEN_ALPHA
+ #endif
+ 
+@@ -67,7 +67,13 @@ wxBitmap* BitmapCache::insert(const std::string &bitmap_key, size_t width, size_
+     wxBitmap *bitmap = nullptr;
+     auto      it     = m_map.find(bitmap_key);
+     if (it == m_map.end()) {
++#ifdef __WXGTK3__
++        // if we're on GTK3, force the bitmap to be 32bpp
++        bitmap = new wxBitmap(width, height, 32);
++#else
++        //everyone else gets the default screen depth
+         bitmap = new wxBitmap(width, height);
++#endif
+ #ifdef __APPLE__
+         // Contrary to intuition, the `scale` argument isn't "please scale this to such and such"
+         // but rather "the wxImage is sized for backing scale such and such".
+@@ -82,7 +88,7 @@ wxBitmap* BitmapCache::insert(const std::string &bitmap_key, size_t width, size_
+         if (size_t(bitmap->GetWidth()) != width || size_t(bitmap->GetHeight()) != height)
+             bitmap->Create(width, height);
+     }
+-#ifndef BROKEN_ALPHA
++#if defined(WIN32) || defined(__APPLE__)
+     bitmap->UseAlpha();
+ #endif
+     return bitmap;
