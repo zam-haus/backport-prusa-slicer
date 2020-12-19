@@ -1,3 +1,4 @@
 Move-Slic3r-data-to-usr-share-slic3r-prusa.patch
 Install-XS-files-into-usr-lib-slic3r-prusa3d.patch
 Fix-alpha-issues-in-icons.patch
+Fix-deprecated-endian.hpp-usage.patch
