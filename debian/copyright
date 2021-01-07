@@ -17,6 +17,10 @@ Files: resources/icons/*.png
 Copyright: Mark James
 License: CC-BY-3.0
 
+Files: resources/data/flatpak/com.prusa3d.PrusaSlicer.metainfo.xml
+Copyright: 2016-2020 Prusa Research
+License: 0BSD
+
 Files: src/admesh/*
 Copyright: 1995-1996, Anthony D. Martin
 License: GPL-2+
@@ -1692,6 +1696,18 @@ License: Apache-2.0
  .
  On Debian systems, the full text of this licence can be found in
  /usr/share/common-licenses/Apache-2.0.
+
+License: 0BSD
+ Permission to use, copy, modify, and/or distribute this software for any
+ purpose with or without fee is hereby granted.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+ REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+ FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ PERFORMANCE OF THIS SOFTWARE.
 
 License: BSD-2-clause
  Redistribution and use in source and binary forms, with or without
