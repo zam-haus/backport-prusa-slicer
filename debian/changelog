@@ -1,3 +1,16 @@
+slic3r-prusa (2.3.0~rc2+dfsg-1) experimental; urgency=medium
+
+  * [ee7a167] New upstream version 2.3.0~rc2+dfsg
+  * [a55c26f] Patch to fix FTBFS with new boost (Closes: #975665)
+  * [1897068] Allow rc versions in debian/watch
+  * [5972eae] Drop upstreamed patches
+  * [9a331d5] Add libpng-dev build-dep
+  * [cb0e8e4] Build-dep on libdbus-1-dev
+  * [8bbd7f1] Rename Catch namespace to avoid symbol conflict with liblog4cplus
+    (Closes: #975198)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 07 Jan 2021 14:56:55 +0800
+
 slic3r-prusa (2.2.0+dfsg1-4) unstable; urgency=medium
 
   * [3b6500e] Fix alpha channel issues in icons (Closes: #949333)
