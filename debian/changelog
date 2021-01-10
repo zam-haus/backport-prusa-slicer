@@ -1,4 +1,15 @@
-slic3r-prusa (2.3.0~rc2+dfsg-1) experimental; urgency=medium
+slic3r-prusa (2.3.0~rc3+dfsg-1) experimental; urgency=medium
+
+  * [65edb5d] Add copyright for metainfo file
+  * [e322b01] Bump debhelper compat level to 12
+  * [5726059] Drop redundant `--parallel` parameter to dh.
+    Looks like debhelper doesn't need it these days
+  * [eaf4e0c] Add prusa-gcodeviewer manpage
+  * [a12a9ca] New upstream version 2.3.0~rc3+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 11 Jan 2021 05:29:49 +0800
+
+slic3r-prusa (2.3.0~rc2+dfsg-1) UNRELEASED; urgency=medium
 
   * [ee7a167] New upstream version 2.3.0~rc2+dfsg
   * [a55c26f] Patch to fix FTBFS with new boost (Closes: #975665)
