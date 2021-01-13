@@ -1,4 +1,15 @@
-slic3r-prusa (2.3.0~rc3+dfsg-1) experimental; urgency=medium
+slic3r-prusa (2.3.0+dfsg-1) unstable; urgency=medium
+
+  * [aaf8827] Build-dep on libgtk-3-dev
+  * [8489e62] Add patch to link against gtk3.
+    This fixes the compilation error documented at
+    https://github.com/prusa3d/PrusaSlicer/issues/5739
+  * [2fc181c] New upstream version 2.3.0+dfsg
+  * [3fa7d96] Drop upstreamed Link-against-gtk3.patch
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 13 Jan 2021 23:38:19 +0800
+
+slic3r-prusa (2.3.0~rc3+dfsg-1) UNRELEASED; urgency=medium
 
   * [65edb5d] Add copyright for metainfo file
   * [e322b01] Bump debhelper compat level to 12
