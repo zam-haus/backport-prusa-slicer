@@ -1,3 +1,9 @@
+slic3r-prusa (2.3.1+dfsg-1) unstable; urgency=medium
+
+  * [0417841] New upstream version 2.3.1+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sun, 18 Apr 2021 01:24:02 +0800
+
 slic3r-prusa (2.3.0+dfsg-1) unstable; urgency=medium
 
   * [aaf8827] Build-dep on libgtk-3-dev
