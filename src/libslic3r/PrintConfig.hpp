@@ -36,7 +36,7 @@ enum class MachineLimitsUsage {
 };
 
 enum PrintHostType {
-    htOctoPrint, htDuet, htFlashAir, htAstroBox, htRepetier
+    htPrusaLink, htOctoPrint, htDuet, htFlashAir, htAstroBox, htRepetier
 };
 
 enum AuthorizationType {
@@ -122,11 +122,13 @@ template<> inline const t_config_enum_values& ConfigOptionEnum<MachineLimitsUsag
 template<> inline const t_config_enum_values& ConfigOptionEnum<PrintHostType>::get_enum_values() {
     static t_config_enum_values keys_map;
     if (keys_map.empty()) {
+        keys_map["prusalink"]       = htPrusaLink;
         keys_map["octoprint"]       = htOctoPrint;
         keys_map["duet"]            = htDuet;
         keys_map["flashair"]        = htFlashAir;
         keys_map["astrobox"]        = htAstroBox;
         keys_map["repetier"]        = htRepetier;
+        
     }
     return keys_map;
 }
@@ -209,6 +211,16 @@ template<> inline const t_config_enum_values& ConfigOptionEnum<SLAPillarConnecti
         {"zigzag", slapcmZigZag},
         {"cross", slapcmCross},
         {"dynamic", slapcmDynamic}
+    };
+
+    return keys_map;
+}
+
+template<> inline const t_config_enum_values& ConfigOptionEnum<ForwardCompatibilitySubstitutionRule>::get_enum_values() {
+    static const t_config_enum_values keys_map = {
+        { "disable",        ForwardCompatibilitySubstitutionRule::Disable },
+        { "enable",         ForwardCompatibilitySubstitutionRule::Enable },
+        { "enable_silent",  ForwardCompatibilitySubstitutionRule::EnableSilent }
     };
 
     return keys_map;
@@ -1418,8 +1430,8 @@ public:
     bool         set_key_value(const std::string &opt_key, ConfigOption *opt) { bool out = m_data.set_key_value(opt_key, opt); this->touch(); return out; }
     template<typename T>
     void         set(const std::string &opt_key, T value) { m_data.set(opt_key, value, true); this->touch(); }
-    void         set_deserialize(const t_config_option_key &opt_key, const std::string &str, bool append = false)
-        { m_data.set_deserialize(opt_key, str, append); this->touch(); }
+    void         set_deserialize(const t_config_option_key &opt_key, const std::string &str, ConfigSubstitutionContext &substitution_context, bool append = false)
+        { m_data.set_deserialize(opt_key, str, substitution_context, append); this->touch(); }
     bool         erase(const t_config_option_key &opt_key) { bool out = m_data.erase(opt_key); if (out) this->touch(); return out; }
 
     // Getters are thread safe.
