@@ -1,3 +1,12 @@
+slic3r-prusa (2.3.3+dfsg-2) unstable; urgency=medium
+
+  * [98cf206] Disable compilation of test_voronoi.cpp to workaround ftbfs
+    (Closes: #984338)
+  * [dc392ad] Remove src/miniz/*.cpp from debian/copyright
+  * [4384784] Fix tpi.h path in debian/copyright
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sun, 21 Nov 2021 02:05:09 +0800
+
 slic3r-prusa (2.3.3+dfsg-1) experimental; urgency=medium
 
   * [e30ffae] New upstream version 2.3.3+dfsg
