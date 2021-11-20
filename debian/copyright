@@ -147,7 +147,7 @@ Copyright: 2003-2004, Theodore A. Roth <troth@openavr.org>
            2006, Joerg Wunsch <j@uriah.heep.sax.de>
 License: GPL-2+
 
-Files: tpi.h
+Files: src/avrdude/tpi.h
 Copyright: 2011, Darell Tan <darell.tan@gmail.com>
 License: GPL-2+
 
