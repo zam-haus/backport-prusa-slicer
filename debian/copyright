@@ -435,13 +435,6 @@ Files: src/libnest2d/tools/benchmark.h
 Copyright: Tamás Mészáros
 License: GPL-2+
 
-Files: src/miniz/miniz.cpp
-       src/miniz/miniz_tdef.cpp
-       src/miniz/miniz_tinfl.cpp
-Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
-           2013-2014, RAD Game Tools and Valve Software
-License: Expat
-
 Files: src/miniz/miniz.c
 Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
            2013-2014, RAD Game Tools and Valve Software
