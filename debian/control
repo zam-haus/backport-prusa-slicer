@@ -4,6 +4,7 @@ Priority: optional
 Maintainer: Debian 3-D Printing Packages <3dprinter-general@lists.alioth.debian.org>
 Uploaders: Chow Loong Jin <hyperair@debian.org>
 Build-Depends: debhelper-compat (= 12),
+               catch2,
                cmake,
                help2man,
                libboost-all-dev,

@@ -2,12 +2,14 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Source: http://slic3r.org/
 Upstream-Contact: Vojtech Bubnik <bubnikv@gmail.com>
 Upstream-Name: prusa-slicer
-Files-Excluded: deps
+Files-Excluded: cmake/modules/Catch2
+                deps
                 src/eigen
                 src/expat
                 src/glew
                 src/avrdude/windows/*.sys
                 src/avrdude/atmel-docs
+                tests/catch2
 
 Files: *
 Copyright: 2011-2016, Alessandro Ranellucci <alessandro@unterwelt.it>
