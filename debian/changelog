@@ -1,3 +1,11 @@
+slic3r-prusa (2.4.0+dfsg-1) unstable; urgency=medium
+
+  * [a97954a] New upstream version 2.4.0+dfsg
+  * [99e6096] Disable dh_dwz to get aeround "Too many DIEs" error
+  * [a5849c1] Drop deleted file patterns from debian/copyright
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 28 Dec 2021 01:05:16 +0800
+
 slic3r-prusa (2.3.3+dfsg-3) unstable; urgency=medium
 
   * [8929e18] Use packaged catch2 library.
