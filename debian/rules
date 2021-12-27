@@ -29,3 +29,6 @@ override_dh_auto_install:
 
 override_dh_auto_test:
 	dh_auto_test -- ARGS=-V
+
+override_dh_dwz:
+	# disable dh_dwz due to "Too many DIEs, not optimizing" error
