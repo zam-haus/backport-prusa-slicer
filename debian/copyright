@@ -19,10 +19,6 @@ Files: resources/icons/*.png
 Copyright: Mark James
 License: CC-BY-3.0
 
-Files: resources/data/flatpak/com.prusa3d.PrusaSlicer.metainfo.xml
-Copyright: 2016-2020 Prusa Research
-License: 0BSD
-
 Files: src/admesh/*
 Copyright: 1995-1996, Anthony D. Martin
 License: GPL-2+
@@ -441,14 +437,6 @@ Files: src/miniz/miniz.c
 Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
            2013-2014, RAD Game Tools and Valve Software
            2016, Martin Raiber
-License: Expat
-
-Files: src/poly2tri/*
-Copyright: 2009-2010, Mason Green <mason.green@gmail.com>
-License: BSD-3-clause
-
-Files: src/polypartition/*
-Copyright: 2011, Ivan Fratric
 License: Expat
 
 Files: src/qhull/*
