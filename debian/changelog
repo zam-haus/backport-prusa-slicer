@@ -1,3 +1,11 @@
+slic3r-prusa (2.4.0+dfsg-2) unstable; urgency=medium
+
+  * [ee4ac72] Stop linking against cereal library.
+    It doesn't exist and it's causing FTBFS. (Closes: #1005492)
+  * [8f58b90] Refresh Stop-building-test_voronoi.cpp.patch
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 25 Feb 2022 16:24:09 +0800
+
 slic3r-prusa (2.4.0+dfsg-1) unstable; urgency=medium
 
   * [a97954a] New upstream version 2.4.0+dfsg
