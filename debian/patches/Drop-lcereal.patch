@@ -1,0 +1,49 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Fri, 25 Feb 2022 15:21:38 +0800
+Subject: Drop -lcereal
+
+libcereal in Debian has become a header-only library, so drop the link
+---
+ src/CMakeLists.txt           | 2 +-
+ src/libslic3r/CMakeLists.txt | 1 -
+ src/slic3r/CMakeLists.txt    | 2 +-
+ 3 files changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 9e89e82..d452fe2 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -125,7 +125,7 @@ if (NOT WIN32 AND NOT APPLE)
+     set_target_properties(PrusaSlicer PROPERTIES OUTPUT_NAME "prusa-slicer")
+ endif ()
+ 
+-target_link_libraries(PrusaSlicer libslic3r cereal)
++target_link_libraries(PrusaSlicer libslic3r)
+ if (APPLE)
+ #    add_compile_options(-stdlib=libc++)
+ #    add_definitions(-DBOOST_THREAD_DONT_USE_CHRONO -DBOOST_NO_CXX11_RVALUE_REFERENCES -DBOOST_THREAD_USES_MOVE)
+diff --git a/src/libslic3r/CMakeLists.txt b/src/libslic3r/CMakeLists.txt
+index deaa0b9..0d44df2 100644
+--- a/src/libslic3r/CMakeLists.txt
++++ b/src/libslic3r/CMakeLists.txt
+@@ -335,7 +335,6 @@ target_include_directories(libslic3r PUBLIC ${EXPAT_INCLUDE_DIRS})
+ target_link_libraries(libslic3r
+     libnest2d
+     admesh
+-    cereal
+     libigl
+     miniz
+     boost_libs
+diff --git a/src/slic3r/CMakeLists.txt b/src/slic3r/CMakeLists.txt
+index 34cc980..bb33424 100644
+--- a/src/slic3r/CMakeLists.txt
++++ b/src/slic3r/CMakeLists.txt
+@@ -260,7 +260,7 @@ add_library(libslic3r_gui STATIC ${SLIC3R_GUI_SOURCES})
+ 
+ encoding_check(libslic3r_gui)
+ 
+-target_link_libraries(libslic3r_gui libslic3r avrdude cereal imgui GLEW::GLEW OpenGL::GL hidapi libcurl ${wxWidgets_LIBRARIES})
++target_link_libraries(libslic3r_gui libslic3r avrdude imgui GLEW::GLEW OpenGL::GL hidapi libcurl ${wxWidgets_LIBRARIES})
+ 
+ if (MSVC)
+     target_link_libraries(libslic3r_gui Setupapi.lib)

@@ -2,3 +2,4 @@ Move-Slic3r-data-to-usr-share-slic3r-prusa.patch
 Install-XS-files-into-usr-lib-slic3r-prusa3d.patch
 Stop-building-test_voronoi.cpp.patch
 Use-packaged-catch2-library.patch
+Drop-lcereal.patch
