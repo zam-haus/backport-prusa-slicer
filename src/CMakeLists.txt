@@ -131,7 +131,7 @@ if (NOT WIN32 AND NOT APPLE)
     set_target_properties(PrusaSlicer PROPERTIES OUTPUT_NAME "prusa-slicer")
 endif ()
 
-target_link_libraries(PrusaSlicer libslic3r libcereal)
+target_link_libraries(PrusaSlicer libslic3r)
 
 if (APPLE)
 #    add_compile_options(-stdlib=libc++)
