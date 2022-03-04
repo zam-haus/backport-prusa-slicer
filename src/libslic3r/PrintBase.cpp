@@ -1,3 +1,4 @@
+#include "Exception.hpp"
 #include "PrintBase.hpp"
 
 #include <boost/filesystem.hpp>
@@ -12,6 +13,11 @@
 namespace Slic3r
 {
 
+void PrintTryCancel::operator()()
+{
+    m_print->throw_if_canceled();
+}
+
 size_t PrintStateBase::g_last_timestamp = 0;
 
 // Update "scale", "input_filename", "input_filename_base" placeholders from the current m_objects.
@@ -20,14 +26,17 @@ void PrintBase::update_object_placeholders(DynamicConfig &config, const std::str
     // get the first input file name
     std::string input_file;
     std::vector<std::string> v_scale;
+    int num_objects = 0;
+    int num_instances = 0;
 	for (const ModelObject *model_object : m_model.objects) {
 		ModelInstance *printable = nullptr;
 		for (ModelInstance *model_instance : model_object->instances)
 			if (model_instance->is_printable()) {
 				printable = model_instance;
-				break;
+				++ num_instances;
 			}
 		if (printable) {
+            ++ num_objects;
 	        // CHECK_ME -> Is the following correct ?
 			v_scale.push_back("x:" + boost::lexical_cast<std::string>(printable->get_scaling_factor(X) * 100) +
 				"% y:" + boost::lexical_cast<std::string>(printable->get_scaling_factor(Y) * 100) +
@@ -37,6 +46,9 @@ void PrintBase::update_object_placeholders(DynamicConfig &config, const std::str
 	    }
     }
     
+    config.set_key_value("num_objects", new ConfigOptionInt(num_objects));
+    config.set_key_value("num_instances", new ConfigOptionInt(num_instances));
+
     config.set_key_value("scale", new ConfigOptionStrings(v_scale));
     if (! input_file.empty()) {
         // get basename with and without suffix
@@ -54,6 +66,7 @@ std::string PrintBase::output_filename(const std::string &format, const std::str
     DynamicConfig cfg;
     if (config_override != nullptr)
     	cfg = *config_override;
+    cfg.set_key_value("version", new ConfigOptionString(std::string(SLIC3R_VERSION)));
     PlaceholderParser::update_timestamp(cfg);
     this->update_object_placeholders(cfg, default_ext);
     if (! filename_base.empty()) {
@@ -68,7 +81,7 @@ std::string PrintBase::output_filename(const std::string &format, const std::str
             filename = boost::filesystem::change_extension(filename, default_ext);
         return filename.string();
     } catch (std::runtime_error &err) {
-        throw std::runtime_error(L("Failed processing of the output_filename_format template.") + "\n" + err.what());
+        throw Slic3r::PlaceholderParserError(L("Failed processing of the output_filename_format template.") + "\n" + err.what());
     }
 }
 
@@ -88,7 +101,17 @@ std::string PrintBase::output_filepath(const std::string &path, const std::strin
     return path;
 }
 
-tbb::mutex& PrintObjectBase::state_mutex(PrintBase *print)
+void PrintBase::status_update_warnings(int step, PrintStateBase::WarningLevel /* warning_level */, const std::string &message, const PrintObjectBase* print_object)
+{
+    if (this->m_status_callback) {
+        auto status = print_object ? SlicingStatus(*print_object, step) : SlicingStatus(*this, step);
+        m_status_callback(status);
+    }
+    else if (! message.empty())
+        printf("%s warning: %s\n",  print_object ? "print_object" : "print", message.c_str());
+}
+
+std::mutex& PrintObjectBase::state_mutex(PrintBase *print)
 { 
 	return print->state_mutex();
 }
@@ -96,6 +119,11 @@ tbb::mutex& PrintObjectBase::state_mutex(PrintBase *print)
 std::function<void()> PrintObjectBase::cancel_callback(PrintBase *print)
 { 
 	return print->cancel_callback();
+}
+
+void PrintObjectBase::status_update_warnings(PrintBase *print, int step, PrintStateBase::WarningLevel warning_level, const std::string &message)
+{
+    print->status_update_warnings(step, warning_level, message, this);
 }
 
 } // namespace Slic3r

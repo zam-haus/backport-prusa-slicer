@@ -5,7 +5,7 @@
 #include <fstream>
 #include <string>
 
-#include <libnest2d/libnest2d.hpp>
+#include <libnest2d/nester.hpp>
 
 namespace libnest2d { namespace svg {
 
@@ -48,23 +48,28 @@ public:
         conf_.width = static_cast<double>(box.width()) /
                 conf_.mm_in_coord_units;
     }
-
-    void writeItem(const Item& item) {
+    
+    void writeShape(RawShape tsh) {
         if(svg_layers_.empty()) addLayer();
-        auto tsh = item.transformedShape();
         if(conf_.origo_location == BOTTOMLEFT) {
             auto d = static_cast<Coord>(
-                        std::round(conf_.height*conf_.mm_in_coord_units) );
+                std::round(conf_.height*conf_.mm_in_coord_units) );
 
             auto& contour = shapelike::contour(tsh);
             for(auto& v : contour) setY(v, -getY(v) + d);
 
             auto& holes = shapelike::holes(tsh);
             for(auto& h : holes) for(auto& v : h) setY(v, -getY(v) + d);
-
+            
         }
-        currentLayer() += shapelike::serialize<Formats::SVG>(tsh,
-                                            1.0/conf_.mm_in_coord_units) + "\n";
+        currentLayer() +=
+            shapelike::serialize<Formats::SVG>(tsh,
+                                               1.0 / conf_.mm_in_coord_units) +
+            "\n";
+    }
+
+    void writeItem(const Item& item) {
+        writeShape(item.transformedShape());
     }
 
     void writePackGroup(const PackGroup& result) {
@@ -75,6 +80,18 @@ public:
             }
             finishLayer();
         }
+    }
+    
+    template<class ItemIt> void writeItems(ItemIt from, ItemIt to) {
+        auto it = from;
+        PackGroup pg;
+        while(it != to) {
+            if(it->binId() == BIN_ID_UNSET) continue;
+            while(pg.size() <= size_t(it->binId())) pg.emplace_back();
+            pg[it->binId()].emplace_back(*it);
+            ++it;
+        }
+        writePackGroup(pg);
     }
 
     void addLayer() {

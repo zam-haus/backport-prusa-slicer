@@ -145,7 +145,6 @@ package Slic3r::Filler;
 sub fill_surface {
     my ($self, $surface, %args) = @_;
     $self->set_density($args{density}) if defined($args{density});
-    $self->set_dont_connect($args{dont_connect}) if defined($args{dont_connect});
     $self->set_dont_adjust($args{dont_adjust}) if defined($args{dont_adjust});
     $self->set_complete($args{complete}) if defined($args{complete});
     return $self->_fill_surface($surface);
@@ -159,7 +158,6 @@ sub new {
     my $self = $class->_new(
         @args{qw(width height nozzle_diameter)},
     );
-    $self->set_bridge($args{bridge} // 0);
     return $self;
 }
 
@@ -167,7 +165,7 @@ sub new_from_width {
     my ($class, %args) = @_;
     
     return $class->_new_from_width(
-        @args{qw(role width nozzle_diameter layer_height bridge_flow_ratio)},
+        @args{qw(role width nozzle_diameter layer_height)},
     );
 }
 

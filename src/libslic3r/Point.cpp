@@ -2,6 +2,7 @@
 #include "Line.hpp"
 #include "MultiPoint.hpp"
 #include "Int128.hpp"
+#include "BoundingBox.hpp"
 #include <algorithm>
 
 namespace Slic3r {
@@ -42,16 +43,6 @@ Pointf3s transform(const Pointf3s& points, const Transform3d& t)
     Pointf3s ret_points(vertices_count, Vec3d::Zero());
     ::memcpy((void*)ret_points.data(), (const void*)dst.data(), data_size);
     return ret_points;
-}
-
-void Point::rotate(double angle)
-{
-    double cur_x = (double)(*this)(0);
-    double cur_y = (double)(*this)(1);
-    double s     = ::sin(angle);
-    double c     = ::cos(angle);
-    (*this)(0) = (coord_t)round(c * cur_x - s * cur_y);
-    (*this)(1) = (coord_t)round(c * cur_y + s * cur_x);
 }
 
 void Point::rotate(double angle, const Point &center)
@@ -126,7 +117,9 @@ bool Point::nearest_point(const Points &points, Point* point) const
  */
 double Point::ccw(const Point &p1, const Point &p2) const
 {
-    return (double)(p2(0) - p1(0))*(double)((*this)(1) - p1(1)) - (double)(p2(1) - p1(1))*(double)((*this)(0) - p1(0));
+    static_assert(sizeof(coord_t) == 4, "Point::ccw() requires a 32 bit coord_t");
+    return cross2((p2 - p1).cast<int64_t>(), (*this - p1).cast<int64_t>());
+//    return cross2((p2 - p1).cast<double>(), (*this - p1).cast<double>());
 }
 
 double Point::ccw(const Line &line) const
@@ -138,9 +131,9 @@ double Point::ccw(const Line &line) const
 // i.e. this assumes a CCW rotation from p1 to p2 around this
 double Point::ccw_angle(const Point &p1, const Point &p2) const
 {
-    double angle = atan2(p1(0) - (*this)(0), p1(1) - (*this)(1))
-                 - atan2(p2(0) - (*this)(0), p2(1) - (*this)(1));
-    
+    //FIXME this calculates an atan2 twice! Project one vector into the other!
+    double angle = atan2(p1.x() - (*this).x(), p1.y() - (*this).y())
+                 - atan2(p2.x() - (*this).x(), p2.y() - (*this).y());
     // we only want to return only positive angles
     return angle <= 0 ? angle + 2*PI : angle;
 }
@@ -186,6 +179,36 @@ Point Point::projection_onto(const Line &line) const
     return ((line.a - *this).cast<double>().squaredNorm() < (line.b - *this).cast<double>().squaredNorm()) ? line.a : line.b;
 }
 
+bool has_duplicate_points(std::vector<Point> &&pts)
+{
+    std::sort(pts.begin(), pts.end());
+    for (size_t i = 1; i < pts.size(); ++ i)
+        if (pts[i - 1] == pts[i])
+            return true;
+    return false;
+}
+
+BoundingBox get_extents(const Points &pts)
+{ 
+    return BoundingBox(pts);
+}
+
+BoundingBox get_extents(const std::vector<Points> &pts)
+{
+    BoundingBox bbox;
+    for (const Points &p : pts)
+        bbox.merge(get_extents(p));
+    return bbox;
+}
+
+BoundingBoxf get_extents(const std::vector<Vec2d> &pts)
+{
+    BoundingBoxf bbox;
+    for (const Vec2d &p : pts)
+        bbox.merge(p);
+    return bbox;
+}
+
 std::ostream& operator<<(std::ostream &stm, const Vec2d &pointf)
 {
     return stm << pointf(0) << "," << pointf(1);
@@ -197,12 +220,12 @@ int orient(const Vec2crd &p1, const Vec2crd &p2, const Vec2crd &p3)
 {
     Slic3r::Vector v1(p2 - p1);
     Slic3r::Vector v2(p3 - p1);
-    return Int128::sign_determinant_2x2_filtered(v1(0), v1(1), v2(0), v2(1));
+    return Int128::sign_determinant_2x2_filtered(v1.x(), v1.y(), v2.x(), v2.y());
 }
 
 int cross(const Vec2crd &v1, const Vec2crd &v2)
 {
-    return Int128::sign_determinant_2x2_filtered(v1(0), v1(1), v2(0), v2(1));
+    return Int128::sign_determinant_2x2_filtered(v1.x(), v1.y(), v2.x(), v2.y());
 }
 
 }

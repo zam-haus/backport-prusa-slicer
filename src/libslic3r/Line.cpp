@@ -33,24 +33,6 @@ bool Line::intersection_infinite(const Line &other, Point* point) const
     return true;
 }
 
-// Distance to the closest point of line.
-double Line::distance_to_squared(const Point &point, const Point &a, const Point &b)
-{
-    const Vec2d   v  = (b - a).cast<double>();
-    const Vec2d   va = (point  - a).cast<double>();
-    const double  l2 = v.squaredNorm();  // avoid a sqrt
-    if (l2 == 0.0) 
-        // a == b case
-        return va.squaredNorm();
-    // Consider the line extending the segment, parameterized as a + t (b - a).
-    // We find projection of this point onto the line. 
-    // It falls where t = [(this-a) . (b-a)] / |b-a|^2
-    const double t = va.dot(v) / l2;
-    if (t < 0.0)      return va.squaredNorm();  // beyond the 'a' end of the segment
-    else if (t > 1.0) return (point - b).cast<double>().squaredNorm();  // beyond the 'b' end of the segment
-    return (t * v - va).squaredNorm();
-}
-
 double Line::perp_distance_to(const Point &point) const
 {
     const Line  &line = *this;
@@ -79,6 +61,25 @@ double Line::direction() const
 bool Line::parallel_to(double angle) const
 {
     return Slic3r::Geometry::directions_parallel(this->direction(), angle);
+}
+
+bool Line::parallel_to(const Line& line) const
+{
+    const Vec2d v1 = (this->b - this->a).cast<double>();
+    const Vec2d v2 = (line.b - line.a).cast<double>();
+    return sqr(cross2(v1, v2)) < sqr(EPSILON) * v1.squaredNorm() * v2.squaredNorm();
+}
+
+bool Line::perpendicular_to(double angle) const
+{
+    return Slic3r::Geometry::directions_perpendicular(this->direction(), angle);
+}
+
+bool Line::perpendicular_to(const Line& line) const
+{
+    const Vec2d v1 = (this->b - this->a).cast<double>();
+    const Vec2d v2 = (line.b - line.a).cast<double>();
+    return sqr(v1.dot(v2)) < sqr(EPSILON) * v1.squaredNorm() * v2.squaredNorm();
 }
 
 bool Line::intersection(const Line &l2, Point *intersection) const
@@ -118,6 +119,13 @@ bool Line::clip_with_bbox(const BoundingBox &bbox)
 	return result;
 }
 
+void Line::extend(double offset)
+{
+    Vector offset_vector = (offset * this->vector().cast<double>().normalized()).cast<coord_t>();
+    this->a -= offset_vector;
+    this->b += offset_vector;
+}
+
 Vec3d Linef3::intersect_plane(double z) const
 {
     auto   v = (this->b - this->a).cast<double>();
@@ -125,4 +133,14 @@ Vec3d Linef3::intersect_plane(double z) const
     return Vec3d(this->a(0) + v(0) * t, this->a(1) + v(1) * t, z);
 }
 
+BoundingBox get_extents(const Lines &lines)
+{
+    BoundingBox bbox;
+    for (const Line &line : lines) {
+        bbox.merge(line.a);
+        bbox.merge(line.b);
+    }
+    return bbox;
 }
+
+} // namespace Slic3r

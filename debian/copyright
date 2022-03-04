@@ -2,12 +2,14 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Source: http://slic3r.org/
 Upstream-Contact: Vojtech Bubnik <bubnikv@gmail.com>
 Upstream-Name: prusa-slicer
-Files-Excluded: deps
+Files-Excluded: cmake/modules/Catch2
+                deps
                 src/eigen
                 src/expat
                 src/glew
                 src/avrdude/windows/*.sys
                 src/avrdude/atmel-docs
+                tests/catch2
 
 Files: *
 Copyright: 2011-2016, Alessandro Ranellucci <alessandro@unterwelt.it>
@@ -143,7 +145,7 @@ Copyright: 2003-2004, Theodore A. Roth <troth@openavr.org>
            2006, Joerg Wunsch <j@uriah.heep.sax.de>
 License: GPL-2+
 
-Files: tpi.h
+Files: src/avrdude/tpi.h
 Copyright: 2011, Darell Tan <darell.tan@gmail.com>
 License: GPL-2+
 
@@ -431,25 +433,10 @@ Files: src/libnest2d/tools/benchmark.h
 Copyright: Tamás Mészáros
 License: GPL-2+
 
-Files: src/miniz/miniz.cpp
-       src/miniz/miniz_tdef.cpp
-       src/miniz/miniz_tinfl.cpp
-Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
-           2013-2014, RAD Game Tools and Valve Software
-License: Expat
-
 Files: src/miniz/miniz.c
 Copyright: 2010-2014, Rich Geldreich and Tenacious Software LLC
            2013-2014, RAD Game Tools and Valve Software
            2016, Martin Raiber
-License: Expat
-
-Files: src/poly2tri/*
-Copyright: 2009-2010, Mason Green <mason.green@gmail.com>
-License: BSD-3-clause
-
-Files: src/polypartition/*
-Copyright: 2011, Ivan Fratric
 License: Expat
 
 Files: src/qhull/*
@@ -1692,6 +1679,18 @@ License: Apache-2.0
  .
  On Debian systems, the full text of this licence can be found in
  /usr/share/common-licenses/Apache-2.0.
+
+License: 0BSD
+ Permission to use, copy, modify, and/or distribute this software for any
+ purpose with or without fee is hereby granted.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+ REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+ FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ PERFORMANCE OF THIS SOFTWARE.
 
 License: BSD-2-clause
  Redistribution and use in source and binary forms, with or without

@@ -1,17 +1,30 @@
 #ifndef slic3r_GUI_Selection_hpp_
 #define slic3r_GUI_Selection_hpp_
 
-#include <set>
 #include "libslic3r/Geometry.hpp"
-#include "3DScene.hpp"
+#include "GLModel.hpp"
 
-#if ENABLE_RENDER_SELECTION_CENTER
-class GLUquadric;
-typedef class GLUquadric GLUquadricObj;
-#endif // ENABLE_RENDER_SELECTION_CENTER
+#include <set>
+#include <optional>
 
 namespace Slic3r {
+
 class Shader;
+class Model;
+class ModelObject;
+class GLVolume;
+class GLArrow;
+class GLCurvedArrow;
+class DynamicPrintConfig;
+class GLShaderProgram;
+#if ENABLE_ENHANCED_PRINT_VOLUME_FIT
+class BuildVolume;
+#endif // ENABLE_ENHANCED_PRINT_VOLUME_FIT
+
+using GLVolumePtrs = std::vector<GLVolume*>;
+using ModelObjectPtrs = std::vector<ModelObject*>;
+
+
 namespace GUI {
 class TransformationType
 {
@@ -116,7 +129,7 @@ private:
         TransformCache m_instance;
 
     public:
-        VolumeCache() {}
+        VolumeCache() = default;
         VolumeCache(const Geometry::Transformation& volume_transform, const Geometry::Transformation& instance_transform);
 
         const Vec3d& get_volume_position() const { return m_volume.position; }
@@ -145,18 +158,23 @@ public:
 
     class Clipboard
     {
-        Model m_model;
+        // Model is stored through a pointer to avoid including heavy Model.hpp.
+        // It is created in constructor.
+        std::unique_ptr<Model> m_model;
+
         Selection::EMode m_mode;
 
     public:
-        void reset() { m_model.clear_objects(); }
-        bool is_empty() const { return m_model.objects.empty(); }
+        Clipboard();
+
+        void reset();
+        bool is_empty() const;
 
         bool is_sla_compliant() const;
 
-        ModelObject* add_object() { return m_model.add_object(); }
-        ModelObject* get_object(unsigned int id) { return (id < (unsigned int)m_model.objects.size()) ? m_model.objects[id] : nullptr; }
-        const ModelObjectPtrs& get_objects() const { return m_model.objects; }
+        ModelObject* add_object();
+        ModelObject* get_object(unsigned int id);
+        const ModelObjectPtrs& get_objects() const;
 
         Selection::EMode get_mode() const { return m_mode; }
         void set_mode(Selection::EMode mode) { m_mode = mode; }
@@ -173,6 +191,8 @@ private:
         // to a set of indices of ModelVolume instances in ModelObject::instances
         // Here the index means a position inside the respective std::vector, not ObjectID.
         ObjectIdxsToInstanceIdxsMap content;
+        // List of ids of the volumes which are sinking when starting dragging
+        std::vector<unsigned int> sinking_volumes;
     };
 
     // Volumes owned by GLCanvas3D.
@@ -188,28 +208,24 @@ private:
     IndicesList m_list;
     Cache m_cache;
     Clipboard m_clipboard;
-    mutable BoundingBoxf3 m_bounding_box;
-    mutable bool m_bounding_box_dirty;
+    std::optional<BoundingBoxf3> m_bounding_box;
     // Bounding box of a selection, with no instance scaling applied. This bounding box
     // is useful for absolute scaling of tilted objects in world coordinate space.
-    mutable BoundingBoxf3 m_unscaled_instance_bounding_box;
-    mutable bool m_unscaled_instance_bounding_box_dirty;
-    mutable BoundingBoxf3 m_scaled_instance_bounding_box;
-    mutable bool m_scaled_instance_bounding_box_dirty;
+    std::optional<BoundingBoxf3> m_unscaled_instance_bounding_box;
+    std::optional<BoundingBoxf3> m_scaled_instance_bounding_box;
 
 #if ENABLE_RENDER_SELECTION_CENTER
-    GLUquadricObj* m_quadric;
+    GLModel m_vbo_sphere;
 #endif // ENABLE_RENDER_SELECTION_CENTER
-    mutable GLArrow m_arrow;
-    mutable GLCurvedArrow m_curved_arrow;
 
-    mutable float m_scale_factor;
+    GLModel m_arrow;
+    GLModel m_curved_arrow;
+
+    float m_scale_factor;
+    bool m_dragging;
 
 public:
     Selection();
-#if ENABLE_RENDER_SELECTION_CENTER
-    ~Selection();
-#endif // ENABLE_RENDER_SELECTION_CENTER
 
     void set_volumes(GLVolumePtrs* volumes);
     bool init();
@@ -267,6 +283,7 @@ public:
     bool is_from_single_instance() const { return get_instance_idx() != -1; }
     bool is_from_single_object() const;
     bool is_sla_compliant() const;
+    bool is_instance_mode() const { return m_mode == Instance; }
 
     bool contains_volume(unsigned int volume_idx) const { return m_list.find(volume_idx) != m_list.end(); }
     // returns true if the selection contains all the given indices
@@ -299,12 +316,18 @@ public:
     const BoundingBoxf3& get_scaled_instance_bounding_box() const;
 
     void start_dragging();
+    void stop_dragging() { m_dragging = false; }
+    bool is_dragging() const { return m_dragging; }
 
     void translate(const Vec3d& displacement, bool local = false);
     void rotate(const Vec3d& rotation, TransformationType transformation_type);
     void flattening_rotate(const Vec3d& normal);
     void scale(const Vec3d& scale, TransformationType transformation_type);
+#if ENABLE_ENHANCED_PRINT_VOLUME_FIT
+    void scale_to_fit_print_volume(const BuildVolume& volume);
+#else
     void scale_to_fit_print_volume(const DynamicPrintConfig& config);
+#endif // ENABLE_ENHANCED_PRINT_VOLUME_FIT
     void mirror(Axis axis);
 
     void translate(unsigned int object_idx, const Vec3d& displacement);
@@ -316,7 +339,7 @@ public:
 #if ENABLE_RENDER_SELECTION_CENTER
     void render_center(bool gizmo_is_dragging) const;
 #endif // ENABLE_RENDER_SELECTION_CENTER
-    void render_sidebar_hints(const std::string& sidebar_field, const Shader& shader) const;
+    void render_sidebar_hints(const std::string& sidebar_field) const;
 
     bool requires_local_axes() const;
 
@@ -336,8 +359,6 @@ public:
     // returns the list of idxs of the volumes contained in the given list but not in the selection
     std::vector<unsigned int> get_unselected_volume_idxs_from(const std::vector<unsigned int>& volume_idxs) const;
 
-    void toggle_instance_printable_state();
-
 private:
     void update_valid();
     void update_type();
@@ -347,37 +368,28 @@ private:
     void do_remove_volume(unsigned int volume_idx);
     void do_remove_instance(unsigned int object_idx, unsigned int instance_idx);
     void do_remove_object(unsigned int object_idx);
-    void calc_bounding_box() const;
-    void calc_unscaled_instance_bounding_box() const;
-    void calc_scaled_instance_bounding_box() const;
-    void set_bounding_boxes_dirty() { m_bounding_box_dirty = true; m_unscaled_instance_bounding_box_dirty = true; m_scaled_instance_bounding_box_dirty = true; }
+    void set_bounding_boxes_dirty() { m_bounding_box.reset(); m_unscaled_instance_bounding_box.reset(); m_scaled_instance_bounding_box.reset(); }
     void render_selected_volumes() const;
     void render_synchronized_volumes() const;
     void render_bounding_box(const BoundingBoxf3& box, float* color) const;
     void render_sidebar_position_hints(const std::string& sidebar_field) const;
     void render_sidebar_rotation_hints(const std::string& sidebar_field) const;
     void render_sidebar_scale_hints(const std::string& sidebar_field) const;
-    void render_sidebar_size_hints(const std::string& sidebar_field) const;
     void render_sidebar_layers_hints(const std::string& sidebar_field) const;
-    void render_sidebar_position_hint(Axis axis) const;
-    void render_sidebar_rotation_hint(Axis axis) const;
-    void render_sidebar_scale_hint(Axis axis) const;
-    void render_sidebar_size_hint(Axis axis, double length) const;
 
 public:
     enum SyncRotationType {
         // Do not synchronize rotation. Either not rotating at all, or rotating by world Z axis.
         SYNC_ROTATION_NONE = 0,
-        // Synchronize fully. Used from "place on bed" feature.
-        SYNC_ROTATION_FULL = 1,
         // Synchronize after rotation by an axis not parallel with Z.
-        SYNC_ROTATION_GENERAL = 2,
+        SYNC_ROTATION_GENERAL = 1,
     };
     void synchronize_unselected_instances(SyncRotationType sync_rotation_type);
     void synchronize_unselected_volumes();
 
 private:
     void ensure_on_bed();
+    void ensure_not_below_bed();
     bool is_from_fully_selected_instance(unsigned int volume_idx) const;
 
     void paste_volumes_from_clipboard();

@@ -10,7 +10,8 @@
     // owned by Layer, no constructor/destructor
 
     Ref<Layer> layer();
-    Ref<PrintRegion> region();
+    Ref<PrintRegion> region()
+        %code%{ RETVAL = &THIS->region(); %};
 
     Ref<SurfaceCollection> slices()
         %code%{ RETVAL = &THIS->slices; %};
@@ -18,15 +19,13 @@
         %code%{ RETVAL = &THIS->thin_fills; %};
     Ref<SurfaceCollection> fill_surfaces()
         %code%{ RETVAL = &THIS->fill_surfaces; %};
-    Polygons bridged()
-        %code%{ RETVAL = THIS->bridged; %};
     Ref<ExtrusionEntityCollection> perimeters()
         %code%{ RETVAL = &THIS->perimeters; %};
     Ref<ExtrusionEntityCollection> fills()
         %code%{ RETVAL = &THIS->fills; %};
     
-    Clone<Flow> flow(FlowRole role, bool bridge = false, double width = -1)
-        %code%{ RETVAL = THIS->flow(role, bridge, width); %};
+    Clone<Flow> flow(FlowRole role)
+        %code%{ RETVAL = THIS->flow(role); %};
     void prepare_fill_surfaces();
     void make_perimeters(SurfaceCollection* slices, SurfaceCollection* fill_surfaces)
         %code%{ THIS->make_perimeters(*slices, fill_surfaces); %};
@@ -70,7 +69,8 @@
         %code%{ RETVAL = dynamic_cast<SupportLayer*>(THIS); %};
     
     void make_slices();
-    void merge_slices();
+    void backup_untyped_slices();
+    void restore_untyped_slices();
     void make_perimeters();
     void make_fills();
 

@@ -21,7 +21,7 @@ template<typename EndPointType, typename KDTreeType, typename CouldReverseFunc>
 std::vector<std::pair<size_t, bool>> chain_segments_closest_point(std::vector<EndPointType> &end_points, KDTreeType &kdtree, CouldReverseFunc &could_reverse_func, EndPointType &first_point)
 {
 	assert((end_points.size() & 1) == 0);
-	size_t num_segments = end_points.size() / 2;
+    size_t num_segments = end_points.size() / 2;
 	assert(num_segments >= 2);
 	for (EndPointType &ep : end_points)
 		ep.chain_id = 0;
@@ -38,11 +38,12 @@ std::vector<std::pair<size_t, bool>> chain_segments_closest_point(std::vector<En
     	// Ignore the starting point as the starting point is considered to be occupied, no end point coud connect to it.
 		size_t next_idx = find_closest_point(kdtree, this_point.pos,
 			[this_idx, &end_points, &could_reverse_func](size_t idx) {
-				return (idx ^ this_idx) > 1 && end_points[idx].chain_id == 0 && ((idx ^ 1) == 0 || could_reverse_func(idx >> 1));
+				return (idx ^ this_idx) > 1 && end_points[idx].chain_id == 0 && ((idx & 1) == 0 || could_reverse_func(idx >> 1));
 		});
 		assert(next_idx < end_points.size());
 		EndPointType &end_point = end_points[next_idx];
 		end_point.chain_id = 1;
+		assert((next_idx & 1) == 0 || could_reverse_func(next_idx >> 1));
 		out.emplace_back(next_idx / 2, (next_idx & 1) != 0);
 		this_idx = next_idx ^ 1;
 	}
@@ -74,7 +75,7 @@ std::vector<std::pair<size_t, bool>> chain_segments_greedy_constrained_reversals
 	{
 		// Just sort the end points so that the first point visited is closest to start_near.
 		out.emplace_back(0, could_reverse_func(0) && start_near != nullptr && 
-            (end_point_func(0, true) - *start_near).template cast<double>().squaredNorm() < (end_point_func(0, false) - *start_near).template cast<double>().squaredNorm());
+            (end_point_func(0, false) - *start_near).template cast<double>().squaredNorm() < (end_point_func(0, true) - *start_near).template cast<double>().squaredNorm());
 	} 
 	else
 	{
@@ -165,7 +166,9 @@ std::vector<std::pair<size_t, bool>> chain_segments_greedy_constrained_reversals
 		EndPoint *first_point = nullptr;
 		size_t    first_point_idx = std::numeric_limits<size_t>::max();
 		if (start_near != nullptr) {
-            size_t idx = find_closest_point(kdtree, start_near->template cast<double>());
+            size_t idx = find_closest_point(kdtree, start_near->template cast<double>(),
+				// Don't start with a reverse segment, if flipping of the segment is not allowed.
+				[&could_reverse_func](size_t idx) { return (idx & 1) == 0 || could_reverse_func(idx >> 1); });
 			assert(idx < end_points.size());
 			first_point = &end_points[idx];
 			first_point->distance_out = 0.;
@@ -1080,6 +1083,7 @@ void svg_draw_polyline_chain(const char *name, size_t idx, const Polylines &poly
 }
 #endif /* DEBUG_SVG_OUTPUT */
 
+#if 0
 // Flip the sequences of polylines to lower the total length of connecting lines.
 static inline void improve_ordering_by_segment_flipping(Polylines &polylines, bool fixed_start)
 {
@@ -1250,6 +1254,7 @@ static inline void improve_ordering_by_segment_flipping(Polylines &polylines, bo
 	assert(cost_final <= cost_initial);
 #endif /* NDEBUG */
 }
+#endif
 
 struct FlipEdge {
 	FlipEdge(const Vec2d &p1, const Vec2d &p2, size_t source_index) : p1(p1), p2(p2), source_index(source_index) {}
@@ -1334,6 +1339,7 @@ static inline std::pair<double, size_t> minimum_crossover_cost(
 	return std::make_pair(cost_min, flip_min);
 }
 
+#if 0
 static inline std::pair<double, size_t> minimum_crossover_cost(
 	const std::vector<FlipEdge>		  &edges,
 	const std::pair<size_t, size_t>   &span1, const ConnectionCost &cost1,
@@ -1409,6 +1415,7 @@ static inline std::pair<double, size_t> minimum_crossover_cost(
 	}
 	return std::make_pair(cost_min, flip_min);
 }
+#endif
 
 static inline void do_crossover(const std::vector<FlipEdge> &edges_in, std::vector<FlipEdge> &edges_out,
 	const std::pair<size_t, size_t> &span1, const std::pair<size_t, size_t> &span2, const std::pair<size_t, size_t> &span3,
@@ -1420,7 +1427,7 @@ static inline void do_crossover(const std::vector<FlipEdge> &edges_in, std::vect
 		const std::pair<size_t, size_t> &span2, bool reversed2, bool flipped2,
 		const std::pair<size_t, size_t> &span3, bool reversed3, bool flipped3) {
 		auto it_edges_out = edges_out.begin();
-		auto copy_span = [&edges_in, &edges_out, &it_edges_out](std::pair<size_t, size_t> span, bool reversed, bool flipped) {
+        auto copy_span = [&edges_in, &it_edges_out](std::pair<size_t, size_t> span, bool reversed, bool flipped) {
 			assert(span.first < span.second);
 			auto it = it_edges_out;
 			if (reversed)
@@ -1451,7 +1458,7 @@ static inline void do_crossover(const std::vector<FlipEdge> &edges_in, std::vect
 	assert(edges_in.size() == edges_out.size());
 }
 
-
+#if 0
 static inline void do_crossover(const std::vector<FlipEdge> &edges_in, std::vector<FlipEdge> &edges_out,
 	const std::pair<size_t, size_t> &span1, const std::pair<size_t, size_t> &span2, const std::pair<size_t, size_t> &span3, const std::pair<size_t, size_t> &span4,
 	size_t i)
@@ -1463,7 +1470,7 @@ static inline void do_crossover(const std::vector<FlipEdge> &edges_in, std::vect
 		const std::pair<size_t, size_t> &span3, bool reversed3, bool flipped3,
 		const std::pair<size_t, size_t> &span4, bool reversed4, bool flipped4) {
 		auto it_edges_out = edges_out.begin();
-		auto copy_span = [&edges_in, &edges_out, &it_edges_out](std::pair<size_t, size_t> span, bool reversed, bool flipped) {
+        auto copy_span = [&edges_in, &it_edges_out](std::pair<size_t, size_t> span, bool reversed, bool flipped) {
 			assert(span.first < span.second);
 			auto it = it_edges_out;
 			if (reversed)
@@ -1523,7 +1530,13 @@ static inline void do_crossover(const std::vector<FlipEdge> &edges_in, std::vect
 	}
 	assert(edges_in.size() == edges_out.size());
 }
+#endif
 
+// Worst time complexity:    O(min(n, 100) * (n * log n + n^2)
+// Expected time complexity: O(min(n, 100) * (n * log n + k * n)
+// where n is the number of edges and k is the number of connection_lengths candidates after the first one
+// is found that improves the total cost.
+//FIXME there are likley better heuristics to lower the time complexity.
 static inline void reorder_by_two_exchanges_with_segment_flipping(std::vector<FlipEdge> &edges)
 {
 	if (edges.size() < 2)
@@ -1533,7 +1546,8 @@ static inline void reorder_by_two_exchanges_with_segment_flipping(std::vector<Fl
 	std::vector<FlipEdge> 					edges_tmp(edges);
 	std::vector<std::pair<double, size_t>>	connection_lengths(edges.size() - 1, std::pair<double, size_t>(0., 0));
 	std::vector<char>						connection_tried(edges.size(), false);
-	for (size_t iter = 0; iter < edges.size(); ++ iter) {
+	const size_t 							max_iterations = std::min(edges.size(), size_t(100));
+	for (size_t iter = 0; iter < max_iterations; ++ iter) {
 		// Initialize connection costs and connection lengths.
 		for (size_t i = 1; i < edges.size(); ++ i) {
 			const FlipEdge   	 &e1 = edges[i - 1];
@@ -1550,9 +1564,8 @@ static inline void reorder_by_two_exchanges_with_segment_flipping(std::vector<Fl
 		size_t crossover1_pos_final = std::numeric_limits<size_t>::max();
 		size_t crossover2_pos_final = std::numeric_limits<size_t>::max();
 		size_t crossover_flip_final = 0;
-		for (const std::pair<double, size_t> &first_crossover_candidate : connection_lengths) {
-			double longest_connection_length = first_crossover_candidate.first;
-			size_t longest_connection_idx    = first_crossover_candidate.second;
+        for (const std::pair<double, size_t>& first_crossover_candidate : connection_lengths) {
+            size_t longest_connection_idx = first_crossover_candidate.second;
 			connection_tried[longest_connection_idx] = true;
 			// Find the second crossover connection with the lowest total chain cost.
 			size_t crossover_pos_min  = std::numeric_limits<size_t>::max();
@@ -1598,6 +1611,8 @@ static inline void reorder_by_two_exchanges_with_segment_flipping(std::vector<Fl
 	}
 }
 
+#if 0
+// Currently not used, too slow.
 static inline void reorder_by_three_exchanges_with_segment_flipping(std::vector<FlipEdge> &edges)
 {
 	if (edges.size() < 3) {
@@ -1627,12 +1642,10 @@ static inline void reorder_by_three_exchanges_with_segment_flipping(std::vector<
 		size_t crossover2_pos_final = std::numeric_limits<size_t>::max();
 		size_t crossover3_pos_final = std::numeric_limits<size_t>::max();
 		size_t crossover_flip_final = 0;
-		for (const std::pair<double, size_t> &first_crossover_candidate : connection_lengths) {
-			double longest_connection_length = first_crossover_candidate.first;
-			size_t longest_connection_idx    = first_crossover_candidate.second;
-			connection_tried[longest_connection_idx] = true;
+        for (const std::pair<double, size_t> &first_crossover_candidate : connection_lengths) {
+            size_t longest_connection_idx = first_crossover_candidate.second;
+            connection_tried[longest_connection_idx] = true;
 			// Find the second crossover connection with the lowest total chain cost.
-			size_t crossover_pos_min  = std::numeric_limits<size_t>::max();
 			double crossover_cost_min = connections.back().cost;
 			for (size_t j = 1; j < connections.size(); ++ j)
 				if (! connection_tried[j]) {
@@ -1680,6 +1693,7 @@ static inline void reorder_by_three_exchanges_with_segment_flipping(std::vector<
 		}
 	}
 }
+#endif
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::DontAlign> Matrixd;
 
@@ -1693,6 +1707,7 @@ private:
 	const ConnectionCost* costs[4];
 };
 
+#if 0
 static inline std::pair<double, size_t> minimum_crossover_cost(
 	const FourOptCosts				  &segment_costs,
 	const Matrixd 					  &segment_end_point_distance_matrix,
@@ -1751,6 +1766,7 @@ static inline std::pair<double, size_t> minimum_crossover_cost(
 	return std::make_pair(cost_min, flip_min);
 }
 
+// Currently not used, too slow.
 static inline void reorder_by_three_exchanges_with_segment_flipping2(std::vector<FlipEdge> &edges)
 {
 	if (edges.size() < 3) {
@@ -1786,12 +1802,10 @@ static inline void reorder_by_three_exchanges_with_segment_flipping2(std::vector
 #else /* NDEBUG */
 		Matrixd segment_end_point_distance_matrix = Matrixd::Constant(4 * 4, 4 * 4, std::numeric_limits<double>::max());
 #endif /* NDEBUG */
-		for (const std::pair<double, size_t> &first_crossover_candidate : connection_lengths) {
-			double longest_connection_length = first_crossover_candidate.first;
-			size_t longest_connection_idx    = first_crossover_candidate.second;
-			connection_tried[longest_connection_idx] = true;
-			// Find the second crossover connection with the lowest total chain cost.
-			size_t crossover_pos_min  = std::numeric_limits<size_t>::max();
+        for (const std::pair<double, size_t> &first_crossover_candidate : connection_lengths) {
+            size_t longest_connection_idx = first_crossover_candidate.second;
+            connection_tried[longest_connection_idx] = true;
+            // Find the second crossover connection with the lowest total chain cost.
 			double crossover_cost_min = connections.back().cost;
 			for (size_t j = 1; j < connections.size(); ++ j)
 				if (! connection_tried[j]) {
@@ -1847,8 +1861,11 @@ static inline void reorder_by_three_exchanges_with_segment_flipping2(std::vector
 		}
 	}
 }
+#endif
 
 // Flip the sequences of polylines to lower the total length of connecting lines.
+// Used by the infill generator if the infill is not connected with perimeter lines
+// and to order the brim lines.
 static inline void improve_ordering_by_two_exchanges_with_segment_flipping(Polylines &polylines, bool fixed_start)
 {
 #ifndef NDEBUG
@@ -1900,6 +1917,7 @@ static inline void improve_ordering_by_two_exchanges_with_segment_flipping(Polyl
 #endif /* NDEBUG */
 }
 
+// Used to optimize order of infill lines and brim lines.
 Polylines chain_polylines(Polylines &&polylines, const Point *start_near)
 {
 #ifdef DEBUG_SVG_OUTPUT
@@ -1968,6 +1986,61 @@ std::vector<const PrintInstance*> chain_print_object_instances(const Print &prin
 		out.emplace_back(&print.objects()[inst.first]->instances()[inst.second]);
 	}
 	return out;
+}
+
+Polylines chain_lines(const std::vector<Line> &lines, const double point_distance_epsilon)
+{
+    // Create line end point lookup.
+    struct LineEnd {
+        LineEnd(const Line *line, bool start) : line(line), start(start) {}
+        const Line      *line;
+        // Is it the start or end point?
+        bool             start;
+        const Point&     point() const { return start ? line->a : line->b; }
+        const Point&     other_point() const { return start ? line->b : line->a; }
+        LineEnd          other_end() const { return LineEnd(line, ! start); }
+        bool operator==(const LineEnd &rhs) const { return this->line == rhs.line && this->start == rhs.start; }
+    };
+    struct LineEndAccessor {
+        const Point* operator()(const LineEnd &pt) const { return &pt.point(); }
+    };
+    typedef ClosestPointInRadiusLookup<LineEnd, LineEndAccessor> ClosestPointLookupType;
+    ClosestPointLookupType closest_end_point_lookup(point_distance_epsilon);
+    for (const Line &line : lines) {
+        closest_end_point_lookup.insert(LineEnd(&line, true));
+        closest_end_point_lookup.insert(LineEnd(&line, false));
+    }
+
+    // Chain the lines.
+    std::vector<char> line_consumed(lines.size(), false);
+    static const double point_distance_epsilon2 = point_distance_epsilon * point_distance_epsilon;
+    Polylines out;
+    for (const Line &seed : lines)
+        if (! line_consumed[&seed - lines.data()]) {
+            line_consumed[&seed - lines.data()] = true;
+            closest_end_point_lookup.erase(LineEnd(&seed, false));
+            closest_end_point_lookup.erase(LineEnd(&seed, true));
+            Polyline pl { seed.a, seed.b };
+            for (size_t round = 0; round < 2; ++ round) {
+                for (;;) {
+                    auto [line_end, dist2] = closest_end_point_lookup.find(pl.last_point());
+                    if (line_end == nullptr || dist2 >= point_distance_epsilon2)
+                        // Cannot extent in this direction.
+                        break;
+                    // Average the last point.
+                    pl.points.back() = (0.5 * (pl.points.back().cast<double>() + line_end->point().cast<double>())).cast<coord_t>();
+                    // and extend with the new line segment.
+                    pl.points.emplace_back(line_end->other_point());
+                    closest_end_point_lookup.erase(*line_end);
+                    closest_end_point_lookup.erase(line_end->other_end());
+                    line_consumed[line_end->line - lines.data()] = true;
+                }
+                // reverse and try the oter direction.
+                pl.reverse();
+            }
+            out.emplace_back(std::move(pl));
+        }
+    return out;
 }
 
 } // namespace Slic3r

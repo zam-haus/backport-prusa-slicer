@@ -50,7 +50,7 @@ bool FlashAir::test(wxString &msg) const
 			res = false;
 			msg = format_error(body, error, status);
 		})
-		.on_complete([&, this](std::string body, unsigned) {
+        .on_complete([&](std::string body, unsigned) {
 			BOOST_LOG_TRIVIAL(debug) << boost::format("%1%: Got upload enabled: %2%") % name % body;
 
 			res = boost::starts_with(body, "1");
@@ -70,7 +70,7 @@ wxString FlashAir::get_test_ok_msg () const
 
 wxString FlashAir::get_test_failed_msg (wxString &msg) const
 {
-    return GUI::from_u8((boost::format("%s: %s")
+    return GUI::from_u8((boost::format("%s: %s\n%s")
                     % _utf8(L("Could not connect to FlashAir"))
                     % std::string(msg.ToUTF8())
                     % _utf8(L("Note: FlashAir with firmware 2.00.02 or newer and activated upload function is required."))).str());
@@ -181,8 +181,6 @@ std::string FlashAir::timestamp_str() const
 {
 	auto t = std::time(nullptr);
 	auto tm = *std::localtime(&t);
-
-	const char *name = get_name();
 
 	unsigned long fattime = ((tm.tm_year - 80) << 25) | 
 							((tm.tm_mon + 1) << 21) |

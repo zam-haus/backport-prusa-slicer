@@ -7,10 +7,10 @@ Subject: Install XS files into /usr/lib/slic3r-prusa3d
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/xs/CMakeLists.txt b/xs/CMakeLists.txt
-index aaf9439..0df4df6 100644
+index 962e2e0..53c00bf 100644
 --- a/xs/CMakeLists.txt
 +++ b/xs/CMakeLists.txt
-@@ -184,8 +184,8 @@ if (MSVC)
+@@ -197,8 +197,8 @@ if (MSVC)
  endif()
  
  # Installation

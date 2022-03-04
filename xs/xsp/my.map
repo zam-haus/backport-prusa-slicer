@@ -191,18 +191,6 @@ GCode*                      O_OBJECT_SLIC3R
 Ref<GCode>                  O_OBJECT_SLIC3R_T
 Clone<GCode>                O_OBJECT_SLIC3R_T
 
-GCodePreviewData*			O_OBJECT_SLIC3R
-Ref<GCodePreviewData>		O_OBJECT_SLIC3R_T
-Clone<GCodePreviewData>		O_OBJECT_SLIC3R_T
-
-MotionPlanner*             O_OBJECT_SLIC3R
-Ref<MotionPlanner>         O_OBJECT_SLIC3R_T
-Clone<MotionPlanner>       O_OBJECT_SLIC3R_T
-
-// GCodeSender*               O_OBJECT_SLIC3R
-// Ref<GCodeSender>           O_OBJECT_SLIC3R_T
-// Clone<GCodeSender>         O_OBJECT_SLIC3R_T
-
 BridgeDetector*            O_OBJECT_SLIC3R
 Ref<BridgeDetector>        O_OBJECT_SLIC3R_T
 Clone<BridgeDetector>      O_OBJECT_SLIC3R_T
@@ -223,8 +211,8 @@ FlowRole     T_UV
 PrintStep     T_UV
 PrintObjectStep     T_UV
 SurfaceType     T_UV
-ClipperLib::JoinType		T_UV
-ClipperLib::PolyFillType		T_UV
+Slic3r::ClipperLib::JoinType		T_UV
+Slic3r::ClipperLib::PolyFillType		T_UV
 
 # we return these types whenever we want the items to be cloned
 Points          T_ARRAYREF
@@ -251,7 +239,6 @@ SupportLayerPtrs*   T_PTR_ARRAYREF_PTR
 # we return these types whenever we want the items to be returned
 # by reference and not marked ::Ref because they're newly allocated
 # and not referenced by any Perl object
-TriangleMeshPtrs T_PTR_ARRAYREF
 
 
 INPUT

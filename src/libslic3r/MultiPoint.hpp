@@ -17,8 +17,6 @@ class MultiPoint
 public:
     Points points;
     
-    operator Points() const { return this->points; }
-
     MultiPoint() {}
     MultiPoint(const MultiPoint &other) : points(other.points) {}
     MultiPoint(MultiPoint &&other) : points(std::move(other.points)) {}
@@ -28,14 +26,16 @@ public:
     MultiPoint& operator=(MultiPoint &&other) { points = std::move(other.points); return *this; }
     void scale(double factor);
     void scale(double factor_x, double factor_y);
-    void translate(double x, double y);
+    void translate(double x, double y) { this->translate(Point(coord_t(x), coord_t(y))); }
     void translate(const Point &vector);
     void rotate(double angle) { this->rotate(cos(angle), sin(angle)); }
     void rotate(double cos_angle, double sin_angle);
     void rotate(double angle, const Point &center);
     void reverse() { std::reverse(this->points.begin(), this->points.end()); }
 
-    const Point& first_point() const { return this->points.front(); }
+    const Point& front() const { return this->points.front(); }
+    const Point& back() const { return this->points.back(); }
+    const Point& first_point() const { return this->front(); }
     virtual const Point& last_point() const = 0;
     virtual Lines lines() const = 0;
     size_t size() const { return points.size(); }
@@ -66,6 +66,7 @@ public:
     bool has_duplicate_points() const;
     // Remove exact duplicates, return true if any duplicate has been removed.
     bool remove_duplicate_points();
+    void clear() { this->points.clear(); }
     void append(const Point &point) { this->points.push_back(point); }
     void append(const Points &src) { this->append(src.begin(), src.end()); }
     void append(const Points::const_iterator &begin, const Points::const_iterator &end) { this->points.insert(this->points.end(), begin, end); }
@@ -81,9 +82,17 @@ public:
 
     bool intersection(const Line& line, Point* intersection) const;
     bool first_intersection(const Line& line, Point* intersection) const;
-    
+    bool intersections(const Line &line, Points *intersections) const;
+
     static Points _douglas_peucker(const Points &points, const double tolerance);
     static Points visivalingam(const Points& pts, const double& tolerance);
+
+    inline auto begin()        { return points.begin(); }
+    inline auto begin()  const { return points.begin(); }
+    inline auto end()          { return points.end();   }
+    inline auto end()    const { return points.end();   }
+    inline auto cbegin() const { return points.begin(); }
+    inline auto cend()   const { return points.end();   }
 };
 
 class MultiPoint3

@@ -1,3 +1,96 @@
+slic3r-prusa (2.4.0+dfsg-1) unstable; urgency=medium
+
+  * [a97954a] New upstream version 2.4.0+dfsg
+  * [99e6096] Disable dh_dwz to get aeround "Too many DIEs" error
+  * [a5849c1] Drop deleted file patterns from debian/copyright
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 28 Dec 2021 01:05:16 +0800
+
+slic3r-prusa (2.3.3+dfsg-3) unstable; urgency=medium
+
+  * [8929e18] Use packaged catch2 library.
+    Thanks to Tobias Frost <tobi@debian.org> (Closes: #979826)
+  * [be803cc] Build-dep on catch2 and drop tests/catch2 files
+  * [1cd5cda] Drop Move-Catch-namespace-into-PrusaCatch.patch.
+    This is no longer needed now that we're using the packaged catch library
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 23 Dec 2021 03:02:30 +0800
+
+slic3r-prusa (2.3.3+dfsg-2) unstable; urgency=medium
+
+  * [98cf206] Disable compilation of test_voronoi.cpp to workaround ftbfs
+    (Closes: #984338)
+  * [dc392ad] Remove src/miniz/*.cpp from debian/copyright
+  * [4384784] Fix tpi.h path in debian/copyright
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sun, 21 Nov 2021 02:05:09 +0800
+
+slic3r-prusa (2.3.3+dfsg-1) experimental; urgency=medium
+
+  * [e30ffae] New upstream version 2.3.3+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 19 Jul 2021 03:22:09 +0800
+
+slic3r-prusa (2.3.2+dfsg-1) experimental; urgency=medium
+
+  * [1d9bbbe] New upstream version 2.3.2+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 09 Jul 2021 01:55:59 +0800
+
+slic3r-prusa (2.3.1+dfsg-1) unstable; urgency=medium
+
+  * [0417841] New upstream version 2.3.1+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sun, 18 Apr 2021 01:24:02 +0800
+
+slic3r-prusa (2.3.0+dfsg-1) unstable; urgency=medium
+
+  * [aaf8827] Build-dep on libgtk-3-dev
+  * [8489e62] Add patch to link against gtk3.
+    This fixes the compilation error documented at
+    https://github.com/prusa3d/PrusaSlicer/issues/5739
+  * [2fc181c] New upstream version 2.3.0+dfsg
+  * [3fa7d96] Drop upstreamed Link-against-gtk3.patch
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 13 Jan 2021 23:38:19 +0800
+
+slic3r-prusa (2.3.0~rc3+dfsg-1) UNRELEASED; urgency=medium
+
+  * [65edb5d] Add copyright for metainfo file
+  * [e322b01] Bump debhelper compat level to 12
+  * [5726059] Drop redundant `--parallel` parameter to dh.
+    Looks like debhelper doesn't need it these days
+  * [eaf4e0c] Add prusa-gcodeviewer manpage
+  * [a12a9ca] New upstream version 2.3.0~rc3+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 11 Jan 2021 05:29:49 +0800
+
+slic3r-prusa (2.3.0~rc2+dfsg-1) UNRELEASED; urgency=medium
+
+  * [ee7a167] New upstream version 2.3.0~rc2+dfsg
+  * [a55c26f] Patch to fix FTBFS with new boost (Closes: #975665)
+  * [1897068] Allow rc versions in debian/watch
+  * [5972eae] Drop upstreamed patches
+  * [9a331d5] Add libpng-dev build-dep
+  * [cb0e8e4] Build-dep on libdbus-1-dev
+  * [8bbd7f1] Rename Catch namespace to avoid symbol conflict with liblog4cplus
+    (Closes: #975198)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 07 Jan 2021 14:56:55 +0800
+
+slic3r-prusa (2.2.0+dfsg1-4) unstable; urgency=medium
+
+  * [3b6500e] Fix alpha channel issues in icons (Closes: #949333)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sun, 06 Dec 2020 15:12:30 +0800
+
+slic3r-prusa (2.2.0+dfsg1-3) unstable; urgency=medium
+
+  * [4bab085] Reduce debug info on armhf.
+    Apparently 90MB is too much for armhf. (Closes: #961373)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 28 Sep 2020 01:13:24 +0800
+
 slic3r-prusa (2.2.0+dfsg1-2) unstable; urgency=medium
 
   * [38942b0] Fix FTBFS on mips, and mipsel (oom), and i386 (float issues)

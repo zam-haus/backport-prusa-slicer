@@ -1,14 +1,14 @@
 #ifndef slic3r_SLAPrint_hpp_
 #define slic3r_SLAPrint_hpp_
 
+#include <cstdint>
 #include <mutex>
 #include "PrintBase.hpp"
-#include "SLA/RasterWriter.hpp"
+#include "SLA/RasterBase.hpp"
 #include "SLA/SupportTree.hpp"
 #include "Point.hpp"
 #include "MTUtils.hpp"
 #include "Zipper.hpp"
-#include <libnest2d/backends/clipper/clipper_polygon.hpp>
 
 namespace Slic3r {
 
@@ -37,7 +37,7 @@ using _SLAPrintObjectBase =
 
 // Layers according to quantized height levels. This will be consumed by
 // the printer (rasterizer) in the SLAPrint class.
-// using coord_t = long long;
+// using coord_t = int64_t;
 
 enum SliceOrigin { soSupport, soModel };
 
@@ -79,11 +79,15 @@ public:
     const TriangleMesh&     pad_mesh() const;
     
     // Ready after this->is_step_done(slaposDrillHoles) is true
-    const TriangleMesh&     hollowed_interior_mesh() const;
-    
+    const indexed_triangle_set &hollowed_interior_mesh() const;
+
     // Get the mesh that is going to be printed with all the modifications
     // like hollowing and drilled holes.
     const TriangleMesh & get_mesh_to_print() const {
+        return (m_hollowing_data && is_step_done(slaposDrillHoles)) ? m_hollowing_data->hollow_mesh_with_holes_trimmed : transformed_mesh();
+    }
+
+    const TriangleMesh & get_mesh_to_slice() const {
         return (m_hollowing_data && is_step_done(slaposDrillHoles)) ? m_hollowing_data->hollow_mesh_with_holes : transformed_mesh();
     }
 
@@ -261,9 +265,9 @@ protected:
 	SLAPrintObject(SLAPrint* print, ModelObject* model_object);
     ~SLAPrintObject();
 
-    void                    config_apply(const ConfigBase &other, bool ignore_nonexistent = false) { this->m_config.apply(other, ignore_nonexistent); }
+    void                    config_apply(const ConfigBase &other, bool ignore_nonexistent = false) { m_config.apply(other, ignore_nonexistent); }
     void                    config_apply_only(const ConfigBase &other, const t_config_option_keys &keys, bool ignore_nonexistent = false)
-        { this->m_config.apply_only(other, keys, ignore_nonexistent); }
+        { m_config.apply_only(other, keys, ignore_nonexistent); }
 
     void                    set_trafo(const Transform3d& trafo, bool left_handed) {
         m_transformed_rmesh.invalidate([this, &trafo, left_handed](){ m_trafo = trafo; m_left_handed = left_handed; });
@@ -309,15 +313,26 @@ private:
     public:
         sla::SupportTree::UPtr  support_tree_ptr; // the supports
         std::vector<ExPolygons> support_slices;   // sliced supports
+        TriangleMesh tree_mesh, pad_mesh, full_mesh;
         
         inline SupportData(const TriangleMesh &t)
-            : sla::SupportableMesh{t, {}, {}}
+            : sla::SupportableMesh{t.its, {}, {}}
         {}
         
         sla::SupportTree::UPtr &create_support_tree(const sla::JobController &ctl)
         {
             support_tree_ptr = sla::SupportTree::create(*this, ctl);
+            tree_mesh = TriangleMesh{support_tree_ptr->retrieve_mesh(sla::MeshType::Support)};
             return support_tree_ptr;
+        }
+
+        void create_pad(const ExPolygons &blueprint, const sla::PadConfig &pcfg)
+        {
+            if (!support_tree_ptr)
+                return;
+
+            support_tree_ptr->add_pad(blueprint, pcfg);
+            pad_mesh = TriangleMesh{support_tree_ptr->retrieve_mesh(sla::MeshType::Pad)};
         }
     };
     
@@ -326,9 +341,10 @@ private:
     class HollowingData
     {
     public:
-        
-        TriangleMesh interior;
+
+        sla::InteriorPtr interior;
         mutable TriangleMesh hollow_mesh_with_holes; // caching the complete hollowed mesh
+        mutable TriangleMesh hollow_mesh_with_holes_trimmed;
     };
     
     std::unique_ptr<HollowingData> m_hollowing_data;
@@ -350,6 +366,7 @@ struct SLAPrintStatistics
     size_t                          fast_layers_count;
     double                          total_cost;
     double                          total_weight;
+    std::vector<double>             layers_times;
 
     // Config with the filled in print statistics.
     DynamicConfig           config() const;
@@ -366,6 +383,42 @@ struct SLAPrintStatistics
         fast_layers_count = 0;
         total_cost = 0.;
         total_weight = 0.;
+        layers_times.clear();
+    }
+};
+
+class SLAArchive {
+protected:
+    std::vector<sla::EncodedRaster> m_layers;
+    
+    virtual std::unique_ptr<sla::RasterBase> create_raster() const = 0;
+    virtual sla::RasterEncoder get_encoder() const = 0;
+    
+public:
+    virtual ~SLAArchive() = default;
+    
+    virtual void apply(const SLAPrinterConfig &cfg) = 0;
+    
+    // Fn have to be thread safe: void(sla::RasterBase& raster, size_t lyrid);
+    template<class Fn, class CancelFn, class EP = ExecutionTBB>
+    void draw_layers(
+        size_t     layer_num,
+        Fn &&      drawfn,
+        CancelFn cancelfn = []() { return false; },
+        const EP & ep       = {})
+    {
+        m_layers.resize(layer_num);
+        execution::for_each(
+            ep, size_t(0), m_layers.size(),
+            [this, &drawfn, &cancelfn](size_t idx) {
+                if (cancelfn()) return;
+
+                sla::EncodedRaster &enc = m_layers[idx];
+                auto                rst = create_raster();
+                drawfn(*rst, idx);
+                enc = rst->encode(get_encoder());
+            },
+            execution::max_concurrency(ep));
     }
 };
 
@@ -394,6 +447,8 @@ public:
 
     void                clear() override;
     bool                empty() const override { return m_objects.empty(); }
+    // List of existing PrintObject IDs, to remove notifications for non-existent IDs.
+    std::vector<ObjectID> print_object_ids() const override;
     ApplyStatus         apply(const Model &model, DynamicPrintConfig config) override;
     void                set_task(const TaskParams &params) override;
     void                process() override;
@@ -403,19 +458,14 @@ public:
     // Returns true if the last step was finished with success.
     bool                finished() const override { return this->is_step_done(slaposSliceSupports) && this->Inherited::is_step_done(slapsRasterize); }
 
-    inline void export_raster(const std::string& fpath,
-                              const std::string& projectname = "")
-    {
-        if(m_printer) m_printer->save(fpath, projectname);
-    }
-
-    inline void export_raster(Zipper &zipper,
-                              const std::string& projectname = "")
-    {
-        if(m_printer) m_printer->save(zipper, projectname);
-    }
-
     const PrintObjects& objects() const { return m_objects; }
+    // PrintObject by its ObjectID, to be used to uniquely bind slicing warnings to their source PrintObjects
+    // in the notification center.
+    const SLAPrintObject* get_object(ObjectID object_id) const {
+        auto it = std::find_if(m_objects.begin(), m_objects.end(),
+            [object_id](const SLAPrintObject *obj) { return obj->id() == object_id; });
+        return (it == m_objects.end()) ? nullptr : *it;
+    }
 
     const SLAPrintConfig&       print_config() const { return m_print_config; }
     const SLAPrinterConfig&     printer_config() const { return m_printer_config; }
@@ -432,7 +482,7 @@ public:
 
     const SLAPrintStatistics&   print_statistics() const { return m_print_statistics; }
 
-    std::string validate() const override;
+    std::string validate(std::string* warning = nullptr) const override;
 
     // An aggregation of SliceRecord-s from all the print objects for each
     // occupied layer. Slice record levels dont have to match exactly.
@@ -443,16 +493,17 @@ public:
         // The collection of slice records for the current level.
         std::vector<std::reference_wrapper<const SliceRecord>> m_slices;
 
-        std::vector<ClipperLib::Polygon> m_transformed_slices;
+        ExPolygons m_transformed_slices;
 
-        template<class Container> void transformed_slices(Container&& c) {
+        template<class Container> void transformed_slices(Container&& c)
+        {
             m_transformed_slices = std::forward<Container>(c);
         }
         
         friend class SLAPrint::Steps;
 
     public:
-
+        
         explicit PrintLayer(coord_t lvl) : m_level(lvl) {}
 
         // for being sorted in their container (see m_printer_input)
@@ -466,7 +517,7 @@ public:
 
         auto slices() const -> const decltype (m_slices)& { return m_slices; }
 
-        const std::vector<ClipperLib::Polygon> & transformed_slices() const {
+        const ExPolygons & transformed_slices() const {
             return m_transformed_slices;
         }
     };
@@ -474,8 +525,11 @@ public:
     // The aggregated and leveled print records from various objects.
     // TODO: use this structure for the preview in the future.
     const std::vector<PrintLayer>& print_layers() const { return m_printer_input; }
-
+    
+    void set_printer(SLAArchive *archiver);
+    
 private:
+    
     // Implement same logic as in SLAPrintObject
     bool invalidate_step(SLAPrintStep st);
 
@@ -491,13 +545,13 @@ private:
     std::vector<bool>               m_stepmask;
 
     // Ready-made data for rasterization.
-    std::vector<PrintLayer>                 m_printer_input;
-
-    // The printer itself
-    std::unique_ptr<sla::RasterWriter>   m_printer;
-
+    std::vector<PrintLayer>         m_printer_input;
+    
+    // The archive object which collects the raster images after slicing
+    SLAArchive                     *m_printer = nullptr;
+    
     // Estimated print time, material consumed.
-    SLAPrintStatistics                      m_print_statistics;
+    SLAPrintStatistics              m_print_statistics;
     
     class StatusReporter
     {
@@ -512,15 +566,6 @@ private:
         
         double status() const { return m_st; }
     } m_report_status;
-    
-    sla::RasterWriter &init_printer();
-    
-    inline sla::Raster::Orientation get_printer_orientation() const
-    {
-        auto ro = m_printer_config.display_orientation.getInt();
-        return ro == sla::Raster::roPortrait ? sla::Raster::roPortrait :
-                                               sla::Raster::roLandscape;
-    }
 
 	friend SLAPrintObject;
 };
@@ -529,13 +574,13 @@ private:
 
 bool is_zero_elevation(const SLAPrintObjectConfig &c);
 
-sla::SupportConfig make_support_cfg(const SLAPrintObjectConfig& c);
+sla::SupportTreeConfig make_support_cfg(const SLAPrintObjectConfig& c);
 
 sla::PadConfig::EmbedObject builtin_pad_cfg(const SLAPrintObjectConfig& c);
 
 sla::PadConfig make_pad_cfg(const SLAPrintObjectConfig& c);
 
-bool validate_pad(const TriangleMesh &pad, const sla::PadConfig &pcfg);
+bool validate_pad(const indexed_triangle_set &pad, const sla::PadConfig &pcfg);
 
 
 } // namespace Slic3r

@@ -1,7 +1,10 @@
 // Include GLGizmoBase.hpp before I18N.hpp as it includes some libigl code, which overrides our localization "L" macro.
 #include "GLGizmoFlatten.hpp"
 #include "slic3r/GUI/GLCanvas3D.hpp"
-#include "slic3r/GUI/GUI_App.hpp"
+#include "slic3r/GUI/Gizmos/GLGizmosCommon.hpp"
+
+#include "libslic3r/Geometry/ConvexHull.hpp"
+#include "libslic3r/Model.hpp"
 
 #include <numeric>
 
@@ -26,41 +29,35 @@ bool GLGizmoFlatten::on_init()
 
 void GLGizmoFlatten::on_set_state()
 {
-    // m_model_object pointer can be invalid (for instance because of undo/redo action),
-    // we should recover it from the object id
-    m_model_object = nullptr;
-    for (const auto mo : wxGetApp().model().objects) {
-        if (mo->id() == m_model_object_id) {
-            m_model_object = mo;
-            break;
-        }
-    }
+}
 
-    if (m_state == On && is_plane_update_necessary())
-        update_planes();
+CommonGizmosDataID GLGizmoFlatten::on_get_requirements() const
+{
+    return CommonGizmosDataID::SelectionInfo;
 }
 
 std::string GLGizmoFlatten::on_get_name() const
 {
-    return (_(L("Place on face")) + " [F]").ToUTF8().data();
+    return _u8L("Place on face");
 }
 
 bool GLGizmoFlatten::on_is_activable() const
 {
+    // This is assumed in GLCanvas3D::do_rotate, do not change this
+    // without updating that function too.
     return m_parent.get_selection().is_single_full_instance();
 }
 
 void GLGizmoFlatten::on_start_dragging()
 {
-    if (m_hover_id != -1)
-    {
+    if (m_hover_id != -1) {
         assert(m_planes_valid);
         m_normal = m_planes[m_hover_id].normal;
         m_starting_center = m_parent.get_selection().get_bounding_box().center();
     }
 }
 
-void GLGizmoFlatten::on_render() const
+void GLGizmoFlatten::on_render()
 {
     const Selection& selection = m_parent.get_selection();
 
@@ -69,27 +66,21 @@ void GLGizmoFlatten::on_render() const
     glsafe(::glEnable(GL_DEPTH_TEST));
     glsafe(::glEnable(GL_BLEND));
 
-    if (selection.is_single_full_instance())
-    {
+    if (selection.is_single_full_instance()) {
         const Transform3d& m = selection.get_volume(*selection.get_volume_idxs().begin())->get_instance_transformation().get_matrix();
         glsafe(::glPushMatrix());
         glsafe(::glTranslatef(0.f, 0.f, selection.get_volume(*selection.get_volume_idxs().begin())->get_sla_shift_z()));
         glsafe(::glMultMatrixd(m.data()));
         if (this->is_plane_update_necessary())
-			const_cast<GLGizmoFlatten*>(this)->update_planes();
-        for (int i = 0; i < (int)m_planes.size(); ++i)
-        {
+            update_planes();
+        for (int i = 0; i < (int)m_planes.size(); ++i) {
             if (i == m_hover_id)
                 glsafe(::glColor4f(0.9f, 0.9f, 0.9f, 0.75f));
             else
                 glsafe(::glColor4f(0.9f, 0.9f, 0.9f, 0.5f));
 
-            ::glBegin(GL_POLYGON);
-            for (const Vec3d& vertex : m_planes[i].vertices)
-            {
-                ::glVertex3dv(vertex.data());
-            }
-            glsafe(::glEnd());
+            if (m_planes[i].vbo.has_VBOs())
+                m_planes[i].vbo.render();
         }
         glsafe(::glPopMatrix());
     }
@@ -98,30 +89,23 @@ void GLGizmoFlatten::on_render() const
     glsafe(::glDisable(GL_BLEND));
 }
 
-void GLGizmoFlatten::on_render_for_picking() const
+void GLGizmoFlatten::on_render_for_picking()
 {
     const Selection& selection = m_parent.get_selection();
 
     glsafe(::glDisable(GL_DEPTH_TEST));
     glsafe(::glDisable(GL_BLEND));
 
-    if (selection.is_single_full_instance())
-    {
+    if (selection.is_single_full_instance() && !wxGetKeyState(WXK_CONTROL)) {
         const Transform3d& m = selection.get_volume(*selection.get_volume_idxs().begin())->get_instance_transformation().get_matrix();
         glsafe(::glPushMatrix());
         glsafe(::glTranslatef(0.f, 0.f, selection.get_volume(*selection.get_volume_idxs().begin())->get_sla_shift_z()));
         glsafe(::glMultMatrixd(m.data()));
         if (this->is_plane_update_necessary())
-			const_cast<GLGizmoFlatten*>(this)->update_planes();
-        for (int i = 0; i < (int)m_planes.size(); ++i)
-        {
+            update_planes();
+        for (int i = 0; i < (int)m_planes.size(); ++i) {
             glsafe(::glColor4fv(picking_color_component(i).data()));
-            ::glBegin(GL_POLYGON);
-            for (const Vec3d& vertex : m_planes[i].vertices)
-            {
-                ::glVertex3dv(vertex.data());
-            }
-            glsafe(::glEnd());
+            m_planes[i].vbo.render();
         }
         glsafe(::glPopMatrix());
     }
@@ -132,19 +116,17 @@ void GLGizmoFlatten::on_render_for_picking() const
 void GLGizmoFlatten::set_flattening_data(const ModelObject* model_object)
 {
     m_starting_center = Vec3d::Zero();
-    if (m_model_object != model_object) {
+    if (model_object != m_old_model_object) {
         m_planes.clear();
         m_planes_valid = false;
     }
-    m_model_object = model_object;
-    m_model_object_id = model_object ? model_object->id() : 0;
 }
 
 void GLGizmoFlatten::update_planes()
 {
+    const ModelObject* mo = m_c->selection_info()->model_object();
     TriangleMesh ch;
-    for (const ModelVolume* vol : m_model_object->volumes)
-    {
+    for (const ModelVolume* vol : mo->volumes) {
         if (vol->type() != ModelVolumeType::MODEL_PART)
             continue;
         TriangleMesh vol_ch = vol->get_convex_hull();
@@ -153,7 +135,7 @@ void GLGizmoFlatten::update_planes()
     }
     ch = ch.convex_hull_3d();
     m_planes.clear();
-    const Transform3d& inst_matrix = m_model_object->instances.front()->get_matrix(true);
+    const Transform3d& inst_matrix = mo->instances.front()->get_matrix(true);
 
     // Following constants are used for discarding too small polygons.
     const float minimal_area = 5.f; // in square mm (world coordinates)
@@ -161,11 +143,13 @@ void GLGizmoFlatten::update_planes()
 
     // Now we'll go through all the facets and append Points of facets sharing the same normal.
     // This part is still performed in mesh coordinate system.
-    const int num_of_facets = ch.stl.stats.number_of_facets;
-    std::vector<int>  facet_queue(num_of_facets, 0);
-    std::vector<bool> facet_visited(num_of_facets, false);
-    int               facet_queue_cnt = 0;
-    const stl_normal* normal_ptr = nullptr;
+    const int                num_of_facets  = ch.facets_count();
+    const std::vector<Vec3f> face_normals   = its_face_normals(ch.its);
+    const std::vector<Vec3i> face_neighbors = its_face_neighbors(ch.its);
+    std::vector<int>         facet_queue(num_of_facets, 0);
+    std::vector<bool>        facet_visited(num_of_facets, false);
+    int                      facet_queue_cnt = 0;
+    const stl_normal*        normal_ptr      = nullptr;
     while (1) {
         // Find next unvisited triangle:
         int facet_idx = 0;
@@ -173,7 +157,7 @@ void GLGizmoFlatten::update_planes()
             if (!facet_visited[facet_idx]) {
                 facet_queue[facet_queue_cnt ++] = facet_idx;
                 facet_visited[facet_idx] = true;
-                normal_ptr = &ch.stl.facet_start[facet_idx].normal;
+                normal_ptr = &face_normals[facet_idx];
                 m_planes.emplace_back();
                 break;
             }
@@ -182,31 +166,30 @@ void GLGizmoFlatten::update_planes()
 
         while (facet_queue_cnt > 0) {
             int facet_idx = facet_queue[-- facet_queue_cnt];
-            const stl_normal& this_normal = ch.stl.facet_start[facet_idx].normal;
+            const stl_normal& this_normal = face_normals[facet_idx];
             if (std::abs(this_normal(0) - (*normal_ptr)(0)) < 0.001 && std::abs(this_normal(1) - (*normal_ptr)(1)) < 0.001 && std::abs(this_normal(2) - (*normal_ptr)(2)) < 0.001) {
-                stl_vertex* first_vertex = ch.stl.facet_start[facet_idx].vertex;
+                const Vec3i face = ch.its.indices[facet_idx];
                 for (int j=0; j<3; ++j)
-                    m_planes.back().vertices.emplace_back((double)first_vertex[j](0), (double)first_vertex[j](1), (double)first_vertex[j](2));
+                    m_planes.back().vertices.emplace_back(ch.its.vertices[face[j]].cast<double>());
 
                 facet_visited[facet_idx] = true;
-                for (int j = 0; j < 3; ++ j) {
-                    int neighbor_idx = ch.stl.neighbors_start[facet_idx].neighbor[j];
-                    if (! facet_visited[neighbor_idx])
+                for (int j = 0; j < 3; ++ j)
+                    if (int neighbor_idx = face_neighbors[facet_idx][j]; neighbor_idx >= 0 && ! facet_visited[neighbor_idx])
                         facet_queue[facet_queue_cnt ++] = neighbor_idx;
-                }
             }
         }
         m_planes.back().normal = normal_ptr->cast<double>();
 
+        Pointf3s& verts = m_planes.back().vertices;
         // Now we'll transform all the points into world coordinates, so that the areas, angles and distances
         // make real sense.
-        m_planes.back().vertices = transform(m_planes.back().vertices, inst_matrix);
+        verts = transform(verts, inst_matrix);
 
         // if this is a just a very small triangle, remove it to speed up further calculations (it would be rejected later anyway):
-        if (m_planes.back().vertices.size() == 3 &&
-            ((m_planes.back().vertices[0] - m_planes.back().vertices[1]).norm() < minimal_side
-            || (m_planes.back().vertices[0] - m_planes.back().vertices[2]).norm() < minimal_side
-            || (m_planes.back().vertices[1] - m_planes.back().vertices[2]).norm() < minimal_side))
+        if (verts.size() == 3 &&
+            ((verts[0] - verts[1]).norm() < minimal_side
+            || (verts[0] - verts[2]).norm() < minimal_side
+            || (verts[1] - verts[2]).norm() < minimal_side))
             m_planes.pop_back();
     }
 
@@ -331,12 +314,28 @@ void GLGizmoFlatten::update_planes()
     // Planes are finished - let's save what we calculated it from:
     m_volumes_matrices.clear();
     m_volumes_types.clear();
-    for (const ModelVolume* vol : m_model_object->volumes) {
+    for (const ModelVolume* vol : mo->volumes) {
         m_volumes_matrices.push_back(vol->get_matrix());
         m_volumes_types.push_back(vol->type());
     }
-    m_first_instance_scale = m_model_object->instances.front()->get_scaling_factor();
-    m_first_instance_mirror = m_model_object->instances.front()->get_mirror();
+    m_first_instance_scale = mo->instances.front()->get_scaling_factor();
+    m_first_instance_mirror = mo->instances.front()->get_mirror();
+    m_old_model_object = mo;
+
+    // And finally create respective VBOs. The polygon is convex with
+    // the vertices in order, so triangulation is trivial.
+    for (auto& plane : m_planes) {
+        plane.vbo.reserve(plane.vertices.size());
+        for (const auto& vert : plane.vertices)
+            plane.vbo.push_geometry(vert, plane.normal);
+        for (size_t i=1; i<plane.vertices.size()-1; ++i)
+            plane.vbo.push_triangle(0, i, i+1); // triangle fan
+        plane.vbo.finalize_geometry(true);
+        // FIXME: vertices should really be local, they need not
+        // persist now when we use VBOs
+        plane.vertices.clear();
+        plane.vertices.shrink_to_fit();
+    }
 
     m_planes_valid = true;
 }
@@ -344,20 +343,22 @@ void GLGizmoFlatten::update_planes()
 
 bool GLGizmoFlatten::is_plane_update_necessary() const
 {
-    if (m_state != On || !m_model_object || m_model_object->instances.empty())
+    const ModelObject* mo = m_c->selection_info()->model_object();
+    if (m_state != On || ! mo || mo->instances.empty())
         return false;
 
-    if (! m_planes_valid || m_model_object->volumes.size() != m_volumes_matrices.size())
+    if (! m_planes_valid || mo != m_old_model_object
+     || mo->volumes.size() != m_volumes_matrices.size())
         return true;
 
     // We want to recalculate when the scale changes - some planes could (dis)appear.
-    if (! m_model_object->instances.front()->get_scaling_factor().isApprox(m_first_instance_scale)
-     || ! m_model_object->instances.front()->get_mirror().isApprox(m_first_instance_mirror))
+    if (! mo->instances.front()->get_scaling_factor().isApprox(m_first_instance_scale)
+     || ! mo->instances.front()->get_mirror().isApprox(m_first_instance_mirror))
         return true;
 
-    for (unsigned int i=0; i < m_model_object->volumes.size(); ++i)
-        if (! m_model_object->volumes[i]->get_matrix().isApprox(m_volumes_matrices[i])
-         || m_model_object->volumes[i]->type() != m_volumes_types[i])
+    for (unsigned int i=0; i < mo->volumes.size(); ++i)
+        if (! mo->volumes[i]->get_matrix().isApprox(m_volumes_matrices[i])
+         || mo->volumes[i]->type() != m_volumes_types[i])
             return true;
 
     return false;

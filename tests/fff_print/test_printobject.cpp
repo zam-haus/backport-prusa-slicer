@@ -2,6 +2,7 @@
 
 #include "libslic3r/libslic3r.h"
 #include "libslic3r/Print.hpp"
+#include "libslic3r/Layer.hpp"
 
 #include "test_data.hpp"
 
@@ -17,7 +18,7 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
 				{ "layer_height", 		2 },
 	            { "nozzle_diameter", 	3 }
 	        });
-			const std::vector<Slic3r::Layer*> &layers = print.objects().front()->layers();
+            ConstLayerPtrsAdaptor layers = print.objects().front()->layers();
             THEN("The output vector has 10 entries") {
                 REQUIRE(layers.size() == 10);
             }
@@ -36,7 +37,7 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
 				{ "layer_height", 		10 },
 	            { "nozzle_diameter", 	11 }
 	        });
-			const std::vector<Slic3r::Layer*> &layers = print.objects().front()->layers();
+            ConstLayerPtrsAdaptor layers = print.objects().front()->layers();
 			THEN("The output vector has 3 entries") {
                 REQUIRE(layers.size() == 3);
             }
@@ -54,7 +55,7 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
 				{ "layer_height", 		15 },
 	            { "nozzle_diameter", 	16 }
 	        });
-			const std::vector<Slic3r::Layer*> &layers = print.objects().front()->layers();
+            ConstLayerPtrsAdaptor layers = print.objects().front()->layers();
 			THEN("The output vector has 2 entries") {
                 REQUIRE(layers.size() == 2);
             }

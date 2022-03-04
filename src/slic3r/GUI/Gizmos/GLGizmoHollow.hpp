@@ -5,59 +5,50 @@
 #include "slic3r/GUI/GLSelectionRectangle.hpp"
 
 #include <libslic3r/SLA/Hollowing.hpp>
+#include <libslic3r/ObjectID.hpp>
 #include <wx/dialog.h>
 
 #include <cereal/types/vector.hpp>
 
 
 namespace Slic3r {
+
+class ConfigOption;
+class ConfigOptionDef;
+
 namespace GUI {
 
-class ClippingPlane;
-class MeshClipper;
-class MeshRaycaster;
-class CommonGizmosData;
 enum class SLAGizmoEventType : unsigned char;
 
 class GLGizmoHollow : public GLGizmoBase
 {
 private:
-    mutable double m_z_shift = 0.;
     bool unproject_on_mesh(const Vec2d& mouse_pos, std::pair<Vec3f, Vec3f>& pos_and_normal);
-
-    GLUquadricObj* m_quadric;
 
 
 public:
     GLGizmoHollow(GLCanvas3D& parent, const std::string& icon_filename, unsigned int sprite_id);
-    ~GLGizmoHollow() override;
+    virtual ~GLGizmoHollow() = default;
     void set_sla_support_data(ModelObject* model_object, const Selection& selection);
     bool gizmo_event(SLAGizmoEventType action, const Vec2d& mouse_position, bool shift_down, bool alt_down, bool control_down);
-    void delete_selected_points();
-    ClippingPlane get_sla_clipping_plane() const;
-    
-    
-    std::pair<const TriangleMesh *, sla::HollowingConfig> get_hollowing_parameters() const;
-    void update_mesh_raycaster(std::unique_ptr<MeshRaycaster> &&rc);
-    void update_hollowed_mesh(std::unique_ptr<TriangleMesh> &&mesh);
-
-    bool is_selection_rectangle_dragging() const { return m_selection_rectangle.is_dragging(); }
-    void update_clipping_plane(bool keep_normal = false) const;
-    void set_common_data_ptr(CommonGizmosData* ptr) { m_c = ptr; }
+    void delete_selected_points();    
+    bool is_selection_rectangle_dragging() const {
+        return m_selection_rectangle.is_dragging();
+    }
 
 private:
     bool on_init() override;
     void on_update(const UpdateData& data) override;
-    void on_render() const override;
-    void on_render_for_picking() const override;
+    void on_render() override;
+    void on_render_for_picking() override;
 
     void render_points(const Selection& selection, bool picking = false) const;
-    void render_clipping_plane(const Selection& selection) const;
-    void render_hollowed_mesh() const;
     void hollow_mesh(bool postpone_error_messages = false);
     bool unsaved_changes() const;
 
-    bool  m_show_supports = true;
+    ObjectID m_old_mo_id = -1;
+
+    GLModel m_vbo_cylinder;
     float m_new_hole_radius = 2.f;        // Size of a new hole.
     float m_new_hole_height = 6.f;
     mutable std::vector<bool> m_selected; // which holes are currently selected
@@ -73,10 +64,6 @@ private:
     sla::DrainHoles m_holes_in_drilled_mesh;
 
     sla::DrainHoles m_holes_stash;
-
-    CommonGizmosData* m_c = nullptr;
-
-    //std::unique_ptr<ClippingPlane> m_clipping_plane;
     
     // This map holds all translated description texts, so they can be easily referenced during layout calculations
     // etc. When language changes, GUI is recreated and this class constructed again, so the change takes effect.
@@ -107,6 +94,7 @@ protected:
     void on_start_dragging() override;
     void on_stop_dragging() override;
     void on_render_input_window(float x, float y, float bottom_limit) override;
+    virtual CommonGizmosDataID on_get_requirements() const override;
 
     std::string on_get_name() const override;
     bool on_is_activable() const override;

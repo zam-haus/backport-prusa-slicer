@@ -1,7 +1,10 @@
 // Include GLGizmoBase.hpp before I18N.hpp as it includes some libigl code, which overrides our localization "L" macro.
 #include "GLGizmoSlaSupports.hpp"
 #include "slic3r/GUI/GLCanvas3D.hpp"
-#include "slic3r/GUI/Gizmos/GLGizmos.hpp"
+#include "slic3r/GUI/Camera.hpp"
+#include "slic3r/GUI/Gizmos/GLGizmosCommon.hpp"
+#include "slic3r/GUI/MainFrame.hpp"
+#include "slic3r/Utils/UndoRedo.hpp"
 
 #include <GL/glew.h>
 
@@ -13,9 +16,10 @@
 #include "slic3r/GUI/GUI.hpp"
 #include "slic3r/GUI/GUI_ObjectSettings.hpp"
 #include "slic3r/GUI/GUI_ObjectList.hpp"
-#include "slic3r/GUI/MeshUtils.hpp"
 #include "slic3r/GUI/Plater.hpp"
-#include "slic3r/GUI/PresetBundle.hpp"
+#include "slic3r/GUI/NotificationManager.hpp"
+#include "slic3r/GUI/MsgDialog.hpp"
+#include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/SLAPrint.hpp"
 
 
@@ -24,79 +28,62 @@ namespace GUI {
 
 GLGizmoSlaSupports::GLGizmoSlaSupports(GLCanvas3D& parent, const std::string& icon_filename, unsigned int sprite_id)
     : GLGizmoBase(parent, icon_filename, sprite_id)
-    , m_quadric(nullptr)
-    , m_its(nullptr)
-{    
-    m_quadric = ::gluNewQuadric();
-    if (m_quadric != nullptr)
-        // using GLU_FILL does not work when the instance's transformation
-        // contains mirroring (normals are reverted)
-        ::gluQuadricDrawStyle(m_quadric, GLU_FILL);
+{
 }
 
-GLGizmoSlaSupports::~GLGizmoSlaSupports()
-{
-    if (m_quadric != nullptr)
-        ::gluDeleteQuadric(m_quadric);
-}
 
 bool GLGizmoSlaSupports::on_init()
 {
     m_shortcut_key = WXK_CONTROL_L;
 
-    m_desc["head_diameter"]    = _(L("Head diameter")) + ": ";
-    m_desc["lock_supports"]    = _(L("Lock supports under new islands"));
-    m_desc["remove_selected"]  = _(L("Remove selected points"));
-    m_desc["remove_all"]       = _(L("Remove all points"));
-    m_desc["apply_changes"]    = _(L("Apply changes"));
-    m_desc["discard_changes"]  = _(L("Discard changes"));
-    m_desc["minimal_distance"] = _(L("Minimal points distance")) + ": ";
-    m_desc["points_density"]   = _(L("Support points density")) + ": ";
-    m_desc["auto_generate"]    = _(L("Auto-generate points"));
-    m_desc["manual_editing"]   = _(L("Manual editing"));
-    m_desc["clipping_of_view"] = _(L("Clipping of view"))+ ": ";
-    m_desc["reset_direction"]  = _(L("Reset direction"));
+    m_desc["head_diameter"]    = _L("Head diameter") + ": ";
+    m_desc["lock_supports"]    = _L("Lock supports under new islands");
+    m_desc["remove_selected"]  = _L("Remove selected points");
+    m_desc["remove_all"]       = _L("Remove all points");
+    m_desc["apply_changes"]    = _L("Apply changes");
+    m_desc["discard_changes"]  = _L("Discard changes");
+    m_desc["minimal_distance"] = _L("Minimal points distance") + ": ";
+    m_desc["points_density"]   = _L("Support points density") + ": ";
+    m_desc["auto_generate"]    = _L("Auto-generate points");
+    m_desc["manual_editing"]   = _L("Manual editing");
+    m_desc["clipping_of_view"] = _L("Clipping of view")+ ": ";
+    m_desc["reset_direction"]  = _L("Reset direction");
 
     return true;
 }
 
 void GLGizmoSlaSupports::set_sla_support_data(ModelObject* model_object, const Selection& selection)
 {
-    if (m_c->recent_update) {
-        if (m_state == On)
-            m_c->build_AABB_if_needed();
+    if (! m_c->selection_info())
+        return;
 
-        update_clipping_plane(m_c->m_clipping_plane_was_moved);
+    ModelObject* mo = m_c->selection_info()->model_object();
 
+    if (m_state == On && mo && mo->id() != m_old_mo_id) {
         disable_editing_mode();
-        if (m_c->m_model_object)
-            reload_cache();
-    }
-
-    if (m_state == On) {
-        m_parent.toggle_model_objects_visibility(false);
-        m_parent.toggle_model_objects_visibility(true, m_c->m_model_object, m_c->m_active_instance);
-        m_parent.toggle_sla_auxiliaries_visibility(! m_editing_mode, m_c->m_model_object, m_c->m_active_instance);
+        reload_cache();
+        m_old_mo_id = mo->id();
+        m_c->instances_hider()->show_supports(true);
     }
 
     // If we triggered autogeneration before, check backend and fetch results if they are there
-    if (m_c->m_model_object) {
-        if (m_c->m_model_object->sla_points_status == sla::PointsStatus::Generating)
+    if (mo) {
+        if (mo->sla_points_status == sla::PointsStatus::Generating)
             get_data_from_backend();
     }
 }
 
 
 
-void GLGizmoSlaSupports::on_render() const
+void GLGizmoSlaSupports::on_render()
 {
+    ModelObject* mo = m_c->selection_info()->model_object();
     const Selection& selection = m_parent.get_selection();
 
     // If current m_c->m_model_object does not match selection, ask GLCanvas3D to turn us off
     if (m_state == On
-     && (m_c->m_model_object != selection.get_model()->objects[selection.get_object_idx()]
-      || m_c->m_active_instance != selection.get_instance_idx()
-      || m_c->m_model_object_id != m_c->m_model_object->id())) {
+     && (mo != selection.get_model()->objects[selection.get_object_idx()]
+      || m_c->selection_info()->get_active_instance() != selection.get_instance_idx())) {
         m_parent.post_event(SimpleEvent(EVT_GLCANVAS_RESETGIZMOS));
         return;
     }
@@ -104,160 +91,54 @@ void GLGizmoSlaSupports::on_render() const
     glsafe(::glEnable(GL_BLEND));
     glsafe(::glEnable(GL_DEPTH_TEST));
 
-    m_z_shift = selection.get_volume(*selection.get_volume_idxs().begin())->get_sla_shift_z();
-
-    render_hollowed_mesh();
-
-    if (m_quadric != nullptr && selection.is_from_single_instance())
+    if (selection.is_from_single_instance())
         render_points(selection, false);
 
     m_selection_rectangle.render(m_parent);
-    render_clipping_plane(selection);
+    m_c->object_clipper()->render_cut();
+    m_c->supports_clipper()->render_cut();
 
     glsafe(::glDisable(GL_BLEND));
 }
 
 
-
-void GLGizmoSlaSupports::render_hollowed_mesh() const
-{
-    /*if (m_c->m_volume_with_cavity) {
-        m_c->m_volume_with_cavity->set_sla_shift_z(m_z_shift);
-        m_parent.get_shader().start_using();
-
-        GLint current_program_id;
-        glsafe(::glGetIntegerv(GL_CURRENT_PROGRAM, &current_program_id));
-        GLint color_id = (current_program_id > 0) ? ::glGetUniformLocation(current_program_id, "uniform_color") : -1;
-        GLint print_box_detection_id = (current_program_id > 0) ? ::glGetUniformLocation(current_program_id, "print_box.volume_detection") : -1;
-        GLint print_box_worldmatrix_id = (current_program_id > 0) ? ::glGetUniformLocation(current_program_id, "print_box.volume_world_matrix") : -1;
-        glcheck();
-        m_c->m_volume_with_cavity->set_render_color();
-        const Geometry::Transformation& volume_trafo = m_c->m_model_object->volumes.front()->get_transformation();
-        m_c->m_volume_with_cavity->set_volume_transformation(volume_trafo);
-        m_c->m_volume_with_cavity->set_instance_transformation(m_c->m_model_object->instances[size_t(m_c->m_active_instance)]->get_transformation());
-        m_c->m_volume_with_cavity->render(color_id, print_box_detection_id, print_box_worldmatrix_id);
-        m_parent.get_shader().stop_using();
-    }*/
-}
-
-
-
-void GLGizmoSlaSupports::render_clipping_plane(const Selection& selection) const
-{
-    if (m_c->m_clipping_plane_distance == 0.f || m_c->m_mesh->empty())
-        return;
-
-    // Get transformation of the instance
-    const GLVolume* vol = selection.get_volume(*selection.get_volume_idxs().begin());
-    Geometry::Transformation trafo = vol->get_instance_transformation();
-    trafo.set_offset(trafo.get_offset() + Vec3d(0., 0., m_z_shift));
-
-    // Get transformation of supports
-    Geometry::Transformation supports_trafo;
-    supports_trafo.set_offset(Vec3d(trafo.get_offset()(0), trafo.get_offset()(1), vol->get_sla_shift_z()));
-    supports_trafo.set_rotation(Vec3d(0., 0., trafo.get_rotation()(2)));
-    // I don't know why, but following seems to be correct.
-    supports_trafo.set_mirror(Vec3d(trafo.get_mirror()(0) * trafo.get_mirror()(1) * trafo.get_mirror()(2),
-                                    1,
-                                    1.));
-
-    // Now initialize the TMS for the object, perform the cut and save the result.
-    if (! m_c->m_object_clipper) {
-        m_c->m_object_clipper.reset(new MeshClipper);
-        m_c->m_object_clipper->set_mesh(*m_c->mesh());
-    }
-    m_c->m_object_clipper->set_plane(*m_c->m_clipping_plane);
-    m_c->m_object_clipper->set_transformation(trafo);
-
-
-    // Next, ask the backend if supports are already calculated. If so, we are gonna cut them too.
-    // First we need a pointer to the respective SLAPrintObject. The index into objects vector is
-    // cached so we don't have todo it on each render. We only search for the po if needed:
-    if (m_c->m_print_object_idx < 0 || (int)m_parent.sla_print()->objects().size() != m_c->m_print_objects_count) {
-        m_c->m_print_objects_count = m_parent.sla_print()->objects().size();
-        m_c->m_print_object_idx = -1;
-        for (const SLAPrintObject* po : m_parent.sla_print()->objects()) {
-            ++m_c->m_print_object_idx;
-            if (po->model_object()->id() == m_c->m_model_object->id())
-                break;
-        }
-    }
-    if (m_c->m_print_object_idx >= 0) {
-        const SLAPrintObject* print_object = m_parent.sla_print()->objects()[m_c->m_print_object_idx];
-
-        if (print_object->is_step_done(slaposSupportTree) && !print_object->get_mesh(slaposSupportTree).empty()) {
-            // If the supports are already calculated, save the timestamp of the respective step
-            // so we can later tell they were recalculated.
-            size_t timestamp = print_object->step_state_with_timestamp(slaposSupportTree).timestamp;
-
-            if (! m_c->m_supports_clipper || (int)timestamp != m_c->m_old_timestamp) {
-                // The timestamp has changed.
-                m_c->m_supports_clipper.reset(new MeshClipper);
-                // The mesh should already have the shared vertices calculated.
-                m_c->m_supports_clipper->set_mesh(print_object->support_mesh());
-                m_c->m_old_timestamp = timestamp;
-            }
-            m_c->m_supports_clipper->set_plane(*m_c->m_clipping_plane);
-            m_c->m_supports_clipper->set_transformation(supports_trafo);
-        }
-        else
-            // The supports are not valid. We better dump the cached data.
-            m_c->m_supports_clipper.reset();
-    }
-
-    // At this point we have the triangulated cuts for both the object and supports - let's render.
-    if (! m_c->m_object_clipper->get_triangles().empty()) {
-		::glPushMatrix();
-        ::glColor3f(1.0f, 0.37f, 0.0f);
-        ::glBegin(GL_TRIANGLES);
-        for (const Vec3f& point : m_c->m_object_clipper->get_triangles())
-            ::glVertex3f(point(0), point(1), point(2));
-        ::glEnd();
-		::glPopMatrix();
-	}
-
-    if (m_c->m_supports_clipper && ! m_c->m_supports_clipper->get_triangles().empty() && !m_editing_mode) {
-        // The supports are hidden in the editing mode, so it makes no sense to render the cuts.
-        ::glPushMatrix();
-        ::glColor3f(1.0f, 0.f, 0.37f);
-        ::glBegin(GL_TRIANGLES);
-        for (const Vec3f& point : m_c->m_supports_clipper->get_triangles())
-            ::glVertex3f(point(0), point(1), point(2));
-        ::glEnd();
-		::glPopMatrix();
-	}
-}
-
-
-void GLGizmoSlaSupports::on_render_for_picking() const
+void GLGizmoSlaSupports::on_render_for_picking()
 {
     const Selection& selection = m_parent.get_selection();
-#if ENABLE_RENDER_PICKING_PASS
-	m_z_shift = selection.get_volume(*selection.get_volume_idxs().begin())->get_sla_shift_z();
-#endif
-
-    glsafe(::glEnable(GL_DEPTH_TEST));
+    //glsafe(::glEnable(GL_DEPTH_TEST));
     render_points(selection, true);
-    render_hollowed_mesh();
 }
 
 void GLGizmoSlaSupports::render_points(const Selection& selection, bool picking) const
 {
-    if (!picking)
-        glsafe(::glEnable(GL_LIGHTING));
+    size_t cache_size = m_editing_mode ? m_editing_cache.size() : m_normal_cache.size();
+
+    bool has_points = (cache_size != 0);
+    bool has_holes = (! m_c->hollowed_mesh()->get_hollowed_mesh()
+                   && ! m_c->selection_info()->model_object()->sla_drain_holes.empty());
+
+    if (! has_points && ! has_holes)
+        return;
+
+    GLShaderProgram* shader = picking ? nullptr : wxGetApp().get_shader("gouraud_light");
+    if (shader != nullptr)
+        shader->start_using();
+    ScopeGuard guard([shader]() {
+        if (shader != nullptr)
+            shader->stop_using();
+    });
 
     const GLVolume* vol = selection.get_volume(*selection.get_volume_idxs().begin());
     const Transform3d& instance_scaling_matrix_inverse = vol->get_instance_transformation().get_matrix(true, true, false, true).inverse();
     const Transform3d& instance_matrix = vol->get_instance_transformation().get_matrix();
+    float z_shift = m_c->selection_info()->get_sla_shift();
 
     glsafe(::glPushMatrix());
-    glsafe(::glTranslated(0.0, 0.0, m_z_shift));
+    glsafe(::glTranslated(0.0, 0.0, z_shift));
     glsafe(::glMultMatrixd(instance_matrix.data()));
 
-    float render_color[4];
-    size_t cache_size = m_editing_mode ? m_editing_cache.size() : m_normal_cache.size();
-    for (size_t i = 0; i < cache_size; ++i)
-    {
+    std::array<float, 4> render_color;
+    for (size_t i = 0; i < cache_size; ++i) {
         const sla::SupportPoint& support_point = m_editing_mode ? m_editing_cache[i].support_point : m_normal_cache[i];
         const bool& point_selected = m_editing_mode ? m_editing_cache[i].selected : false;
 
@@ -265,34 +146,31 @@ void GLGizmoSlaSupports::render_points(const Selection& selection, bool picking)
             continue;
 
         // First decide about the color of the point.
-        if (picking) {
-            std::array<float, 4> color = picking_color_component(i);
-            render_color[0] = color[0];
-            render_color[1] = color[1];
-            render_color[2] = color[2];
-	        render_color[3] = color[3];
-        }
+        if (picking)
+            render_color = picking_color_component(i);
         else {
-            render_color[3] = 1.f;
-            if ((size_t(m_hover_id) == i && m_editing_mode)) { // ignore hover state unless editing mode is active
-                render_color[0] = 0.f;
-                render_color[1] = 1.0f;
-                render_color[2] = 1.0f;
-            }
+            if (size_t(m_hover_id) == i && m_editing_mode) // ignore hover state unless editing mode is active
+                render_color = { 0.f, 1.f, 1.f, 1.f };
             else { // neigher hover nor picking
                 bool supports_new_island = m_lock_unique_islands && support_point.is_new_island;
                 if (m_editing_mode) {
-                    render_color[0] = point_selected ? 1.0f : (supports_new_island ? 0.3f : 0.7f);
-                    render_color[1] = point_selected ? 0.3f : (supports_new_island ? 0.3f : 0.7f);
-                    render_color[2] = point_selected ? 0.3f : (supports_new_island ? 1.0f : 0.7f);
+                    if (point_selected)
+                        render_color = { 1.f, 0.3f, 0.3f, 1.f};
+                    else
+                        if (supports_new_island)
+                            render_color = { 0.3f, 0.3f, 1.f, 1.f };
+                        else
+                            render_color = { 0.7f, 0.7f, 0.7f, 1.f };
                 }
                 else
-                    for (unsigned char i=0; i<3; ++i) render_color[i] = 0.5f;
+                    render_color = { 0.5f, 0.5f, 0.5f, 1.f };
             }
         }
-        glsafe(::glColor4fv(render_color));
-        float render_color_emissive[4] = { 0.5f * render_color[0], 0.5f * render_color[1], 0.5f * render_color[2], 1.f};
-        glsafe(::glMaterialfv(GL_FRONT, GL_EMISSION, render_color_emissive));
+
+        const_cast<GLModel*>(&m_cone)->set_color(-1, render_color);
+        const_cast<GLModel*>(&m_sphere)->set_color(-1, render_color);
+        if (shader && !picking)
+            shader->set_uniform("emission_factor", 0.5f);
 
         // Inverse matrix of the instance scaling is applied so that the mark does not scale with the object.
         glsafe(::glPushMatrix());
@@ -307,7 +185,7 @@ void GLGizmoSlaSupports::render_points(const Selection& selection, bool picking)
         if (m_editing_mode) {
             // in case the normal is not yet cached, find and cache it
             if (m_editing_cache[i].normal == Vec3f::Zero())
-                m_c->m_mesh_raycaster->get_closest_point(m_editing_cache[i].support_point.pos, &m_editing_cache[i].normal);
+                m_c->raycaster()->raycaster()->get_closest_point(m_editing_cache[i].support_point.pos, &m_editing_cache[i].normal);
 
             Eigen::Quaterniond q;
             q.setFromTwoVectors(Vec3d{0., 0., 1.}, instance_scaling_matrix_inverse * m_editing_cache[i].normal.cast<double>());
@@ -317,34 +195,39 @@ void GLGizmoSlaSupports::render_points(const Selection& selection, bool picking)
             const double cone_radius = 0.25; // mm
             const double cone_height = 0.75;
             glsafe(::glPushMatrix());
-            glsafe(::glTranslatef(0.f, 0.f, support_point.head_front_radius * RenderPointScale));
-            ::gluCylinder(m_quadric, 0., cone_radius, cone_height, 24, 1);
+            glsafe(::glTranslatef(0.f, 0.f, cone_height + support_point.head_front_radius * RenderPointScale));
+            glsafe(::glPushMatrix());
+            glsafe(::glRotated(180., 1., 0., 0.));
+            glsafe(::glScaled(cone_radius, cone_radius, cone_height));
+            m_cone.render();
+            glsafe(::glPopMatrix());
             glsafe(::glTranslatef(0.f, 0.f, cone_height));
-            ::gluDisk(m_quadric, 0.0, cone_radius, 24, 1);
             glsafe(::glPopMatrix());
         }
-        ::gluSphere(m_quadric, (double)support_point.head_front_radius * RenderPointScale, 24, 12);
+
+        glsafe(::glPushMatrix());
+        double radius = (double)support_point.head_front_radius * RenderPointScale;
+        glsafe(::glScaled(radius, radius, radius));
+        m_sphere.render();
+        glsafe(::glPopMatrix());
+
         if (vol->is_left_handed())
             glFrontFace(GL_CCW);
 
         glsafe(::glPopMatrix());
     }
 
-    {
-        // Reset emissive component to zero (the default value)
-        float render_color_emissive[4] = { 0.f, 0.f, 0.f, 1.f };
-        glsafe(::glMaterialfv(GL_FRONT, GL_EMISSION, render_color_emissive));
-    }
-
     // Now render the drain holes:
-    if (! m_c->has_drilled_mesh()) {
+    if (has_holes && ! picking) {
         render_color[0] = 0.7f;
         render_color[1] = 0.7f;
         render_color[2] = 0.7f;
         render_color[3] = 0.7f;
-        glsafe(::glColor4fv(render_color));
-        for (const sla::DrainHole& drain_hole : m_c->m_model_object->sla_drain_holes) {
-            if (is_mesh_point_clipped((drain_hole.pos+m_c->HoleStickOutLength*drain_hole.normal).cast<double>()))
+        const_cast<GLModel*>(&m_cylinder)->set_color(-1, render_color);
+        if (shader)
+            shader->set_uniform("emission_factor", 0.5f);
+        for (const sla::DrainHole& drain_hole : m_c->selection_info()->model_object()->sla_drain_holes) {
+            if (is_mesh_point_clipped(drain_hole.pos.cast<double>()))
                 continue;
 
             // Inverse matrix of the instance scaling is applied so that the mark does not scale with the object.
@@ -363,12 +246,8 @@ void GLGizmoSlaSupports::render_points(const Selection& selection, bool picking)
             glsafe(::glRotated(aa.angle() * (180. / M_PI), aa.axis()(0), aa.axis()(1), aa.axis()(2)));
             glsafe(::glPushMatrix());
             glsafe(::glTranslated(0., 0., -drain_hole.height));
-            ::gluCylinder(m_quadric, drain_hole.radius, drain_hole.radius, drain_hole.height, 24, 1);
-            glsafe(::glTranslated(0., 0., drain_hole.height));
-            ::gluDisk(m_quadric, 0.0, drain_hole.radius, 24, 1);
-            glsafe(::glTranslated(0., 0., -drain_hole.height));
-            glsafe(::glRotatef(180.f, 1.f, 0.f, 0.f));
-            ::gluDisk(m_quadric, 0.0, drain_hole.radius, 24, 1);
+            glsafe(::glScaled(drain_hole.radius, drain_hole.radius, drain_hole.height + sla::HoleStickOutLength));
+            m_cylinder.render();
             glsafe(::glPopMatrix());
 
             if (vol->is_left_handed())
@@ -377,9 +256,6 @@ void GLGizmoSlaSupports::render_points(const Selection& selection, bool picking)
         }
     }
 
-    if (!picking)
-        glsafe(::glDisable(GL_LIGHTING));
-
     glsafe(::glPopMatrix());
 }
 
@@ -387,12 +263,17 @@ void GLGizmoSlaSupports::render_points(const Selection& selection, bool picking)
 
 bool GLGizmoSlaSupports::is_mesh_point_clipped(const Vec3d& point) const
 {
-    if (m_c->m_clipping_plane_distance == 0.f)
+    if (m_c->object_clipper()->get_position() == 0.)
         return false;
 
-    Vec3d transformed_point = m_c->m_model_object->instances[m_c->m_active_instance]->get_transformation().get_matrix() * point;
-    transformed_point(2) += m_z_shift;
-    return m_c->m_clipping_plane->is_point_clipped(transformed_point);
+    auto sel_info = m_c->selection_info();
+    int active_inst = m_c->selection_info()->get_active_instance();
+    const ModelInstance* mi = sel_info->model_object()->instances[active_inst];
+    const Transform3d& trafo = mi->get_transformation().get_matrix();
+
+    Vec3d transformed_point =  trafo * point;
+    transformed_point(2) += sel_info->get_sla_shift();
+    return m_c->object_clipper()->get_clipping_plane()->is_point_clipped(transformed_point);
 }
 
 
@@ -401,33 +282,37 @@ bool GLGizmoSlaSupports::is_mesh_point_clipped(const Vec3d& point) const
 // Return false if no intersection was found, true otherwise.
 bool GLGizmoSlaSupports::unproject_on_mesh(const Vec2d& mouse_pos, std::pair<Vec3f, Vec3f>& pos_and_normal)
 {
-    if (! m_c->m_mesh_raycaster)
+    if (! m_c->raycaster()->raycaster())
         return false;
 
-    const Camera& camera = m_parent.get_camera();
+    const Camera& camera = wxGetApp().plater()->get_camera();
     const Selection& selection = m_parent.get_selection();
     const GLVolume* volume = selection.get_volume(*selection.get_volume_idxs().begin());
     Geometry::Transformation trafo = volume->get_instance_transformation();
-    trafo.set_offset(trafo.get_offset() + Vec3d(0., 0., m_z_shift));
+    trafo.set_offset(trafo.get_offset() + Vec3d(0., 0., m_c->selection_info()->get_sla_shift()));
+
+    double clp_dist = m_c->object_clipper()->get_position();
+    const ClippingPlane* clp = m_c->object_clipper()->get_clipping_plane();
 
     // The raycaster query
     Vec3f hit;
     Vec3f normal;
-    if (m_c->m_mesh_raycaster->unproject_on_mesh(
+    if (m_c->raycaster()->raycaster()->unproject_on_mesh(
             mouse_pos,
             trafo.get_matrix(),
             camera,
             hit,
             normal,
-            m_c->m_clipping_plane_distance != 0.f ? m_c->m_clipping_plane.get() : nullptr))
+            clp_dist != 0. ? clp : nullptr))
     {
         // Check whether the hit is in a hole
         bool in_hole = false;
         // In case the hollowed and drilled mesh is available, we can allow
         // placing points in holes, because they should never end up
         // on surface that's been drilled away.
-        if (! m_c->has_drilled_mesh()) {
-            for (const sla::DrainHole& hole : m_c->m_model_object->sla_drain_holes) {
+        if (! m_c->hollowed_mesh()->get_hollowed_mesh()) {
+            sla::DrainHoles drain_holes = m_c->selection_info()->model_object()->sla_drain_holes;
+            for (const sla::DrainHole& hole : drain_holes) {
                 if (hole.is_inside(hit)) {
                     in_hole = true;
                     break;
@@ -450,6 +335,9 @@ bool GLGizmoSlaSupports::unproject_on_mesh(const Vec2d& mouse_pos, std::pair<Vec
 // concludes that the event was not intended for it, it should return false.
 bool GLGizmoSlaSupports::gizmo_event(SLAGizmoEventType action, const Vec2d& mouse_position, bool shift_down, bool alt_down, bool control_down)
 {
+    ModelObject* mo = m_c->selection_info()->model_object();
+    int active_inst = m_c->selection_info()->get_active_instance();
+
     if (m_editing_mode) {
 
         // left down with shift - show the selection rectangle:
@@ -481,7 +369,7 @@ bool GLGizmoSlaSupports::gizmo_event(SLAGizmoEventType action, const Vec2d& mous
             if (m_selection_empty) {
                 std::pair<Vec3f, Vec3f> pos_and_normal;
                 if (unproject_on_mesh(mouse_position, pos_and_normal)) { // we got an intersection
-                    Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("Add support point")));
+                    Plater::TakeSnapshot snapshot(wxGetApp().plater(), _L("Add support point"));
                     m_editing_cache.emplace_back(sla::SupportPoint(pos_and_normal.first, m_new_point_head_diameter/2.f, false), false, pos_and_normal.second);
                     m_parent.set_as_dirty();
                     m_wait_for_up_event = true;
@@ -501,8 +389,8 @@ bool GLGizmoSlaSupports::gizmo_event(SLAGizmoEventType action, const Vec2d& mous
             GLSelectionRectangle::EState rectangle_status = m_selection_rectangle.get_state();
 
             // First collect positions of all the points in world coordinates.
-            Geometry::Transformation trafo = m_c->m_model_object->instances[m_c->m_active_instance]->get_transformation();
-            trafo.set_offset(trafo.get_offset() + Vec3d(0., 0., m_z_shift));
+            Geometry::Transformation trafo = mo->instances[active_inst]->get_transformation();
+            trafo.set_offset(trafo.get_offset() + Vec3d(0., 0., m_c->selection_info()->get_sla_shift()));
             std::vector<Vec3d> points;
             for (unsigned int i=0; i<m_editing_cache.size(); ++i)
                 points.push_back(trafo.get_matrix() * m_editing_cache[i].support_point.pos.cast<double>());
@@ -513,9 +401,20 @@ bool GLGizmoSlaSupports::gizmo_event(SLAGizmoEventType action, const Vec2d& mous
             for (size_t idx : points_idxs)
                 points_inside.push_back(points[idx].cast<float>());
 
-            // Only select/deselect points that are actually visible
-            for (size_t idx :  m_c->m_mesh_raycaster->get_unobscured_idxs(trafo, m_parent.get_camera(), points_inside, m_c->m_clipping_plane.get()))
+            // Only select/deselect points that are actually visible. We want to check not only
+            // the point itself, but also the center of base of its cone, so the points don't hide
+            // under every miniature irregularity on the model. Remember the actual number and
+            // append the cone bases.
+            size_t orig_pts_num = points_inside.size();
+            for (size_t idx : points_idxs)
+                points_inside.emplace_back((trafo.get_matrix().cast<float>() * (m_editing_cache[idx].support_point.pos + m_editing_cache[idx].normal)).cast<float>());
+
+            for (size_t idx : m_c->raycaster()->raycaster()->get_unobscured_idxs(
+                     trafo, wxGetApp().plater()->get_camera(), points_inside,
+                     m_c->object_clipper()->get_clipping_plane()))
             {
+                if (idx >= orig_pts_num) // this is a cone-base, get index of point it belongs to
+                    idx -= orig_pts_num;
                 if (rectangle_status == GLSelectionRectangle::Deselect)
                     unselect_point(points_idxs[idx]);
                 else
@@ -558,7 +457,8 @@ bool GLGizmoSlaSupports::gizmo_event(SLAGizmoEventType action, const Vec2d& mous
         }
 
         if (action ==  SLAGizmoEventType::DiscardChanges) {
-            editing_mode_discard_changes();
+            ask_about_changes_call_after([this](){ editing_mode_apply_changes(); },
+                                         [this](){ editing_mode_discard_changes(); });
             return true;
         }
 
@@ -591,20 +491,21 @@ bool GLGizmoSlaSupports::gizmo_event(SLAGizmoEventType action, const Vec2d& mous
     }
 
     if (action == SLAGizmoEventType::MouseWheelUp && control_down) {
-        m_c->m_clipping_plane_distance = std::min(1.f, m_c->m_clipping_plane_distance + 0.01f);
-        update_clipping_plane(m_c->m_clipping_plane_was_moved);
-        m_c->m_clipping_plane_was_moved = true;
+        double pos = m_c->object_clipper()->get_position();
+        pos = std::min(1., pos + 0.01);
+        m_c->object_clipper()->set_position(pos, true);
         return true;
     }
 
     if (action == SLAGizmoEventType::MouseWheelDown && control_down) {
-        m_c->m_clipping_plane_distance = std::max(0.f, m_c->m_clipping_plane_distance - 0.01f);
-        update_clipping_plane(true);
+        double pos = m_c->object_clipper()->get_position();
+        pos = std::max(0., pos - 0.01);
+        m_c->object_clipper()->set_position(pos, true);
         return true;
     }
 
     if (action == SLAGizmoEventType::ResetClippingPlane) {
-        update_clipping_plane();
+        m_c->object_clipper()->set_position(-1., false);
         return true;
     }
 
@@ -618,7 +519,7 @@ void GLGizmoSlaSupports::delete_selected_points(bool force)
         std::abort();
     }
 
-    Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("Delete support point")));
+    Plater::TakeSnapshot snapshot(wxGetApp().plater(), _L("Delete support point"));
 
     for (unsigned int idx=0; idx<m_editing_cache.size(); ++idx) {
         if (m_editing_cache[idx].selected && (!m_editing_cache[idx].support_point.is_new_island || !m_lock_unique_islands || force)) {
@@ -627,8 +528,6 @@ void GLGizmoSlaSupports::delete_selected_points(bool force)
     }
 
     select_point(NoPoints);
-
-    //m_parent.post_event(SimpleEvent(EVT_GLCANVAS_SCHEDULE_BACKGROUND_PROCESS));
 }
 
 void GLGizmoSlaSupports::on_update(const UpdateData& data)
@@ -643,8 +542,6 @@ void GLGizmoSlaSupports::on_update(const UpdateData& data)
             m_editing_cache[m_hover_id].support_point.pos = pos_and_normal.first;
             m_editing_cache[m_hover_id].support_point.is_new_island = false;
             m_editing_cache[m_hover_id].normal = pos_and_normal.second;
-            // Do not update immediately, wait until the mouse is released.
-            // m_parent.post_event(SimpleEvent(EVT_GLCANVAS_SCHEDULE_BACKGROUND_PROCESS));
         }
     }
 }
@@ -652,11 +549,12 @@ void GLGizmoSlaSupports::on_update(const UpdateData& data)
 std::vector<const ConfigOption*> GLGizmoSlaSupports::get_config_options(const std::vector<std::string>& keys) const
 {
     std::vector<const ConfigOption*> out;
+    const ModelObject* mo = m_c->selection_info()->model_object();
 
-    if (!m_c->m_model_object)
+    if (! mo)
         return out;
 
-    const DynamicPrintConfig& object_cfg = m_c->m_model_object->config;
+    const DynamicPrintConfig& object_cfg = mo->config.get();
     const DynamicPrintConfig& print_cfg = wxGetApp().preset_bundle->sla_prints.get_edited_preset().config;
     std::unique_ptr<DynamicPrintConfig> default_cfg = nullptr;
 
@@ -676,14 +574,6 @@ std::vector<const ConfigOption*> GLGizmoSlaSupports::get_config_options(const st
     return out;
 }
 
-
-ClippingPlane GLGizmoSlaSupports::get_sla_clipping_plane() const
-{
-    if (!m_c->m_model_object || m_state == Off || m_c->m_clipping_plane_distance == 0.f)
-        return ClippingPlane::ClipsNothing();
-    else
-        return ClippingPlane(-m_c->m_clipping_plane->get_normal(), m_c->m_clipping_plane->get_data()[3]);
-}
 
 
 /*
@@ -732,7 +622,9 @@ void GLGizmoSlaSupports::on_render_input_window(float x, float y, float bottom_l
     static float last_y = 0.0f;
     static float last_h = 0.0f;
 
-    if (! m_c->m_model_object)
+    ModelObject* mo = m_c->selection_info()->model_object();
+
+    if (! mo)
         return;
 
     bool first_run = true; // This is a hack to redraw the button when all points are removed,
@@ -743,7 +635,7 @@ RENDER_AGAIN:
     //ImGui::SetNextWindowPos(ImVec2(x, y - std::max(0.f, y+window_size.y-bottom_limit) ));
     //ImGui::SetNextWindowSize(ImVec2(window_size));
 
-    m_imgui->begin(on_get_name(), ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
+    m_imgui->begin(get_name(), ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
     // adjust window position to avoid overlap the view toolbar
     float win_h = ImGui::GetWindowHeight();
@@ -752,7 +644,11 @@ RENDER_AGAIN:
     if ((last_h != win_h) || (last_y != y))
     {
         // ask canvas for another frame to render the window in the correct position
+#if ENABLE_ENHANCED_IMGUI_SLIDER_FLOAT
+        m_imgui->set_requires_extra_frame();
+#else
         m_parent.request_extra_frame();
+#endif // ENABLE_ENHANCED_IMGUI_SLIDER_FLOAT
         if (last_h != win_h)
             last_h = win_h;
         if (last_y != y)
@@ -790,24 +686,24 @@ RENDER_AGAIN:
         //  - keep updating the head radius during sliding so it is continuosly refreshed in 3D scene
         //  - take correct undo/redo snapshot after the user is done with moving the slider
         float initial_value = m_new_point_head_diameter;
-        ImGui::SliderFloat("", &m_new_point_head_diameter, 0.1f, diameter_upper_cap, "%.1f");
-        if (ImGui::IsItemClicked()) {
+        m_imgui->slider_float("##head_diameter", &m_new_point_head_diameter, 0.1f, diameter_upper_cap, "%.1f");
+        if (m_imgui->get_last_slider_status().clicked) {
             if (m_old_point_head_diameter == 0.f)
                 m_old_point_head_diameter = initial_value;
         }
-        if (ImGui::IsItemEdited()) {
+        if (m_imgui->get_last_slider_status().edited) {
             for (auto& cache_entry : m_editing_cache)
                 if (cache_entry.selected)
                     cache_entry.support_point.head_front_radius = m_new_point_head_diameter / 2.f;
         }
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
+        if (m_imgui->get_last_slider_status().deactivated_after_edit) {
             // momentarily restore the old value to take snapshot
             for (auto& cache_entry : m_editing_cache)
                 if (cache_entry.selected)
                     cache_entry.support_point.head_front_radius = m_old_point_head_diameter / 2.f;
             float backup = m_new_point_head_diameter;
             m_new_point_head_diameter = m_old_point_head_diameter;
-            Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("Change point head diameter")));
+            Plater::TakeSnapshot snapshot(wxGetApp().plater(), _L("Change point head diameter"));
             m_new_point_head_diameter = backup;
             for (auto& cache_entry : m_editing_cache)
                 if (cache_entry.selected)
@@ -850,34 +746,34 @@ RENDER_AGAIN:
         float density = static_cast<const ConfigOptionInt*>(opts[0])->value;
         float minimal_point_distance = static_cast<const ConfigOptionFloat*>(opts[1])->value;
 
-        ImGui::SliderFloat("", &minimal_point_distance, 0.f, 20.f, "%.f mm");
-        bool slider_clicked = ImGui::IsItemClicked(); // someone clicked the slider
-        bool slider_edited = ImGui::IsItemEdited(); // someone is dragging the slider
-        bool slider_released = ImGui::IsItemDeactivatedAfterEdit(); // someone has just released the slider
+        m_imgui->slider_float("##minimal_point_distance", &minimal_point_distance, 0.f, 20.f, "%.f mm");
+        bool slider_clicked = m_imgui->get_last_slider_status().clicked; // someone clicked the slider
+        bool slider_edited = m_imgui->get_last_slider_status().edited; // someone is dragging the slider
+        bool slider_released = m_imgui->get_last_slider_status().deactivated_after_edit; // someone has just released the slider
 
         ImGui::AlignTextToFramePadding();
         m_imgui->text(m_desc.at("points_density"));
         ImGui::SameLine(settings_sliders_left);
 
-        ImGui::SliderFloat(" ", &density, 0.f, 200.f, "%.f %%");
-        slider_clicked |= ImGui::IsItemClicked();
-        slider_edited |= ImGui::IsItemEdited();
-        slider_released |= ImGui::IsItemDeactivatedAfterEdit();
+        m_imgui->slider_float("##points_density", &density, 0.f, 200.f, "%.f %%");
+        slider_clicked |= m_imgui->get_last_slider_status().clicked;
+        slider_edited |= m_imgui->get_last_slider_status().edited;
+        slider_released |= m_imgui->get_last_slider_status().deactivated_after_edit;
 
         if (slider_clicked) { // stash the values of the settings so we know what to revert to after undo
             m_minimal_point_distance_stash = minimal_point_distance;
             m_density_stash = density;
         }
         if (slider_edited) {
-            m_c->m_model_object->config.opt<ConfigOptionFloat>("support_points_minimal_distance", true)->value = minimal_point_distance;
-            m_c->m_model_object->config.opt<ConfigOptionInt>("support_points_density_relative", true)->value = (int)density;
+            mo->config.set("support_points_minimal_distance", minimal_point_distance);
+            mo->config.set("support_points_density_relative", (int)density);
         }
         if (slider_released) {
-            m_c->m_model_object->config.opt<ConfigOptionFloat>("support_points_minimal_distance", true)->value = m_minimal_point_distance_stash;
-            m_c->m_model_object->config.opt<ConfigOptionInt>("support_points_density_relative", true)->value = (int)m_density_stash;
-            Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("Support parameter change")));
-            m_c->m_model_object->config.opt<ConfigOptionFloat>("support_points_minimal_distance", true)->value = minimal_point_distance;
-            m_c->m_model_object->config.opt<ConfigOptionInt>("support_points_density_relative", true)->value = (int)density;
+            mo->config.set("support_points_minimal_distance", m_minimal_point_distance_stash);
+            mo->config.set("support_points_density_relative", (int)m_density_stash);
+            Plater::TakeSnapshot snapshot(wxGetApp().plater(), _L("Support parameter change"));
+            mo->config.set("support_points_minimal_distance", minimal_point_distance);
+            mo->config.set("support_points_density_relative", (int)density);
             wxGetApp().obj_list()->update_and_show_object_settings_item();
         }
 
@@ -904,25 +800,23 @@ RENDER_AGAIN:
 
     // Following is rendered in both editing and non-editing mode:
     ImGui::Separator();
-    if (m_c->m_clipping_plane_distance == 0.f)
-    {
+    if (m_c->object_clipper()->get_position() == 0.f) {
         ImGui::AlignTextToFramePadding();
         m_imgui->text(m_desc.at("clipping_of_view"));
     }
     else {
         if (m_imgui->button(m_desc.at("reset_direction"))) {
             wxGetApp().CallAfter([this](){
-                    update_clipping_plane();
+                    m_c->object_clipper()->set_position(-1., false);
                 });
         }
     }
 
     ImGui::SameLine(clipping_slider_left);
     ImGui::PushItemWidth(window_width - clipping_slider_left);
-    if (ImGui::SliderFloat("  ", &m_c->m_clipping_plane_distance, 0.f, 1.f, "%.2f")) {
-        update_clipping_plane(m_c->m_clipping_plane_was_moved);
-        m_c->m_clipping_plane_was_moved = true;
-    }
+    float clp_dist = m_c->object_clipper()->get_position();
+    if (m_imgui->slider_float("##clp_dist", &clp_dist, 0.f, 1.f, "%.2f"))
+        m_c->object_clipper()->set_position(clp_dist, true);
 
 
     if (m_imgui->button("?")) {
@@ -983,79 +877,60 @@ bool GLGizmoSlaSupports::on_is_selectable() const
 
 std::string GLGizmoSlaSupports::on_get_name() const
 {
-    return (_(L("SLA Support Points")) + " [L]").ToUTF8().data();
+    return _u8L("SLA Support Points");
+}
+
+CommonGizmosDataID GLGizmoSlaSupports::on_get_requirements() const
+{
+    return CommonGizmosDataID(
+                int(CommonGizmosDataID::SelectionInfo)
+              | int(CommonGizmosDataID::InstancesHider)
+              | int(CommonGizmosDataID::Raycaster)
+              | int(CommonGizmosDataID::HollowedMesh)
+              | int(CommonGizmosDataID::ObjectClipper)
+              | int(CommonGizmosDataID::SupportsClipper));
 }
 
 
 
+void GLGizmoSlaSupports::ask_about_changes_call_after(std::function<void()> on_yes, std::function<void()> on_no)
+{
+    wxGetApp().CallAfter([on_yes, on_no]() {
+        // Following is called through CallAfter, because otherwise there was a problem
+        // on OSX with the wxMessageDialog being shown several times when clicked into.
+        MessageDialog dlg(GUI::wxGetApp().mainframe, _L("Do you want to save your manually "
+            "edited support points?") + "\n",_L("Save support points?"), wxICON_QUESTION | wxYES | wxNO | wxCANCEL );
+        int ret = dlg.ShowModal();
+            if (ret == wxID_YES)
+                on_yes();
+            else if (ret == wxID_NO)
+                on_no();
+    });
+}
+
+
 void GLGizmoSlaSupports::on_set_state()
 {
-    // m_c->m_model_object pointer can be invalid (for instance because of undo/redo action),
-    // we should recover it from the object id
-    m_c->m_model_object = nullptr;
-    for (const auto mo : wxGetApp().model().objects) {
-        if (mo->id() == m_c->m_model_object_id) {
-            m_c->m_model_object = mo;
-            break;
-        }
-    }
-
     if (m_state == m_old_state)
         return;
 
     if (m_state == On && m_old_state != On) { // the gizmo was just turned on
-        Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("SLA gizmo turned on")));
-
-        m_c->unstash_clipping_plane();
-        update_clipping_plane(m_c->m_clipping_plane_was_moved);
-
-        m_c->build_AABB_if_needed();
-
-
-        // we'll now reload support points:
-        if (m_c->m_model_object)
-            reload_cache();
-
-        m_parent.toggle_model_objects_visibility(false);
-        if (m_c->m_model_object)  {
-            m_parent.toggle_model_objects_visibility(true, m_c->m_model_object, m_c->m_active_instance);
-            m_parent.toggle_sla_auxiliaries_visibility(! m_editing_mode, m_c->m_model_object, m_c->m_active_instance);
-        }
-
         // Set default head diameter from config.
         const DynamicPrintConfig& cfg = wxGetApp().preset_bundle->sla_prints.get_edited_preset().config;
         m_new_point_head_diameter = static_cast<const ConfigOptionFloat*>(cfg.option("support_head_front_diameter"))->value;
     }
     if (m_state == Off && m_old_state != Off) { // the gizmo was just turned Off
-        bool will_ask = m_c->m_model_object && m_editing_mode && unsaved_changes();
+        bool will_ask = m_editing_mode && unsaved_changes() && on_is_activable();
         if (will_ask) {
-            wxGetApp().CallAfter([this]() {
-                // Following is called through CallAfter, because otherwise there was a problem
-                // on OSX with the wxMessageDialog being shown several times when clicked into.
-                wxMessageDialog dlg(GUI::wxGetApp().mainframe, _(L("Do you want to save your manually "
-                    "edited support points?")) + "\n",_(L("Save changes?")), wxICON_QUESTION | wxYES | wxNO);
-                    if (dlg.ShowModal() == wxID_YES)
-                        editing_mode_apply_changes();
-                    else
-                        editing_mode_discard_changes();
-            });
+            ask_about_changes_call_after([this](){ editing_mode_apply_changes(); },
+                                         [this](){ editing_mode_discard_changes(); });
             // refuse to be turned off so the gizmo is active when the CallAfter is executed
             m_state = m_old_state;
         }
         else {
             // we are actually shutting down
             disable_editing_mode(); // so it is not active next time the gizmo opens
-            Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("SLA gizmo turned off")));
-            m_parent.toggle_model_objects_visibility(true);
-            m_normal_cache.clear();
-            m_c->stash_clipping_plane();
-            m_c->m_clipping_plane_distance = 0.f;
-            update_clipping_plane(true);
-            // Release clippers and the AABB raycaster.
-            m_its = nullptr;
-            m_c->m_object_clipper.reset();
-            m_c->m_supports_clipper.reset();
-            //m_c->m_mesh_raycaster.reset();
+            m_old_mo_id = -1;
         }
     }
     m_old_state = m_state;
@@ -1084,7 +959,7 @@ void GLGizmoSlaSupports::on_stop_dragging()
          && backup.support_point.pos != m_point_before_drag.support_point.pos) // and it was moved, not just selected
         {
             m_editing_cache[m_hover_id] = m_point_before_drag;
-            Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("Move support point")));
+            Plater::TakeSnapshot snapshot(wxGetApp().plater(), _L("Move support point"));
             m_editing_cache[m_hover_id] = backup;
         }
     }
@@ -1095,10 +970,7 @@ void GLGizmoSlaSupports::on_stop_dragging()
 
 void GLGizmoSlaSupports::on_load(cereal::BinaryInputArchive& ar)
 {
-    ar(m_c->m_clipping_plane_distance,
-       *m_c->m_clipping_plane,
-       m_c->m_model_object_id,
-       m_new_point_head_diameter,
+    ar(m_new_point_head_diameter,
        m_normal_cache,
        m_editing_cache,
        m_selection_empty
@@ -1109,10 +981,7 @@ void GLGizmoSlaSupports::on_load(cereal::BinaryInputArchive& ar)
 
 void GLGizmoSlaSupports::on_save(cereal::BinaryOutputArchive& ar) const
 {
-    ar(m_c->m_clipping_plane_distance,
-       *m_c->m_clipping_plane,
-       m_c->m_model_object_id,
-       m_new_point_head_diameter,
+    ar(m_new_point_head_diameter,
        m_normal_cache,
        m_editing_cache,
        m_selection_empty
@@ -1183,15 +1052,16 @@ void GLGizmoSlaSupports::editing_mode_apply_changes()
     disable_editing_mode(); // this leaves the editing mode undo/redo stack and must be done before the snapshot is taken
 
     if (unsaved_changes()) {
-        Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("Support points edit")));
+        Plater::TakeSnapshot snapshot(wxGetApp().plater(), _L("Support points edit"));
 
         m_normal_cache.clear();
         for (const CacheEntry& ce : m_editing_cache)
             m_normal_cache.push_back(ce.support_point);
 
-        m_c->m_model_object->sla_points_status = sla::PointsStatus::UserModified;
-        m_c->m_model_object->sla_support_points.clear();
-        m_c->m_model_object->sla_support_points = m_normal_cache;
+        ModelObject* mo = m_c->selection_info()->model_object();
+        mo->sla_points_status = sla::PointsStatus::UserModified;
+        mo->sla_support_points.clear();
+        mo->sla_support_points = m_normal_cache;
 
         reslice_SLA_supports();
     }
@@ -1201,23 +1071,25 @@ void GLGizmoSlaSupports::editing_mode_apply_changes()
 
 void GLGizmoSlaSupports::reload_cache()
 {
+    const ModelObject* mo = m_c->selection_info()->model_object();
     m_normal_cache.clear();
-    if (m_c->m_model_object->sla_points_status == sla::PointsStatus::AutoGenerated || m_c->m_model_object->sla_points_status == sla::PointsStatus::Generating)
+    if (mo->sla_points_status == sla::PointsStatus::AutoGenerated || mo->sla_points_status == sla::PointsStatus::Generating)
         get_data_from_backend();
     else
-        for (const sla::SupportPoint& point : m_c->m_model_object->sla_support_points)
+        for (const sla::SupportPoint& point : mo->sla_support_points)
             m_normal_cache.emplace_back(point);
 }
 
 
 bool GLGizmoSlaSupports::has_backend_supports() const
 {
-    if (! m_c->m_model_object)
+    const ModelObject* mo = m_c->selection_info()->model_object();
+    if (! mo)
         return false;
 
     // find SlaPrintObject with this ID
     for (const SLAPrintObject* po : m_parent.sla_print()->objects()) {
-        if (po->model_object()->id() == m_c->m_model_object->id())
+        if (po->model_object()->id() == mo->id())
         	return po->is_step_done(slaposSupportPoints);
     }
     return false;
@@ -1225,24 +1097,28 @@ bool GLGizmoSlaSupports::has_backend_supports() const
 
 void GLGizmoSlaSupports::reslice_SLA_supports(bool postpone_error_messages) const
 {
-    wxGetApp().CallAfter([this, postpone_error_messages]() { wxGetApp().plater()->reslice_SLA_supports(*m_c->m_model_object, postpone_error_messages); });
+    wxGetApp().CallAfter([this, postpone_error_messages]() {
+        wxGetApp().plater()->reslice_SLA_supports(
+            *m_c->selection_info()->model_object(), postpone_error_messages);
+    });
 }
 
 void GLGizmoSlaSupports::get_data_from_backend()
 {
     if (! has_backend_supports())
         return;
+    ModelObject* mo = m_c->selection_info()->model_object();
 
     // find the respective SLAPrintObject, we need a pointer to it
     for (const SLAPrintObject* po : m_parent.sla_print()->objects()) {
-        if (po->model_object()->id() == m_c->m_model_object->id()) {
+        if (po->model_object()->id() == mo->id()) {
             m_normal_cache.clear();
             const std::vector<sla::SupportPoint>& points = po->get_support_points();
             auto mat = po->trafo().inverse().cast<float>();
             for (unsigned int i=0; i<points.size();++i)
                 m_normal_cache.emplace_back(sla::SupportPoint(mat * points[i].pos, points[i].head_front_radius, points[i].is_new_island));
 
-            m_c->m_model_object->sla_points_status = sla::PointsStatus::AutoGenerated;
+            mo->sla_points_status = sla::PointsStatus::AutoGenerated;
             break;
         }
     }
@@ -1254,15 +1130,18 @@ void GLGizmoSlaSupports::get_data_from_backend()
 
 void GLGizmoSlaSupports::auto_generate()
 {
-    wxMessageDialog dlg(GUI::wxGetApp().plater(), 
-                        _(L("Autogeneration will erase all manually edited points.")) + "\n\n" +
-                        _(L("Are you sure you want to do it?")) + "\n",
-                        _(L("Warning")), wxICON_WARNING | wxYES | wxNO);
+    //wxMessageDialog dlg(GUI::wxGetApp().plater(), 
+    MessageDialog dlg(GUI::wxGetApp().plater(), 
+                        _L("Autogeneration will erase all manually edited points.") + "\n\n" +
+                        _L("Are you sure you want to do it?") + "\n",
+                        _L("Warning"), wxICON_WARNING | wxYES | wxNO);
 
-    if (m_c->m_model_object->sla_points_status != sla::PointsStatus::UserModified || m_normal_cache.empty() || dlg.ShowModal() == wxID_YES) {
-        Plater::TakeSnapshot snapshot(wxGetApp().plater(), _(L("Autogenerate support points")));
+    ModelObject* mo = m_c->selection_info()->model_object();
+
+    if (mo->sla_points_status != sla::PointsStatus::UserModified || m_normal_cache.empty() || dlg.ShowModal() == wxID_YES) {
+        Plater::TakeSnapshot snapshot(wxGetApp().plater(), _L("Autogenerate support points"));
         wxGetApp().CallAfter([this]() { reslice_SLA_supports(); });
-        m_c->m_model_object->sla_points_status = sla::PointsStatus::Generating;
+        mo->sla_points_status = sla::PointsStatus::Generating;
     }
 }
 
@@ -1277,7 +1156,7 @@ void GLGizmoSlaSupports::switch_to_editing_mode()
         m_editing_cache.emplace_back(sp);
     select_point(NoPoints);
 
-    m_parent.toggle_sla_auxiliaries_visibility(false, m_c->m_model_object, m_c->m_active_instance);
+    m_c->instances_hider()->show_supports(false);
     m_parent.set_as_dirty();
 }
 
@@ -1287,9 +1166,10 @@ void GLGizmoSlaSupports::disable_editing_mode()
     if (m_editing_mode) {
         m_editing_mode = false;
         wxGetApp().plater()->leave_gizmos_stack();
-        m_parent.toggle_sla_auxiliaries_visibility(true, m_c->m_model_object, m_c->m_active_instance);
+        m_c->instances_hider()->show_supports(true);
         m_parent.set_as_dirty();
     }
+    wxGetApp().plater()->get_notification_manager()->close_notification_of_type(NotificationType::QuitSLAManualMode);
 }
 
 
@@ -1306,22 +1186,8 @@ bool GLGizmoSlaSupports::unsaved_changes() const
     return false;
 }
 
-
-void GLGizmoSlaSupports::update_clipping_plane(bool keep_normal) const
-{
-    if (! m_c->m_model_object)
-        return;
-    Vec3d normal = (keep_normal && m_c->m_clipping_plane->get_normal() != Vec3d::Zero() ?
-                        m_c->m_clipping_plane->get_normal() : -m_parent.get_camera().get_dir_forward());
-
-    const Vec3d& center = m_c->m_model_object->instances[m_c->m_active_instance]->get_offset() + Vec3d(0., 0., m_z_shift);
-    float dist = normal.dot(center);
-    *m_c->m_clipping_plane = ClippingPlane(normal, (dist - (-m_c->m_active_instance_bb_radius) - m_c->m_clipping_plane_distance * 2*m_c->m_active_instance_bb_radius));
-    m_parent.set_as_dirty();
-}
-
 SlaGizmoHelpDialog::SlaGizmoHelpDialog()
-: wxDialog(nullptr, wxID_ANY, _(L("SLA gizmo keyboard shortcuts")), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER)
+: wxDialog(nullptr, wxID_ANY, _L("SLA gizmo keyboard shortcuts"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER)
 {
     SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
     const wxString ctrl = GUI::shortkey_ctrl_prefix();
@@ -1332,7 +1198,7 @@ SlaGizmoHelpDialog::SlaGizmoHelpDialog()
     const wxFont& font = wxGetApp().small_font();
     const wxFont& bold_font = wxGetApp().bold_font();
 
-    auto note_text = new wxStaticText(this, wxID_ANY, _(L("Note: some shortcuts work in (non)editing mode only.")));
+    auto note_text = new wxStaticText(this, wxID_ANY, _L("Note: some shortcuts work in (non)editing mode only."));
     note_text->SetFont(font);
 
     auto vsizer    = new wxBoxSizer(wxVERTICAL);
@@ -1350,21 +1216,21 @@ SlaGizmoHelpDialog::SlaGizmoHelpDialog()
     vsizer->AddSpacer(20);
 
     std::vector<std::pair<wxString, wxString>> shortcuts;
-    shortcuts.push_back(std::make_pair(_(L("Left click")),          _(L("Add point"))));
-    shortcuts.push_back(std::make_pair(_(L("Right click")),         _(L("Remove point"))));
-    shortcuts.push_back(std::make_pair(_(L("Drag")),                _(L("Move point"))));
-    shortcuts.push_back(std::make_pair(ctrl+_(L("Left click")),     _(L("Add point to selection"))));
-    shortcuts.push_back(std::make_pair(alt+_(L("Left click")),      _(L("Remove point from selection"))));
-    shortcuts.push_back(std::make_pair(wxString("Shift+")+_(L("Drag")), _(L("Select by rectangle"))));
-    shortcuts.push_back(std::make_pair(alt+_(L("Drag")),            _(L("Deselect by rectangle"))));
-    shortcuts.push_back(std::make_pair(ctrl+"A",                    _(L("Select all points"))));
-    shortcuts.push_back(std::make_pair("Delete",                    _(L("Remove selected points"))));
-    shortcuts.push_back(std::make_pair(ctrl+_(L("Mouse wheel")),    _(L("Move clipping plane"))));
-    shortcuts.push_back(std::make_pair("R",                         _(L("Reset clipping plane"))));
-    shortcuts.push_back(std::make_pair("Enter",                     _(L("Apply changes"))));
-    shortcuts.push_back(std::make_pair("Esc",                       _(L("Discard changes"))));
-    shortcuts.push_back(std::make_pair("M",                         _(L("Switch to editing mode"))));
-    shortcuts.push_back(std::make_pair("A",                         _(L("Auto-generate points"))));
+    shortcuts.push_back(std::make_pair(_L("Left click"),              _L("Add point")));
+    shortcuts.push_back(std::make_pair(_L("Right click"),             _L("Remove point")));
+    shortcuts.push_back(std::make_pair(_L("Drag"),                    _L("Move point")));
+    shortcuts.push_back(std::make_pair(ctrl+_L("Left click"),         _L("Add point to selection")));
+    shortcuts.push_back(std::make_pair(alt+_L("Left click"),          _L("Remove point from selection")));
+    shortcuts.push_back(std::make_pair(wxString("Shift+")+_L("Drag"), _L("Select by rectangle")));
+    shortcuts.push_back(std::make_pair(alt+_(L("Drag")),              _L("Deselect by rectangle")));
+    shortcuts.push_back(std::make_pair(ctrl+"A",                      _L("Select all points")));
+    shortcuts.push_back(std::make_pair("Delete",                      _L("Remove selected points")));
+    shortcuts.push_back(std::make_pair(ctrl+_L("Mouse wheel"),        _L("Move clipping plane")));
+    shortcuts.push_back(std::make_pair("R",                           _L("Reset clipping plane")));
+    shortcuts.push_back(std::make_pair("Enter",                       _L("Apply changes")));
+    shortcuts.push_back(std::make_pair("Esc",                         _L("Discard changes")));
+    shortcuts.push_back(std::make_pair("M",                           _L("Switch to editing mode")));
+    shortcuts.push_back(std::make_pair("A",                           _L("Auto-generate points")));
 
     for (const auto& pair : shortcuts) {
         auto shortcut = new wxStaticText(this, wxID_ANY, pair.first);

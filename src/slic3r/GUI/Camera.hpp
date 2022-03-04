@@ -2,9 +2,7 @@
 #define slic3r_Camera_hpp_
 
 #include "libslic3r/BoundingBox.hpp"
-#if ENABLE_THUMBNAIL_GENERATOR
 #include "3DScene.hpp"
-#endif // ENABLE_THUMBNAIL_GENERATOR
 #include <array>
 
 namespace Slic3r {
@@ -13,16 +11,14 @@ namespace GUI {
 struct Camera
 {
     static const double DefaultDistance;
-#if ENABLE_THUMBNAIL_GENERATOR
     static const double DefaultZoomToBoxMarginFactor;
     static const double DefaultZoomToVolumesMarginFactor;
-#endif // ENABLE_THUMBNAIL_GENERATOR
     static double FrustrumMinZRange;
     static double FrustrumMinNearZ;
     static double FrustrumZMargin;
     static double MaxFovDeg;
 
-    enum EType : unsigned char
+    enum class EType : unsigned char
     {
         Unknown,
         Ortho,
@@ -30,35 +26,38 @@ struct Camera
         Num_types
     };
 
-    bool requires_zoom_to_bed;
+    bool requires_zoom_to_bed{ false };
 
 private:
-    EType m_type;
-    Vec3d m_target;
-    float m_zenit;
-    double m_zoom;
+    EType m_type{ EType::Perspective };
+    bool m_update_config_on_type_change_enabled{ false };
+    Vec3d m_target{ Vec3d::Zero() };
+    float m_zenit{ 45.0f };
+    double m_zoom{ 1.0 };
     // Distance between camera position and camera target measured along the camera Z axis
-    mutable double m_distance;
-    mutable double m_gui_scale;
+    double m_distance{ DefaultDistance };
+    double m_gui_scale{ 1.0 };
 
-    mutable std::array<int, 4> m_viewport;
-    mutable Transform3d m_view_matrix;
+    std::array<int, 4> m_viewport;
+    Transform3d m_view_matrix{ Transform3d::Identity() };
     // We are calculating the rotation part of the m_view_matrix from m_view_rotation.
-    mutable Eigen::Quaterniond m_view_rotation;
-    mutable Transform3d m_projection_matrix;
-    mutable std::pair<double, double> m_frustrum_zs;
+    Eigen::Quaterniond m_view_rotation{ 1.0, 0.0, 0.0, 0.0 };
+    Transform3d m_projection_matrix{ Transform3d::Identity() };
+    std::pair<double, double> m_frustrum_zs;
 
     BoundingBoxf3 m_scene_box;
 
 public:
-    Camera();
+    Camera() { set_default_orientation(); }
 
     EType get_type() const { return m_type; }
     std::string get_type_as_string() const;
     void set_type(EType type);
     // valid values for type: "0" -> ortho, "1" -> perspective
-    void set_type(const std::string& type);
+    void set_type(const std::string& type) { set_type((type == "1") ? EType::Perspective : EType::Ortho); }
     void select_next_type();
+
+    void enable_update_config_on_type_change(bool enable) { m_update_config_on_type_change_enabled = enable; }
 
     const Vec3d& get_target() const { return m_target; }
     void set_target(const Vec3d& target);
@@ -68,7 +67,7 @@ public:
 
     double get_zoom() const { return m_zoom; }
     double get_inv_zoom() const { assert(m_zoom != 0.0); return 1.0 / m_zoom; }
-    void update_zoom(double delta_zoom);
+    void update_zoom(double delta_zoom) { set_zoom(m_zoom / (1.0 - std::max(std::min(delta_zoom, 4.0), -4.0) * 0.1)); }
     void set_zoom(double zoom);
 
     const BoundingBoxf3& get_scene_box() const { return m_scene_box; }
@@ -88,28 +87,25 @@ public:
 
     double get_near_z() const { return m_frustrum_zs.first; }
     double get_far_z() const { return m_frustrum_zs.second; }
+    const std::pair<double, double>& get_z_range() const { return m_frustrum_zs; }
 
     double get_fov() const;
 
-    void apply_viewport(int x, int y, unsigned int w, unsigned int h) const;
-    void apply_view_matrix() const;
+    void apply_viewport(int x, int y, unsigned int w, unsigned int h);
+    void apply_view_matrix();
     // Calculates and applies the projection matrix tighting the frustrum z range around the given box.
     // If larger z span is needed, pass the desired values of near and far z (negative values are ignored)
-    void apply_projection(const BoundingBoxf3& box, double near_z = -1.0, double far_z = -1.0) const;
+    void apply_projection(const BoundingBoxf3& box, double near_z = -1.0, double far_z = -1.0);
 
-#if ENABLE_THUMBNAIL_GENERATOR
     void zoom_to_box(const BoundingBoxf3& box, double margin_factor = DefaultZoomToBoxMarginFactor);
     void zoom_to_volumes(const GLVolumePtrs& volumes, double margin_factor = DefaultZoomToVolumesMarginFactor);
-#else
-    void zoom_to_box(const BoundingBoxf3& box, int canvas_w, int canvas_h);
-#endif // ENABLE_THUMBNAIL_GENERATOR
 
 #if ENABLE_CAMERA_STATISTICS
     void debug_render() const;
 #endif // ENABLE_CAMERA_STATISTICS
 
     // translate the camera in world space
-    void translate_world(const Vec3d& displacement) { this->set_target(m_target + displacement); }
+    void translate_world(const Vec3d& displacement) { set_target(m_target + displacement); }
 
     // rotate the camera on a sphere having center == m_target and radius == m_distance
     // using the given variations of spherical coordinates
@@ -123,28 +119,23 @@ public:
     bool is_looking_downward() const { return get_dir_forward().dot(Vec3d::UnitZ()) < 0.0; }
 
     // forces camera right vector to be parallel to XY plane
-    void recover_from_free_camera()
-    {
+    void recover_from_free_camera() {
         if (std::abs(get_dir_right()(2)) > EPSILON)
             look_at(get_position(), m_target, Vec3d::UnitZ());
     }
 
     void look_at(const Vec3d& position, const Vec3d& target, const Vec3d& up);
 
-    double max_zoom() const { return 100.0; }
-    double min_zoom() const;
+    double max_zoom() const { return 250.0; }
+    double min_zoom() const { return 0.7 * calc_zoom_to_bounding_box_factor(m_scene_box); }
 
 private:
     // returns tight values for nearZ and farZ plane around the given bounding box
     // the camera MUST be outside of the bounding box in eye coordinate of the given box
-    std::pair<double, double> calc_tight_frustrum_zs_around(const BoundingBoxf3& box) const;
-#if ENABLE_THUMBNAIL_GENERATOR
+    std::pair<double, double> calc_tight_frustrum_zs_around(const BoundingBoxf3& box);
     double calc_zoom_to_bounding_box_factor(const BoundingBoxf3& box, double margin_factor = DefaultZoomToBoxMarginFactor) const;
     double calc_zoom_to_volumes_factor(const GLVolumePtrs& volumes, Vec3d& center, double margin_factor = DefaultZoomToVolumesMarginFactor) const;
-#else
-    double calc_zoom_to_bounding_box_factor(const BoundingBoxf3& box, int canvas_w, int canvas_h) const;
-#endif // ENABLE_THUMBNAIL_GENERATOR
-    void set_distance(double distance) const;
+    void set_distance(double distance);
 
     void set_default_orientation();
     Vec3d validate_target(const Vec3d& target) const;

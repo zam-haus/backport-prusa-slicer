@@ -1,6 +1,7 @@
 #include <catch_main.hpp>
 
 #include <fstream>
+#include <cstdint>
 
 #include <libnest2d/libnest2d.hpp>
 #include "printer_parts.hpp"
@@ -43,12 +44,74 @@ struct NfpImpl<S, NfpLevel::CONVEX_ONLY>
 }
 }
 
+namespace {
+using namespace libnest2d;
+
+template<int64_t SCALE = 1, class It>
+void exportSVG(const char *loc, It from, It to) {
+
+    static const char* svg_header =
+        R"raw(<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<svg height="500" width="500" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+)raw";
+
+    //    for(auto r : result) {
+    std::fstream out(loc, std::fstream::out);
+    if(out.is_open()) {
+        out << svg_header;
+        //        Item rbin( RectangleItem(bin.width(), bin.height()) );
+        //        for(unsigned j = 0; j < rbin.vertexCount(); j++) {
+        //            auto v = rbin.vertex(j);
+        //            setY(v, -getY(v)/SCALE + 500 );
+        //            setX(v, getX(v)/SCALE);
+        //            rbin.setVertex(j, v);
+        //        }
+        //        out << shapelike::serialize<Formats::SVG>(rbin.rawShape()) << std::endl;
+        for(auto it = from; it != to; ++it) {
+            const Item &itm = *it;
+            Item tsh(itm.transformedShape());
+            for(unsigned j = 0; j < tsh.vertexCount(); j++) {
+                auto v = tsh.vertex(j);
+                setY(v, -getY(v)/SCALE + 500);
+                setX(v, getX(v)/SCALE);
+                tsh.setVertex(j, v);
+            }
+            out << shapelike::serialize<Formats::SVG>(tsh.rawShape()) << std::endl;
+        }
+        out << "\n</svg>" << std::endl;
+    }
+    out.close();
+
+    //        i++;
+    //    }
+}
+
+template<int64_t SCALE = 1>
+void exportSVG(std::vector<std::reference_wrapper<Item>>& result, int idx = 0) {
+    exportSVG<SCALE>((std::string("out") + std::to_string(idx) + ".svg").c_str(),
+                      result.begin(), result.end());
+}
+}
+
 static std::vector<libnest2d::Item>& prusaParts() {
-    static std::vector<libnest2d::Item> ret;
+    using namespace libnest2d;
+
+    static std::vector<Item> ret;
 
     if(ret.empty()) {
         ret.reserve(PRINTER_PART_POLYGONS.size());
-        for(auto& inp : PRINTER_PART_POLYGONS) ret.emplace_back(inp);
+        for(auto& inp : PRINTER_PART_POLYGONS) {
+            auto inp_cpy = inp;
+
+            if (ClosureTypeV<PathImpl> == Closure::OPEN)
+                inp_cpy.points.pop_back();
+
+            if constexpr (!libnest2d::is_clockwise<libnest2d::PathImpl>())
+                std::reverse(inp_cpy.begin(), inp_cpy.end());
+
+            ret.emplace_back(inp_cpy);
+        }
     }
 
     return ret;
@@ -139,15 +202,15 @@ TEST_CASE("boundingCircle", "[Geometry]") {
     PolygonImpl p = {{{0, 10}, {10, 0}, {0, -10}, {0, 10}}, {}};
     Circle c = boundingCircle(p);
 
-    REQUIRE(c.center().X == 0);
-    REQUIRE(c.center().Y == 0);
+    REQUIRE(getX(c.center()) == 0);
+    REQUIRE(getY(c.center()) == 0);
     REQUIRE(c.radius() == Approx(10));
 
     shapelike::translate(p, PointImpl{10, 10});
     c = boundingCircle(p);
 
-    REQUIRE(c.center().X == 10);
-    REQUIRE(c.center().Y == 10);
+    REQUIRE(getX(c.center()) == 10);
+    REQUIRE(getY(c.center()) == 10);
     REQUIRE(c.radius() == Approx(10));
 
     auto parts = prusaParts();
@@ -242,7 +305,7 @@ TEST_CASE("Area", "[Geometry]") {
         {61, 97}
     };
 
-    REQUIRE(shapelike::area(item.transformedShape()) > 0 );
+    REQUIRE(std::abs(shapelike::area(item.transformedShape())) > 0 );
 }
 
 TEST_CASE("IsPointInsidePolygon", "[Geometry]") {
@@ -295,30 +358,36 @@ TEST_CASE("LeftAndDownPolygon", "[Geometry]")
     Box bin(100, 100);
     BottomLeftPlacer placer(bin);
 
-    Item item = {{70, 75}, {88, 60}, {65, 50}, {60, 30}, {80, 20}, {42, 20},
-                 {35, 35}, {35, 55}, {40, 75}, {70, 75}};
+    PathImpl pitem = {{70, 75}, {88, 60}, {65, 50}, {60, 30}, {80, 20},
+                     {42, 20}, {35, 35}, {35, 55}, {40, 75}};
 
-    Item leftControl = { {40, 75},
-                        {35, 55},
-                        {35, 35},
-                        {42, 20},
-                        {0,  20},
-                        {0,  75},
-                        {40, 75}};
+    PathImpl pleftControl = {{40, 75}, {35, 55}, {35, 35},
+                             {42, 20}, {0, 20},  {0, 75}};
 
-    Item downControl = {{88, 60},
-                        {88, 0},
-                        {35, 0},
-                        {35, 35},
-                        {42, 20},
-                        {80, 20},
-                        {60, 30},
-                        {65, 50},
-                        {88, 60}};
+    PathImpl pdownControl = {{88, 60}, {88, 0},  {35, 0},  {35, 35},
+                             {42, 20}, {80, 20}, {60, 30}, {65, 50}};
 
+    if constexpr (!is_clockwise<PathImpl>()) {
+        std::reverse(sl::begin(pitem), sl::end(pitem));
+        std::reverse(sl::begin(pleftControl), sl::end(pleftControl));
+        std::reverse(sl::begin(pdownControl), sl::end(pdownControl));
+    }
+
+    if constexpr (ClosureTypeV<PathImpl> == Closure::CLOSED) {
+        sl::addVertex(pitem, sl::front(pitem));
+        sl::addVertex(pleftControl, sl::front(pleftControl));
+        sl::addVertex(pdownControl, sl::front(pdownControl));
+    }
+
+    Item item{pitem}, leftControl{pleftControl}, downControl{pdownControl};
     Item leftp(placer.leftPoly(item));
 
-    REQUIRE(shapelike::isValid(leftp.rawShape()).first);
+    auto valid = sl::isValid(leftp.rawShape());
+
+    std::vector<std::reference_wrapper<Item>> to_export{ leftp, leftControl };
+    exportSVG<1>("leftp.svg", to_export.begin(), to_export.end());
+
+    REQUIRE(valid.first);
     REQUIRE(leftp.vertexCount() == leftControl.vertexCount());
 
     for(unsigned long i = 0; i < leftControl.vertexCount(); i++) {
@@ -337,7 +406,7 @@ TEST_CASE("LeftAndDownPolygon", "[Geometry]")
     }
 }
 
-TEST_CASE("ArrangeRectanglesTight", "[Nesting]")
+TEST_CASE("ArrangeRectanglesTight", "[Nesting][NotWorking]")
 {
     using namespace libnest2d;
 
@@ -388,6 +457,8 @@ TEST_CASE("ArrangeRectanglesTight", "[Nesting]")
         }));
 
     // check for no intersections, no containment:
+
+    // exportSVG<1>("arrangeRectanglesTight.svg", rects.begin(), rects.end());
 
     bool valid = true;
     for(Item& r1 : rects) {
@@ -469,53 +540,7 @@ TEST_CASE("ArrangeRectanglesLoose", "[Nesting]")
 
 }
 
-namespace {
-using namespace libnest2d;
-
-template<long long SCALE = 1, class Bin>
-void exportSVG(std::vector<std::reference_wrapper<Item>>& result, const Bin& bin, int idx = 0) {
-    std::string loc = "out";
-
-    static std::string svg_header =
-        R"raw(<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-<svg height="500" width="500" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-)raw";
-
-    int i = idx;
-    auto r = result;
-    //    for(auto r : result) {
-    std::fstream out(loc + std::to_string(i) + ".svg", std::fstream::out);
-    if(out.is_open()) {
-        out << svg_header;
-        Item rbin( RectangleItem(bin.width(), bin.height()) );
-        for(unsigned j = 0; j < rbin.vertexCount(); j++) {
-            auto v = rbin.vertex(j);
-            setY(v, -getY(v)/SCALE + 500 );
-            setX(v, getX(v)/SCALE);
-            rbin.setVertex(j, v);
-        }
-        out << shapelike::serialize<Formats::SVG>(rbin.rawShape()) << std::endl;
-        for(Item& sh : r) {
-            Item tsh(sh.transformedShape());
-            for(unsigned j = 0; j < tsh.vertexCount(); j++) {
-                auto v = tsh.vertex(j);
-                setY(v, -getY(v)/SCALE + 500);
-                setX(v, getX(v)/SCALE);
-                tsh.setVertex(j, v);
-            }
-            out << shapelike::serialize<Formats::SVG>(tsh.rawShape()) << std::endl;
-        }
-        out << "\n</svg>" << std::endl;
-    }
-    out.close();
-
-    //        i++;
-    //    }
-}
-}
-
-TEST_CASE("BottomLeftStressTest", "[Geometry]") {
+TEST_CASE("BottomLeftStressTest", "[Geometry][NotWorking]") {
     using namespace libnest2d;
 
     const Coord SCALE = 1000000;
@@ -541,7 +566,7 @@ TEST_CASE("BottomLeftStressTest", "[Geometry]") {
             valid = (valid && !r1.isInside(r2) && !r2.isInside(r1));
             if(!valid) {
                 std::cout << "error index: " << i << std::endl;
-                exportSVG(result, bin, i);
+                exportSVG<SCALE>(result, i);
             }
             REQUIRE(valid);
         } else {
@@ -558,7 +583,7 @@ TEST_CASE("BottomLeftStressTest", "[Geometry]") {
 TEST_CASE("convexHull", "[Geometry]") {
     using namespace libnest2d;
 
-    ClipperLib::Path poly = PRINTER_PART_POLYGONS[0];
+    PathImpl poly = PRINTER_PART_POLYGONS[0];
 
     auto chull = sl::convexHull(poly);
 
@@ -592,7 +617,7 @@ TEST_CASE("PrusaPartsShouldFitIntoTwoBins", "[Nesting]") {
         }));
 
     // Gather the items into piles of arranged polygons...
-    using Pile = TMultiShape<ClipperLib::Polygon>;
+    using Pile = TMultiShape<PolygonImpl>;
     std::vector<Pile> piles(bins);
 
     for (auto &itm : input)
@@ -604,6 +629,20 @@ TEST_CASE("PrusaPartsShouldFitIntoTwoBins", "[Nesting]") {
         auto bb = sl::boundingBox(pile);
         REQUIRE(sl::isInside(bb, bin));
     }
+
+    // Check the area of merged pile vs the sum of area of all the parts
+    // They should match, otherwise there is an overlap which should not happen.
+    for (auto &pile : piles) {
+        double area_sum = 0.;
+
+        for (auto &obj : pile)
+            area_sum += sl::area(obj);
+
+        auto pile_m = nfp::merge(pile);
+        double area_merge = sl::area(pile_m);
+
+        REQUIRE(area_sum == Approx(area_merge));
+    }
 }
 
 TEST_CASE("EmptyItemShouldBeUntouched", "[Nesting]") {
@@ -611,7 +650,7 @@ TEST_CASE("EmptyItemShouldBeUntouched", "[Nesting]") {
 
     std::vector<Item> items;
     items.emplace_back(Item{});   // Emplace empty item
-    items.emplace_back(Item{0, 200, 0});   // Emplace zero area item
+    items.emplace_back(Item{ {0, 200} });   // Emplace zero area item
 
     size_t bins = libnest2d::nest(items, bin);
 
@@ -656,12 +695,12 @@ TEST_CASE("Items can be preloaded", "[Nesting]") {
         REQUIRE(bins == 1);
 
         REQUIRE(fixed_rect.binId() == 0);
-        REQUIRE(fixed_rect.translation().X == bin.center().X);
-        REQUIRE(fixed_rect.translation().Y == bin.center().Y);
+        REQUIRE(getX(fixed_rect.translation()) == getX(bin.center()));
+        REQUIRE(getY(fixed_rect.translation()) == getY(bin.center()));
 
         REQUIRE(movable_rect.binId() == 0);
-        REQUIRE(movable_rect.translation().X != bin.center().X);
-        REQUIRE(movable_rect.translation().Y != bin.center().Y);
+        REQUIRE(getX(movable_rect.translation()) != getX(bin.center()));
+        REQUIRE(getY(movable_rect.translation()) != getY(bin.center()));
     }
 
     SECTION("Preloaded Item should not affect free bins") {
@@ -672,14 +711,14 @@ TEST_CASE("Items can be preloaded", "[Nesting]") {
         REQUIRE(bins == 2);
 
         REQUIRE(fixed_rect.binId() == 1);
-        REQUIRE(fixed_rect.translation().X == bin.center().X);
-        REQUIRE(fixed_rect.translation().Y == bin.center().Y);
+        REQUIRE(getX(fixed_rect.translation()) == getX(bin.center()));
+        REQUIRE(getY(fixed_rect.translation()) == getY(bin.center()));
 
         REQUIRE(movable_rect.binId() == 0);
 
         auto bb = movable_rect.boundingBox();
-        REQUIRE(bb.center().X == bin.center().X);
-        REQUIRE(bb.center().Y == bin.center().Y);
+        REQUIRE(getX(bb.center()) == getX(bin.center()));
+        REQUIRE(getY(bb.center()) == getY(bin.center()));
     }
 }
 
@@ -695,15 +734,13 @@ std::vector<ItemPair> nfp_testdata = {
         {
             {80, 50},
             {100, 70},
-            {120, 50},
-            {80, 50}
+            {120, 50}
         },
         {
             {10, 10},
             {10, 40},
             {40, 40},
-            {40, 10},
-            {10, 10}
+            {40, 10}
         }
     },
     {
@@ -713,15 +750,13 @@ std::vector<ItemPair> nfp_testdata = {
             {80, 90},
             {120, 90},
             {140, 70},
-            {120, 50},
-            {80, 50}
+            {120, 50}
         },
         {
             {10, 10},
             {10, 40},
             {40, 40},
-            {40, 10},
-            {10, 10}
+            {40, 10}
         }
     },
     {
@@ -733,15 +768,13 @@ std::vector<ItemPair> nfp_testdata = {
             {30, 40},
             {40, 40},
             {50, 30},
-            {50, 20},
-            {40, 10}
+            {50, 20}
         },
         {
             {80, 0},
             {80, 30},
             {110, 30},
-            {110, 0},
-            {80, 0}
+            {110, 0}
         }
     },
     {
@@ -761,9 +794,8 @@ std::vector<ItemPair> nfp_testdata = {
             {122, 97},
             {120, 98},
             {118, 101},
-            {117, 103},
-            {117, 107}
-            },
+            {117, 103}
+        },
         {
             {102, 116},
             {111, 126},
@@ -772,9 +804,8 @@ std::vector<ItemPair> nfp_testdata = {
             {148, 100},
             {148, 85},
             {147, 84},
-            {102, 84},
-            {102, 116},
-            }
+            {102, 84}
+        }
     },
     {
         {
@@ -788,9 +819,8 @@ std::vector<ItemPair> nfp_testdata = {
             {139, 68},
             {111, 68},
             {108, 70},
-            {99, 102},
-            {99, 122},
-            },
+            {99, 102}
+        },
         {
             {107, 124},
             {128, 125},
@@ -805,9 +835,8 @@ std::vector<ItemPair> nfp_testdata = {
             {136, 86},
             {134, 85},
             {108, 85},
-            {107, 86},
-            {107, 124},
-            }
+            {107, 86}
+        }
     },
     {
         {
@@ -820,9 +849,8 @@ std::vector<ItemPair> nfp_testdata = {
             {156, 66},
             {133, 57},
             {132, 57},
-            {91, 98},
-            {91, 100},
-            },
+            {91, 98}
+        },
         {
             {101, 90},
             {103, 98},
@@ -838,9 +866,8 @@ std::vector<ItemPair> nfp_testdata = {
             {145, 84},
             {105, 84},
             {102, 87},
-            {101, 89},
-            {101, 90},
-            }
+            {101, 89}
+        }
     }
 };
 
@@ -855,10 +882,9 @@ std::vector<ItemPair> nfp_testdata = {
                  {533659, 157607},
                  {538669, 160091},
                  {537178, 142155},
-                 {534959, 143386},
-                 {533726, 142141},
-                 }
-             },
+                 {534959, 143386}
+             }
+         },
          {
              {
                  {118305, 11603},
@@ -879,8 +905,7 @@ std::vector<ItemPair> nfp_testdata = {
                  {209315, 17080},
                  {205326, 17080},
                  {203334, 13629},
-                 {204493, 11616},
-                 {118305, 11603},
+                 {204493, 11616}
                  }
              },
          }
@@ -894,7 +919,7 @@ void testNfp(const std::vector<ItemPair>& testdata) {
 
     int TEST_CASEcase = 0;
 
-    auto& exportfun = exportSVG<SCALE, Box>;
+    auto& exportfun = exportSVG<SCALE>;
 
     auto onetest = [&](Item& orbiter, Item& stationary, unsigned /*testidx*/){
         TEST_CASEcase++;
@@ -941,7 +966,7 @@ void testNfp(const std::vector<ItemPair>& testdata) {
                     std::ref(stationary), std::ref(tmp), std::ref(infp)
                 };
 
-                exportfun(inp, bin, TEST_CASEcase*i++);
+                exportfun(inp, TEST_CASEcase*i++);
             }
 
             REQUIRE(touching);
@@ -952,6 +977,14 @@ void testNfp(const std::vector<ItemPair>& testdata) {
     for(auto& td : testdata) {
         auto orbiter = td.orbiter;
         auto stationary = td.stationary;
+        if (!libnest2d::is_clockwise<PolygonImpl>()) {
+            auto porb = orbiter.rawShape();
+            auto pstat = stationary.rawShape();
+            std::reverse(sl::begin(porb), sl::end(porb));
+            std::reverse(sl::begin(pstat), sl::end(pstat));
+            orbiter = Item{porb};
+            stationary = Item{pstat};
+        }
         onetest(orbiter, stationary, tidx++);
     }
 
@@ -959,6 +992,14 @@ void testNfp(const std::vector<ItemPair>& testdata) {
     for(auto& td : testdata) {
         auto orbiter = td.stationary;
         auto stationary = td.orbiter;
+        if (!libnest2d::is_clockwise<PolygonImpl>()) {
+            auto porb = orbiter.rawShape();
+            auto pstat = stationary.rawShape();
+            std::reverse(sl::begin(porb), sl::end(porb));
+            std::reverse(sl::begin(pstat), sl::end(pstat));
+            orbiter = Item{porb};
+            stationary = Item{pstat};
+        }
         onetest(orbiter, stationary, tidx++);
     }
 }
@@ -1068,7 +1109,7 @@ using Ratio = boost::rational<boost::multiprecision::int128_t>;
 TEST_CASE("MinAreaBBWithRotatingCalipers", "[Geometry]") {
     long double err_epsilon = 500e6l;
 
-    for(ClipperLib::Path rinput : PRINTER_PART_POLYGONS) {
+    for(PathImpl rinput : PRINTER_PART_POLYGONS) {
         PolygonImpl poly(rinput);
 
         long double arearef = refMinAreaBox(poly);
@@ -1080,8 +1121,8 @@ TEST_CASE("MinAreaBBWithRotatingCalipers", "[Geometry]") {
         REQUIRE(succ);
     }
 
-    for(ClipperLib::Path rinput : STEGOSAUR_POLYGONS) {
-        rinput.pop_back();
+    for(PathImpl rinput : STEGOSAUR_POLYGONS) {
+//        rinput.pop_back();
         std::reverse(rinput.begin(), rinput.end());
 
         PolygonImpl poly(removeCollinearPoints<PathImpl, PointImpl, Unit>(rinput, 1000000));
@@ -1095,4 +1136,92 @@ TEST_CASE("MinAreaBBWithRotatingCalipers", "[Geometry]") {
 
         REQUIRE(succ);
     }
+}
+
+template<class It> MultiPolygon merged_pile(It from, It to, int bin_id)
+{
+    MultiPolygon pile;
+    pile.reserve(size_t(to - from));
+    
+    for (auto it = from; it != to; ++it) {
+        if (it->binId() == bin_id) pile.emplace_back(it->transformedShape());
+    }
+    
+    return nfp::merge(pile);
+}
+
+TEST_CASE("Test for bed center distance optimization", "[Nesting], [NestKernels]")
+{
+    static const constexpr Slic3r::ClipperLib::cInt W = 10000000;
+    
+    // Get the input items and define the bin.
+    std::vector<RectangleItem> input(9, {W, W});
+    
+    auto bin = Box::infinite();
+    
+    NfpPlacer::Config pconfig;
+    
+    pconfig.object_function = [](const Item &item) -> double {
+        return pl::magnsq<PointImpl, double>(item.boundingBox().center());
+    };
+    
+    size_t bins = nest(input, bin, 0, NestConfig{pconfig});
+    
+    REQUIRE(bins == 1);
+    
+    // Gather the items into piles of arranged polygons...
+    MultiPolygon pile;
+    pile.reserve(input.size());
+    
+    for (auto &itm : input) {
+        REQUIRE(itm.binId() == 0);
+        pile.emplace_back(itm.transformedShape());
+    }
+    
+    MultiPolygon m = merged_pile(input.begin(), input.end(), 0);
+    
+    REQUIRE(m.size() == 1);
+    
+    REQUIRE(sl::area(m) == Approx(9. * W * W));
+}
+
+TEST_CASE("Test for biggest bounding box area", "[Nesting], [NestKernels]")
+{
+    static const constexpr Slic3r::ClipperLib::cInt W = 10000000;
+    static const constexpr size_t N = 100;
+    
+    // Get the input items and define the bin.
+    std::vector<RectangleItem> input(N, {W, W});
+    
+    auto bin = Box::infinite();
+    
+    NfpPlacer::Config pconfig;
+    pconfig.rotations = {0.};
+    Box pile_box;
+    pconfig.before_packing =
+        [&pile_box](const MultiPolygon &pile,
+                    const _ItemGroup<PolygonImpl> &/*packed_items*/,
+                    const _ItemGroup<PolygonImpl> &/*remaining_items*/) {
+        pile_box = sl::boundingBox(pile);
+    };
+
+    pconfig.object_function = [&pile_box](const Item &item) -> double {
+        Box b = sl::boundingBox(item.boundingBox(), pile_box);
+        double area = b.area<double>() / (double(W) * W);
+        return -area;
+    };
+    
+    size_t bins = nest(input, bin, 0, NestConfig{pconfig});
+    
+    // To debug:
+    exportSVG<1000000>("out", input.begin(), input.end());
+    
+    REQUIRE(bins == 1);
+    
+    MultiPolygon pile = merged_pile(input.begin(), input.end(), 0);
+    Box bb = sl::boundingBox(pile);
+    
+    // Here the result shall be a stairway of boxes
+    REQUIRE(pile.size() == N);
+    REQUIRE(bb.area() == double(N) * N * W * W);
 }

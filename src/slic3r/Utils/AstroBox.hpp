@@ -26,9 +26,9 @@ public:
     bool upload(PrintHostUpload upload_data, ProgressFn prorgess_fn, ErrorFn error_fn) const override;
     bool has_auto_discovery() const override { return true; }
     bool can_test() const override { return true; }
-    bool can_start_print() const override { return true; }
+    PrintHostPostUploadActions get_post_upload_actions() const override { return PrintHostPostUploadAction::StartPrint; }
     std::string get_host() const override { return host; }
-
+    
 protected:
     bool validate_version_text(const boost::optional<std::string> &version_text) const;
 

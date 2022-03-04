@@ -5,7 +5,7 @@
 #include <string>
 
 #include <boost/thread.hpp>
-#include <tbb/mutex.h>
+#include <mutex>
 #include <condition_variable>
 
 // Custom wxWidget events
@@ -83,7 +83,7 @@ public:
 	// Public to be accessible from RemovableDriveManagerMM::on_device_unmount OSX notification handler.
 	// It would be better to make this method private and friend to RemovableDriveManagerMM, but RemovableDriveManagerMM is an ObjectiveC class.
 	void 		update();
-
+	void        set_exporting_finished(bool b) { m_exporting_finished = b; }
 #ifdef _WIN32
     // Called by Win32 Volume arrived / detached callback.
 	void 		volumes_changed();
@@ -111,9 +111,9 @@ private:
 	// m_current_drives is guarded by m_drives_mutex
 	// sorted ascending by path
 	std::vector<DriveData> 	m_current_drives;
-	mutable tbb::mutex 		m_drives_mutex;
+	mutable std::mutex 		m_drives_mutex;
 	// Locking the update() function to avoid that the function is executed multiple times.
-	mutable tbb::mutex 		m_inside_update_mutex;
+	mutable std::mutex 		m_inside_update_mutex;
 
 	// Returns drive path (same as path in DriveData) if exists otherwise empty string.
 	std::string 			get_removable_drive_from_path(const std::string& path);
@@ -121,7 +121,9 @@ private:
 	std::vector<DriveData>::const_iterator find_last_save_path_drive_data() const;
 	// Set with set_and_verify_last_save_path() to a removable drive path to be ejected.
 	std::string 			m_last_save_path;
-
+	// Verifies that exporting was finished so drive can be ejected.
+	// Set false by set_and_verify_last_save_path() that is called just before exporting.
+	bool                    m_exporting_finished;
 #if __APPLE__
     void register_window_osx();
     void unregister_window_osx();
@@ -130,6 +132,8 @@ private:
     void eject_device(const std::string &path);
     // Opaque pointer to RemovableDriveManagerMM
     void *m_impl_osx;
+    boost::thread *m_eject_thread { nullptr };
+    void eject_thread_finish();
 #endif
 };
 

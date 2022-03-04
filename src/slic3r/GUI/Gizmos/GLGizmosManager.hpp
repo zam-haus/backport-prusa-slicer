@@ -3,7 +3,9 @@
 
 #include "slic3r/GUI/GLTexture.hpp"
 #include "slic3r/GUI/GLToolbar.hpp"
-#include "slic3r/GUI/Gizmos/GLGizmos.hpp"
+#include "slic3r/GUI/Gizmos/GLGizmoBase.hpp"
+#include "slic3r/GUI/Gizmos/GLGizmosCommon.hpp"
+
 #include "libslic3r/ObjectID.hpp"
 
 #include <map>
@@ -18,6 +20,8 @@ namespace GUI {
 
 class GLCanvas3D;
 class ClippingPlane;
+enum class SLAGizmoEventType : unsigned char;
+class CommonGizmosDataPool;
 
 class Rect
 {
@@ -62,6 +66,10 @@ public:
         Cut,
         Hollow,
         SlaSupports,
+        FdmSupports,
+        Seam,
+        MmuSegmentation,
+        Simplify,
         Undefined
     };
 
@@ -87,15 +95,16 @@ private:
     mutable GLTexture m_icons_texture;
     mutable bool m_icons_texture_dirty;
     BackgroundTexture m_background_texture;
+    BackgroundTexture m_arrow_texture;
     Layout m_layout;
     EType m_current;
     EType m_hover;
+    std::pair<EType, bool> m_highlight; // bool true = higlightedShown, false = highlightedHidden
 
     std::vector<size_t> get_selectable_idxs() const;
-    std::vector<size_t> get_activable_idxs() const;
     size_t get_gizmo_idx_from_mouse(const Vec2d& mouse_pos) const;
 
-    void activate_gizmo(EType type);
+    bool activate_gizmo(EType type);
 
     struct MouseCapture
     {
@@ -113,12 +122,14 @@ private:
     MouseCapture m_mouse_capture;
     std::string m_tooltip;
     bool m_serializing;
-    std::unique_ptr<CommonGizmosData> m_common_gizmos_data;
+    std::unique_ptr<CommonGizmosDataPool> m_common_gizmos_data;
 
 public:
     explicit GLGizmosManager(GLCanvas3D& parent);
 
     bool init();
+
+    bool init_arrow(const BackgroundTexture::Metadata& arrow_texture);
 
     template<class Archive>
     void load(Archive& ar)
@@ -163,6 +174,9 @@ public:
 
     void refresh_on_off_state();
     void reset_all_states();
+    bool is_serializing() const { return m_serializing; }
+    bool open_gizmo(EType type);
+    bool check_gizmos_closed_except(EType) const;
 
     void set_hover_id(int id);
     void enable_grabber(EType type, unsigned int id, bool enable);
@@ -172,6 +186,7 @@ public:
 
     EType get_current_type() const { return m_current; }
     GLGizmoBase* get_current() const;
+    EType get_gizmo_from_name(const std::string& gizmo_name) const;
 
     bool is_running() const;
     bool handle_shortcut(int key);
@@ -195,14 +210,23 @@ public:
     void set_flattening_data(const ModelObject* model_object);
 
     void set_sla_support_data(ModelObject* model_object);
+
+    void set_painter_gizmo_data();
+
     bool gizmo_event(SLAGizmoEventType action, const Vec2d& mouse_position = Vec2d::Zero(), bool shift_down = false, bool alt_down = false, bool control_down = false);
-    ClippingPlane get_sla_clipping_plane() const;
+    ClippingPlane get_clipping_plane() const;
     bool wants_reslice_supports_on_undo() const;
+
+    bool is_in_editing_mode(bool error_notification = false) const;
+    bool is_hiding_instances() const;
 
     void render_current_gizmo() const;
     void render_current_gizmo_for_picking_pass() const;
+    void render_painter_gizmo() const;
 
     void render_overlay() const;
+
+    void render_arrow(const GLCanvas3D& parent, EType highlighted_type) const;
 
     std::string get_tooltip() const;
 
@@ -213,8 +237,16 @@ public:
 
     void update_after_undo_redo(const UndoRedo::Snapshot& snapshot);
 
+    int get_selectable_icons_cnt() const { return get_selectable_idxs().size(); }
+    int get_shortcut_key(GLGizmosManager::EType) const;
+
+    // To end highlight set gizmo = undefined
+    void set_highlight(EType gizmo, bool highlight_shown) { m_highlight = std::pair<EType, bool>(gizmo, highlight_shown); }
+    bool get_highlight_state() const { return m_highlight.second; }
+
 private:
     void render_background(float left, float top, float right, float bottom, float border) const;
+    
     void do_render_overlay() const;
 
     float get_scaled_total_height() const;
@@ -228,63 +260,6 @@ private:
 };
 
 
-
-class MeshRaycaster;
-class MeshClipper;
-
-// This class is only for sharing SLA related data between SLA gizmos
-// and its synchronization with backend data. It should not be misused
-// for anything else.
-class CommonGizmosData {
-public:
-    CommonGizmosData();
-    const TriangleMesh* mesh() const {
-        return (! m_mesh ? nullptr : m_mesh); //(m_cavity_mesh ? m_cavity_mesh.get() : m_mesh));
-    }
-
-    bool update_from_backend(GLCanvas3D& canvas, ModelObject* model_object);
-    bool recent_update = false;
-    static constexpr float HoleStickOutLength = 1.f;
-
-    ModelObject* m_model_object = nullptr;
-    const TriangleMesh* m_mesh;
-    std::unique_ptr<MeshRaycaster> m_mesh_raycaster;
-    std::unique_ptr<MeshClipper> m_object_clipper;
-    std::unique_ptr<MeshClipper> m_supports_clipper;
-
-    //std::unique_ptr<TriangleMesh> m_cavity_mesh;
-    //std::unique_ptr<GLVolume> m_volume_with_cavity;
-
-    int m_active_instance = -1;
-    float m_active_instance_bb_radius = 0;
-    ObjectID m_model_object_id = 0;
-    int m_print_object_idx = -1;
-    int m_print_objects_count = -1;
-    int m_old_timestamp = -1;
-
-    float m_clipping_plane_distance = 0.f;
-    std::unique_ptr<ClippingPlane> m_clipping_plane;
-    bool m_clipping_plane_was_moved = false;
-
-    void stash_clipping_plane() {
-        m_clipping_plane_distance_stash = m_clipping_plane_distance;
-    }
-
-    void unstash_clipping_plane() {
-        m_clipping_plane_distance = m_clipping_plane_distance_stash;
-    }
-
-    bool has_drilled_mesh() const { return m_has_drilled_mesh; }
-
-    void build_AABB_if_needed();
-
-private:
-    const TriangleMesh* m_old_mesh;
-    TriangleMesh m_backend_mesh_transformed;
-    float m_clipping_plane_distance_stash = 0.f;
-    bool m_has_drilled_mesh = false;
-    bool m_schedule_aabb_calculation = false;
-};
 
 } // namespace GUI
 } // namespace Slic3r

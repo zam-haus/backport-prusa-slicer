@@ -10,6 +10,8 @@
 
 #include "semver/semver.h"
 
+#include "Exception.hpp"
+
 namespace Slic3r {
 
 
@@ -23,8 +25,17 @@ public:
 	Semver() : ver(semver_zero()) {}
 
 	Semver(int major, int minor, int patch,
-		boost::optional<const std::string&> metadata = boost::none,
-		boost::optional<const std::string&> prerelease = boost::none)
+		boost::optional<const std::string&> metadata, boost::optional<const std::string&> prerelease)
+		: ver(semver_zero())
+	{
+		ver.major = major;
+		ver.minor = minor;
+		ver.patch = patch;
+		set_metadata(metadata);
+		set_prerelease(prerelease);
+	}
+
+	Semver(int major, int minor, int patch, const char *metadata = nullptr, const char *prerelease = nullptr)
 		: ver(semver_zero())
 	{
 		ver.major = major;
@@ -38,7 +49,7 @@ public:
 	{
 		auto parsed = parse(str);
 		if (! parsed) {
-			throw std::runtime_error(std::string("Could not parse version string: ") + str);
+			throw Slic3r::RuntimeError(std::string("Could not parse version string: ") + str);
 		}
 		ver = parsed->ver;
 		parsed->ver = semver_zero();
@@ -100,7 +111,9 @@ public:
 	void set_min(int min) { ver.minor = min; }
 	void set_patch(int patch) { ver.patch = patch; }
 	void set_metadata(boost::optional<const std::string&> meta) { ver.metadata = meta ? strdup(*meta) : nullptr; }
+	void set_metadata(const char *meta) { ver.metadata = meta ? strdup(meta) : nullptr; }
 	void set_prerelease(boost::optional<const std::string&> pre) { ver.prerelease = pre ? strdup(*pre) : nullptr; }
+	void set_prerelease(const char *pre) { ver.prerelease = pre ? strdup(pre) : nullptr; }
 
 	// Comparison
 	bool operator<(const Semver &b)  const { return ::semver_compare(ver, b.ver) == -1; }

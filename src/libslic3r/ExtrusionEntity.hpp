@@ -6,6 +6,8 @@
 #include "Polyline.hpp"
 
 #include <assert.h>
+#include <string_view>
+#include <numeric>
 
 namespace Slic3r {
 
@@ -22,6 +24,7 @@ enum ExtrusionRole : uint8_t {
     erInternalInfill,
     erSolidInfill,
     erTopSolidInfill,
+    erIroning,
     erBridgeInfill,
     erGapFill,
     erSkirt,
@@ -54,14 +57,16 @@ inline bool is_infill(ExtrusionRole role)
     return role == erBridgeInfill
         || role == erInternalInfill
         || role == erSolidInfill
-        || role == erTopSolidInfill;
+        || role == erTopSolidInfill
+        || role == erIroning;
 }
 
 inline bool is_solid_infill(ExtrusionRole role)
 {
     return role == erBridgeInfill
         || role == erSolidInfill
-        || role == erTopSolidInfill;
+        || role == erTopSolidInfill
+        || role == erIroning;
 }
 
 inline bool is_bridge(ExtrusionRole role) {
@@ -98,11 +103,13 @@ public:
     virtual double min_mm3_per_mm() const = 0;
     virtual Polyline as_polyline() const = 0;
     virtual void   collect_polylines(Polylines &dst) const = 0;
+    virtual void   collect_points(Points &dst) const = 0;
     virtual Polylines as_polylines() const { Polylines dst; this->collect_polylines(dst); return dst; }
     virtual double length() const = 0;
     virtual double total_volume() const = 0;
 
     static std::string role_to_string(ExtrusionRole role);
+    static ExtrusionRole string_to_role(const std::string_view role);
 };
 
 typedef std::vector<ExtrusionEntity*> ExtrusionEntitiesPtr;
@@ -118,8 +125,8 @@ public:
     // Height of the extrusion, used for visualization purposes.
     float height;
 
-    ExtrusionPath(ExtrusionRole role) : mm3_per_mm(-1), width(-1), height(-1), m_role(role) {};
-    ExtrusionPath(ExtrusionRole role, double mm3_per_mm, float width, float height) : mm3_per_mm(mm3_per_mm), width(width), height(height), m_role(role) {};
+    ExtrusionPath(ExtrusionRole role) : mm3_per_mm(-1), width(-1), height(-1), m_role(role) {}
+    ExtrusionPath(ExtrusionRole role, double mm3_per_mm, float width, float height) : mm3_per_mm(mm3_per_mm), width(width), height(height), m_role(role) {}
     ExtrusionPath(const ExtrusionPath& rhs) : polyline(rhs.polyline), mm3_per_mm(rhs.mm3_per_mm), width(rhs.width), height(rhs.height), m_role(rhs.m_role) {}
     ExtrusionPath(ExtrusionPath&& rhs) : polyline(std::move(rhs.polyline)), mm3_per_mm(rhs.mm3_per_mm), width(rhs.width), height(rhs.height), m_role(rhs.m_role) {}
     ExtrusionPath(const Polyline &polyline, const ExtrusionPath &rhs) : polyline(polyline), mm3_per_mm(rhs.mm3_per_mm), width(rhs.width), height(rhs.height), m_role(rhs.m_role) {}
@@ -162,6 +169,7 @@ public:
     double min_mm3_per_mm() const override { return this->mm3_per_mm; }
     Polyline as_polyline() const override { return this->polyline; }
     void   collect_polylines(Polylines &dst) const override { if (! this->polyline.empty()) dst.emplace_back(this->polyline); }
+    void   collect_points(Points &dst) const override { append(dst, this->polyline.points); }
     double total_volume() const override { return mm3_per_mm * unscale<double>(length()); }
 
 private:
@@ -195,6 +203,8 @@ public:
     void reverse() override;
     const Point& first_point() const override { return this->paths.front().polyline.points.front(); }
     const Point& last_point() const override { return this->paths.back().polyline.points.back(); }
+    size_t size() const { return this->paths.size(); }
+    bool empty() const { return this->paths.empty(); }
     double length() const override;
     ExtrusionRole role() const override { return this->paths.empty() ? erNone : this->paths.front().role(); }
     // Produce a list of 2D polygons covered by the extruded paths, offsetted by the extrusion width.
@@ -212,6 +222,12 @@ public:
     double min_mm3_per_mm() const override;
     Polyline as_polyline() const override;
     void   collect_polylines(Polylines &dst) const override { Polyline pl = this->as_polyline(); if (! pl.empty()) dst.emplace_back(std::move(pl)); }
+    void   collect_points(Points &dst) const override { 
+        size_t n = std::accumulate(paths.begin(), paths.end(), 0, [](const size_t n, const ExtrusionPath &p){ return n + p.polyline.size(); });
+        dst.reserve(dst.size() + n);
+        for (const ExtrusionPath &p : this->paths)
+            append(dst, p.polyline.points);
+    }
     double total_volume() const override { double volume =0.; for (const auto& path : paths) volume += path.total_volume(); return volume; }
 };
 
@@ -242,6 +258,7 @@ public:
     double length() const override;
     bool split_at_vertex(const Point &point);
     void split_at(const Point &point, bool prefer_non_overhang);
+    std::pair<size_t, Point> get_closest_path_and_point(const Point& point, bool prefer_non_overhang) const;
     void clip_end(double distance, ExtrusionPaths* paths) const;
     // Test, whether the point is extruded by a bridging flow.
     // This used to be used to avoid placing seams on overhangs, but now the EdgeGrid is used instead.
@@ -263,6 +280,12 @@ public:
     double min_mm3_per_mm() const override;
     Polyline as_polyline() const override { return this->polygon().split_at_first_point(); }
     void   collect_polylines(Polylines &dst) const override { Polyline pl = this->as_polyline(); if (! pl.empty()) dst.emplace_back(std::move(pl)); }
+    void   collect_points(Points &dst) const override { 
+        size_t n = std::accumulate(paths.begin(), paths.end(), 0, [](const size_t n, const ExtrusionPath &p){ return n + p.polyline.size(); });
+        dst.reserve(dst.size() + n);
+        for (const ExtrusionPath &p : this->paths)
+            append(dst, p.polyline.points);
+    }
     double total_volume() const override { double volume =0.; for (const auto& path : paths) volume += path.total_volume(); return volume; }
 
     //static inline std::string role_to_string(ExtrusionLoopRole role);
@@ -336,6 +359,25 @@ inline void extrusion_entities_append_loops(ExtrusionEntitiesPtr &dst, Polygons 
         }
     }
     loops.clear();
+}
+
+inline void extrusion_entities_append_loops_and_paths(ExtrusionEntitiesPtr &dst, Polylines &&polylines, ExtrusionRole role, double mm3_per_mm, float width, float height)
+{
+    dst.reserve(dst.size() + polylines.size());
+    for (Polyline &polyline : polylines) {
+        if (polyline.is_valid()) {
+            if (polyline.is_closed()) {
+                ExtrusionPath extrusion_path(role, mm3_per_mm, width, height);
+                extrusion_path.polyline = std::move(polyline);
+                dst.emplace_back(new ExtrusionLoop(std::move(extrusion_path)));
+            } else {
+                ExtrusionPath *extrusion_path = new ExtrusionPath(role, mm3_per_mm, width, height);
+                extrusion_path->polyline      = std::move(polyline);
+                dst.emplace_back(extrusion_path);
+            }
+        }
+    }
+    polylines.clear();
 }
 
 }

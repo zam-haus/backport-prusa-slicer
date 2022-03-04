@@ -1,5 +1,5 @@
+cmake_minimum_required(VERSION 3.13)
 project(libslic3r)
-cmake_minimum_required(VERSION 2.6)
 
 include(PrecompiledHeader)
 
@@ -21,6 +21,12 @@ add_library(libslic3r STATIC
     BoundingBox.hpp
     BridgeDetector.cpp
     BridgeDetector.hpp
+    Brim.cpp
+    Brim.hpp
+    BuildVolume.cpp
+    BuildVolume.hpp
+    clipper.cpp
+    clipper.hpp
     ClipperUtils.cpp
     ClipperUtils.hpp
     Config.cpp
@@ -29,6 +35,7 @@ add_library(libslic3r STATIC
     EdgeGrid.hpp
     ElephantFootCompensation.cpp
     ElephantFootCompensation.hpp
+    enum_bitmask.hpp
     ExPolygon.cpp
     ExPolygon.hpp
     ExPolygonCollection.cpp
@@ -46,6 +53,8 @@ add_library(libslic3r STATIC
     Fill/Fill.hpp
     Fill/Fill3DHoneycomb.cpp
     Fill/Fill3DHoneycomb.hpp
+    Fill/FillAdaptive.cpp
+    Fill/FillAdaptive.hpp
     Fill/FillBase.cpp
     Fill/FillBase.hpp
     Fill/FillConcentric.cpp
@@ -56,14 +65,23 @@ add_library(libslic3r STATIC
     Fill/FillGyroid.hpp
     Fill/FillPlanePath.cpp
     Fill/FillPlanePath.hpp
+    Fill/FillLine.cpp
+    Fill/FillLine.hpp
+    Fill/FillLightning.cpp
+    Fill/FillLightning.hpp
+    Fill/Lightning/DistanceField.cpp
+    Fill/Lightning/DistanceField.hpp
+    Fill/Lightning/Generator.cpp
+    Fill/Lightning/Generator.hpp
+    Fill/Lightning/Layer.cpp
+    Fill/Lightning/Layer.hpp
+    Fill/Lightning/TreeNode.cpp
+    Fill/Lightning/TreeNode.hpp
     Fill/FillRectilinear.cpp
     Fill/FillRectilinear.hpp
-    Fill/FillRectilinear2.cpp
-    Fill/FillRectilinear2.hpp
-    Fill/FillRectilinear3.cpp
-    Fill/FillRectilinear3.hpp
     Flow.cpp
     Flow.hpp
+    format.hpp
     Format/3mf.cpp
     Format/3mf.hpp
     Format/AMF.cpp
@@ -72,12 +90,10 @@ add_library(libslic3r STATIC
     Format/OBJ.hpp
     Format/objparser.cpp
     Format/objparser.hpp
-    Format/PRUS.cpp
-    Format/PRUS.hpp
     Format/STL.cpp
     Format/STL.hpp
-    GCode/Analyzer.cpp
-    GCode/Analyzer.hpp
+    Format/SL1.hpp
+    Format/SL1.cpp
     GCode/ThumbnailData.cpp
     GCode/ThumbnailData.hpp
     GCode/CoolingBuffer.cpp
@@ -86,28 +102,40 @@ add_library(libslic3r STATIC
     GCode/PostProcessor.hpp
 #    GCode/PressureEqualizer.cpp
 #    GCode/PressureEqualizer.hpp
-    GCode/PreviewData.cpp
-    GCode/PreviewData.hpp
     GCode/PrintExtents.cpp
     GCode/PrintExtents.hpp
     GCode/SpiralVase.cpp
     GCode/SpiralVase.hpp
+    GCode/SeamPlacer.cpp
+    GCode/SeamPlacer.hpp
     GCode/ToolOrdering.cpp
     GCode/ToolOrdering.hpp
     GCode/WipeTower.cpp
     GCode/WipeTower.hpp
+    GCode/GCodeProcessor.cpp
+    GCode/GCodeProcessor.hpp
+    GCode/AvoidCrossingPerimeters.cpp
+    GCode/AvoidCrossingPerimeters.hpp
     GCode.cpp
     GCode.hpp
     GCodeReader.cpp
     GCodeReader.hpp
     # GCodeSender.cpp
     # GCodeSender.hpp
-    GCodeTimeEstimator.cpp
-    GCodeTimeEstimator.hpp
     GCodeWriter.cpp
     GCodeWriter.hpp
     Geometry.cpp
     Geometry.hpp
+    Geometry/Circle.cpp
+    Geometry/Circle.hpp
+    Geometry/ConvexHull.cpp
+    Geometry/ConvexHull.hpp
+    Geometry/MedialAxis.cpp
+    Geometry/MedialAxis.hpp
+    Geometry/Voronoi.hpp
+    Geometry/VoronoiOffset.cpp
+    Geometry/VoronoiOffset.hpp
+    Geometry/VoronoiVisualUtils.hpp
     Int128.hpp
     KDTreeIndirect.hpp
     Layer.cpp
@@ -117,14 +145,20 @@ add_library(libslic3r STATIC
     "${CMAKE_CURRENT_BINARY_DIR}/libslic3r_version.h"
     Line.cpp
     Line.hpp
+    BlacklistedLibraryCheck.cpp
+    BlacklistedLibraryCheck.hpp
+    LocalesUtils.cpp
+    LocalesUtils.hpp
     Model.cpp
     Model.hpp
+    ModelArrange.hpp
+    ModelArrange.cpp
+    MultiMaterialSegmentation.cpp
+    MultiMaterialSegmentation.hpp
     CustomGCode.cpp
     CustomGCode.hpp
     Arrange.hpp
     Arrange.cpp
-    MotionPlanner.cpp
-    MotionPlanner.hpp
     MultiPoint.cpp
     MultiPoint.hpp
     MutablePriorityQueue.hpp
@@ -134,22 +168,38 @@ add_library(libslic3r STATIC
     PerimeterGenerator.hpp
     PlaceholderParser.cpp
     PlaceholderParser.hpp
+    Platform.cpp
+    Platform.hpp
     Point.cpp
     Point.hpp
     Polygon.cpp
     Polygon.hpp
+    MutablePolygon.cpp
+    MutablePolygon.hpp
     PolygonTrimmer.cpp
     PolygonTrimmer.hpp
     Polyline.cpp
     Polyline.hpp
+    Preset.cpp
+    Preset.hpp
+    PresetBundle.cpp
+    PresetBundle.hpp
+    AppConfig.cpp
+    AppConfig.hpp
     Print.cpp
     Print.hpp
+    PrintApply.cpp
     PrintBase.cpp
     PrintBase.hpp
     PrintConfig.cpp
     PrintConfig.hpp
     PrintObject.cpp
+    PrintObjectSlice.cpp
     PrintRegion.cpp
+    PNGReadWrite.hpp
+    PNGReadWrite.cpp
+    QuadricEdgeCollapse.cpp
+    QuadricEdgeCollapse.hpp
     Semver.cpp
     ShortestPath.cpp
     ShortestPath.hpp
@@ -159,6 +209,8 @@ add_library(libslic3r STATIC
     SLAPrint.hpp
     Slicing.cpp
     Slicing.hpp
+    SlicesToTriangleMesh.hpp
+    SlicesToTriangleMesh.cpp
     SlicingAdaptive.cpp
     SlicingAdaptive.hpp
     SupportMaterial.cpp
@@ -174,10 +226,19 @@ add_library(libslic3r STATIC
     Tesselate.hpp
     TriangleMesh.cpp
     TriangleMesh.hpp
+    TriangleMeshSlicer.cpp
+    TriangleMeshSlicer.hpp
+    MeshSplitImpl.hpp
+    TriangulateWall.hpp
+    TriangulateWall.cpp
     utils.cpp
     Utils.hpp
     Time.cpp
     Time.hpp
+    Thread.cpp
+    Thread.hpp
+    TriangleSelector.cpp
+    TriangleSelector.hpp
     MTUtils.hpp
     Zipper.hpp
     Zipper.cpp
@@ -185,15 +246,19 @@ add_library(libslic3r STATIC
     MinAreaBoundingBox.cpp
     miniz_extension.hpp
     miniz_extension.cpp
-    SimplifyMesh.hpp
-    SimplifyMeshImpl.hpp
-    SimplifyMesh.cpp
+    MarchingSquares.hpp
+    Execution/Execution.hpp
+    Execution/ExecutionSeq.hpp
+    Execution/ExecutionTBB.hpp
+    Optimize/Optimizer.hpp
+    Optimize/NLoptOptimizer.hpp
+    Optimize/BruteforceOptimizer.hpp
     ${OpenVDBUtils_SOURCES}
-    SLA/Common.hpp
-    SLA/Common.cpp
     SLA/Pad.hpp
     SLA/Pad.cpp
     SLA/SupportTreeBuilder.hpp
+    SLA/SupportTreeMesher.hpp
+    SLA/SupportTreeMesher.cpp
     SLA/SupportTreeBuildsteps.hpp
     SLA/SupportTreeBuildsteps.cpp
     SLA/SupportTreeBuilder.cpp
@@ -205,10 +270,12 @@ add_library(libslic3r STATIC
     SLA/Rotfinder.cpp
     SLA/BoostAdapter.hpp
     SLA/SpatIndex.hpp
-    SLA/Raster.hpp
-    SLA/Raster.cpp
-    SLA/RasterWriter.hpp
-    SLA/RasterWriter.cpp
+    SLA/SpatIndex.cpp
+    SLA/RasterBase.hpp
+    SLA/RasterBase.cpp
+    SLA/AGGRaster.hpp
+    SLA/RasterToPolygons.hpp
+    SLA/RasterToPolygons.cpp
     SLA/ConcaveHull.hpp
     SLA/ConcaveHull.cpp
     SLA/Hollowing.hpp
@@ -217,10 +284,11 @@ add_library(libslic3r STATIC
     SLA/SupportPoint.hpp
     SLA/SupportPointGenerator.hpp
     SLA/SupportPointGenerator.cpp
-    SLA/Contour3D.hpp
-    SLA/Contour3D.cpp
-    SLA/EigenMesh3D.hpp
+    SLA/IndexedMesh.hpp
+    SLA/IndexedMesh.cpp
     SLA/Clustering.hpp
+    SLA/Clustering.cpp
+    SLA/ReprojectPointsOnMesh.hpp
 )
 
 if (SLIC3R_STATIC)
@@ -233,7 +301,8 @@ cmake_policy(SET CMP0011 NEW)
 find_package(CGAL REQUIRED)
 cmake_policy(POP)
 
-add_library(libslic3r_cgal STATIC MeshBoolean.cpp MeshBoolean.hpp)
+add_library(libslic3r_cgal STATIC MeshBoolean.cpp MeshBoolean.hpp  TryCatchSignal.hpp
+    TryCatchSignal.cpp)
 target_include_directories(libslic3r_cgal PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # Reset compile options of libslic3r_cgal. Despite it being linked privately, CGAL options
@@ -261,7 +330,8 @@ endif ()
 encoding_check(libslic3r)
 
 target_compile_definitions(libslic3r PUBLIC -DUSE_TBB -DTBB_USE_CAPTURED_EXCEPTION=0)
-target_include_directories(libslic3r PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${LIBNEST2D_INCLUDES} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(libslic3r PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(libslic3r PUBLIC ${EXPAT_INCLUDE_DIRS})
 target_link_libraries(libslic3r
     libnest2d
     admesh
@@ -273,13 +343,13 @@ target_link_libraries(libslic3r
     nowide
     ${EXPAT_LIBRARIES}
     glu-libtess
-    polypartition
-    poly2tri
     qhull
     semver
     TBB::tbb
     libslic3r_cgal
     ${CMAKE_DL_LIBS}
+    PNG::PNG
+    ZLIB::ZLIB
     )
 
 if (TARGET OpenVDB::openvdb)
@@ -291,7 +361,7 @@ if(WIN32)
 endif()
 
 if(SLIC3R_PROFILE)
-    target_link_libraries(slic3r Shiny)
+    target_link_libraries(libslic3r Shiny)
 endif()
 
 if (SLIC3R_PCH AND NOT SLIC3R_SYNTAXONLY)

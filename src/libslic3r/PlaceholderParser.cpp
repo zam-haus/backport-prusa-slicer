@@ -1,4 +1,5 @@
 #include "PlaceholderParser.hpp"
+#include "Exception.hpp"
 #include "Flow.hpp"
 #include <cstring>
 #include <ctime>
@@ -24,6 +25,7 @@
 #endif
 
 #include <boost/algorithm/string.hpp>
+#include <boost/nowide/convert.hpp>
 
 // Spirit v2.5 allows you to suppress automatic generation
 // of predefined terminals to speed up complation. With
@@ -236,6 +238,7 @@ namespace client
         int                 i() const { return data.i; }
         void                set_i(int v) { this->reset(); this->data.i = v; this->type = TYPE_INT; }
         int                 as_i() const { return (this->type == TYPE_INT) ? this->i() : int(this->d()); }
+        int                 as_i_rounded() const { return (this->type == TYPE_INT) ? this->i() : int(std::round(this->d())); }
         double&             d()       { return data.d; }
         double              d() const { return data.d; }
         void                set_d(double v) { this->reset(); this->data.d = v; this->type = TYPE_DOUBLE; }
@@ -317,7 +320,7 @@ namespace client
         expr unary_integer(const Iterator start_pos) const
         { 
             switch (this->type) {
-            case TYPE_INT :
+            case TYPE_INT:
                 return expr<Iterator>(this->i(), start_pos, this->it_range.end());
             case TYPE_DOUBLE:
                 return expr<Iterator>(static_cast<int>(this->d()), start_pos, this->it_range.end()); 
@@ -329,10 +332,25 @@ namespace client
             return expr();
         }
 
+        expr round(const Iterator start_pos) const
+        { 
+            switch (this->type) {
+            case TYPE_INT:
+                return expr<Iterator>(this->i(), start_pos, this->it_range.end());
+            case TYPE_DOUBLE:
+                return expr<Iterator>(static_cast<int>(std::round(this->d())), start_pos, this->it_range.end());
+            default:
+                this->throw_exception("Cannot round a non-numeric value.");
+            }
+            assert(false);
+            // Suppress compiler warnings.
+            return expr();
+        }
+
         expr unary_not(const Iterator start_pos) const
         { 
             switch (this->type) {
-            case TYPE_BOOL :
+            case TYPE_BOOL:
                 return expr<Iterator>(! this->b(), start_pos, this->it_range.end());
             default:
                 this->throw_exception("Cannot apply a not operator.");
@@ -494,6 +512,12 @@ namespace client
         static void leq      (expr &lhs, expr &rhs) { compare_op(lhs, rhs, '>', true ); }
         static void geq      (expr &lhs, expr &rhs) { compare_op(lhs, rhs, '<', true ); }
 
+        static void throw_if_not_numeric(const expr &param)
+        {
+            const char *err_msg = "Not a numeric type.";
+            param.throw_if_not_numeric(err_msg);            
+        }
+
         enum Function2ParamsType {
             FUNCTION_MIN,
             FUNCTION_MAX,
@@ -501,9 +525,8 @@ namespace client
         // Store the result into param1.
         static void function_2params(expr &param1, expr &param2, Function2ParamsType fun)
         { 
-            const char *err_msg = "Not a numeric type.";
-            param1.throw_if_not_numeric(err_msg);
-            param2.throw_if_not_numeric(err_msg);
+            throw_if_not_numeric(param1);
+            throw_if_not_numeric(param2);
             if (param1.type == TYPE_DOUBLE || param2.type == TYPE_DOUBLE) {
                 double d = 0.;
                 switch (fun) {
@@ -527,6 +550,44 @@ namespace client
         // Store the result into param1.
         static void min(expr &param1, expr &param2) { function_2params(param1, param2, FUNCTION_MIN); }
         static void max(expr &param1, expr &param2) { function_2params(param1, param2, FUNCTION_MAX); }
+
+        // Store the result into param1.
+        static void random(expr &param1, expr &param2, std::mt19937 &rng)
+        { 
+            throw_if_not_numeric(param1);
+            throw_if_not_numeric(param2);
+            if (param1.type == TYPE_DOUBLE || param2.type == TYPE_DOUBLE) {
+                param1.data.d = std::uniform_real_distribution<>(param1.as_d(), param2.as_d())(rng);
+                param1.type   = TYPE_DOUBLE;
+            } else {
+                param1.data.i = std::uniform_int_distribution<>(param1.as_i(), param2.as_i())(rng);
+                param1.type   = TYPE_INT;
+            }
+        }
+
+        // Store the result into param1.
+        // param3 is optional
+        template<bool leading_zeros>
+        static void digits(expr &param1, expr &param2, expr &param3)
+        { 
+            throw_if_not_numeric(param1);
+            if (param2.type != TYPE_INT)
+                param2.throw_exception("digits: second parameter must be integer");
+            bool has_decimals = param3.type != TYPE_EMPTY;
+            if (has_decimals && param3.type != TYPE_INT)
+                param3.throw_exception("digits: third parameter must be integer");
+
+            char buf[256];
+            int  ndigits = std::clamp(param2.as_i(), 0, 64);
+            if (has_decimals) {
+                // Format as double.
+                int decimals = std::clamp(param3.as_i(), 0, 64);
+                sprintf(buf, leading_zeros ? "%0*.*lf" : "%*.*lf", ndigits, decimals, param1.as_d());
+            } else
+                // Format as int.
+                sprintf(buf, leading_zeros ? "%0*d" : "%*d", ndigits, param1.as_i_rounded());
+            param1.set_s(buf);
+        }
 
         static void regex_op(expr &lhs, boost::iterator_range<Iterator> &rhs, char op)
         {
@@ -622,6 +683,7 @@ namespace client
         const DynamicConfig     *config                 = nullptr;
         const DynamicConfig     *config_override        = nullptr;
         size_t                   current_extruder_id    = 0;
+        PlaceholderParser::ContextData *context_data    = nullptr;
         // If false, the macro_processor will evaluate a full macro.
         // If true, the macro processor will evaluate just a boolean condition using the full expressive power of the macro processor.
         bool                     just_boolean_expression = false;
@@ -823,6 +885,15 @@ namespace client
         }
 
         template <typename Iterator>
+        static void random(const MyContext *ctx, expr<Iterator> &param1, expr<Iterator> &param2)
+        {
+            if (ctx->context_data == nullptr)
+                ctx->throw_exception("Random number generator not available in this context.",
+                    boost::iterator_range<Iterator>(param1.it_range.begin(), param2.it_range.end()));
+            expr<Iterator>::random(param1, param2, ctx->context_data->rng);
+        }
+
+        template <typename Iterator>
         static void throw_exception(const std::string &msg, const boost::iterator_range<Iterator> &it_range)
         {
             // An asterix is added to the start of the string to differentiate the boost::spirit::info::tag content
@@ -869,7 +940,9 @@ namespace client
                 }
             }
             msg += '\n';
-            msg += error_line;
+            // This hack removes all non-UTF8 characters from the source line, so that the upstream wxWidgets conversions
+            // from UTF8 to UTF16 don't bail out.
+            msg += boost::nowide::narrow(boost::nowide::widen(error_line));
             msg += '\n';
             for (size_t i = 0; i < error_pos; ++ i)
                 msg += ' ';
@@ -897,6 +970,7 @@ namespace client
         { "additive_expression",        "Expecting an expression." },
         { "multiplicative_expression",  "Expecting an expression." },
         { "unary_expression",           "Expecting an expression." },
+        { "optional_parameter",         "Expecting a closing brace or an optional parameter." },
         { "scalar_variable_reference",  "Expecting a scalar variable reference."},
         { "variable_reference",         "Expecting a variable reference."},
         { "regular_expression",         "Expecting a regular expression."}
@@ -1161,6 +1235,10 @@ namespace client
                         { out = value.unary_not(out.it_range.begin()); }
                 static void to_int(expr<Iterator> &value, expr<Iterator> &out)
                         { out = value.unary_integer(out.it_range.begin()); }
+                static void round(expr<Iterator> &value, expr<Iterator> &out)
+                        { out = value.round(out.it_range.begin()); }
+                // For indicating "no optional parameter".
+                static void noexpr(expr<Iterator> &out) { out.reset(); }
             };
             unary_expression = iter_pos[px::bind(&FactorActions::set_start_pos, _1, _val)] >> (
                     scalar_variable_reference(_r1)                  [ _val = _1 ]
@@ -1172,7 +1250,14 @@ namespace client
                                                                     [ px::bind(&expr<Iterator>::min, _val, _2) ]
                 |   (kw["max"] > '(' > conditional_expression(_r1) [_val = _1] > ',' > conditional_expression(_r1) > ')') 
                                                                     [ px::bind(&expr<Iterator>::max, _val, _2) ]
-                |   (kw["int"] > '(' > unary_expression(_r1) > ')') [ px::bind(&FactorActions::to_int,  _1,     _val) ]
+                |   (kw["random"] > '(' > conditional_expression(_r1) [_val = _1] > ',' > conditional_expression(_r1) > ')') 
+                                                                    [ px::bind(&MyContext::random<Iterator>, _r1, _val, _2) ]
+                |   (kw["digits"] > '(' > conditional_expression(_r1) [_val = _1] > ',' > conditional_expression(_r1) > optional_parameter(_r1))
+                                                                    [ px::bind(&expr<Iterator>::template digits<false>, _val, _2, _3) ]
+                |   (kw["zdigits"] > '(' > conditional_expression(_r1) [_val = _1] > ',' > conditional_expression(_r1) > optional_parameter(_r1))
+                                                                    [ px::bind(&expr<Iterator>::template digits<true>, _val, _2, _3) ]
+                |   (kw["int"]   > '(' > conditional_expression(_r1) > ')') [ px::bind(&FactorActions::to_int,  _1, _val) ]
+                |   (kw["round"] > '(' > conditional_expression(_r1) > ')') [ px::bind(&FactorActions::round,   _1, _val) ]
                 |   (strict_double > iter_pos)                      [ px::bind(&FactorActions::double_, _1, _2, _val) ]
                 |   (int_      > iter_pos)                          [ px::bind(&FactorActions::int_,    _1, _2, _val) ]
                 |   (kw[bool_] > iter_pos)                          [ px::bind(&FactorActions::bool_,   _1, _2, _val) ]
@@ -1180,6 +1265,12 @@ namespace client
                                                                     [ px::bind(&FactorActions::string_, _1,     _val) ]
                 );
             unary_expression.name("unary_expression");
+
+            optional_parameter = iter_pos[px::bind(&FactorActions::set_start_pos, _1, _val)] >> (
+                    lit(')')                                       [ px::bind(&FactorActions::noexpr, _val) ]
+                |   (lit(',') > conditional_expression(_r1) > ')') [ _val = _1 ]
+                );
+            optional_parameter.name("optional_parameter");
 
             scalar_variable_reference = 
                 variable_reference(_r1)[_a=_1] >>
@@ -1199,6 +1290,8 @@ namespace client
 
             keywords.add
                 ("and")
+                ("digits")
+                ("zdigits")
                 ("if")
                 ("int")
                 //("inf")
@@ -1208,6 +1301,8 @@ namespace client
                 ("false")
                 ("min")
                 ("max")
+                ("random")
+                ("round")
                 ("not")
                 ("or")
                 ("true");
@@ -1230,6 +1325,7 @@ namespace client
                 debug(additive_expression);
                 debug(multiplicative_expression);
                 debug(unary_expression);
+                debug(optional_parameter);
                 debug(scalar_variable_reference);
                 debug(variable_reference);
                 debug(regular_expression);
@@ -1267,6 +1363,8 @@ namespace client
         RuleExpression multiplicative_expression;
         // Number literals, functions, braced expressions, variable references, variable indexing references.
         RuleExpression unary_expression;
+        // Accepting an optional parameter.
+        RuleExpression optional_parameter;
         // Rule to capture a regular expression enclosed in //.
         qi::rule<Iterator, boost::iterator_range<Iterator>(), spirit_encoding::space_type> regular_expression;
         // Evaluate boolean expression into bool.
@@ -1303,23 +1401,24 @@ static std::string process_macro(const std::string &templ, client::MyContext &co
 	if (!context.error_message.empty()) {
         if (context.error_message.back() != '\n' && context.error_message.back() != '\r')
             context.error_message += '\n';
-        throw std::runtime_error(context.error_message);
+        throw Slic3r::PlaceholderParserError(context.error_message);
     }
     return output;
 }
 
-std::string PlaceholderParser::process(const std::string &templ, unsigned int current_extruder_id, const DynamicConfig *config_override) const
+std::string PlaceholderParser::process(const std::string &templ, unsigned int current_extruder_id, const DynamicConfig *config_override, ContextData *context_data) const
 {
     client::MyContext context;
     context.external_config 	= this->external_config();
     context.config              = &this->config();
     context.config_override     = config_override;
     context.current_extruder_id = current_extruder_id;
+    context.context_data        = context_data;
     return process_macro(templ, context);
 }
 
 // Evaluate a boolean expression using the full expressive power of the PlaceholderParser boolean expression syntax.
-// Throws std::runtime_error on syntax or runtime error.
+// Throws Slic3r::RuntimeError on syntax or runtime error.
 bool PlaceholderParser::evaluate_boolean_expression(const std::string &templ, const DynamicConfig &config, const DynamicConfig *config_override)
 {
     client::MyContext context;

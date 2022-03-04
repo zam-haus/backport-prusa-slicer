@@ -5,9 +5,8 @@
 #include <memory>
 #include <Eigen/Geometry>
 
-#include <libslic3r/SLA/Common.hpp>
 #include <libslic3r/SLA/Pad.hpp>
-#include <libslic3r/SLA/EigenMesh3D.hpp>
+#include <libslic3r/SLA/IndexedMesh.hpp>
 #include <libslic3r/SLA/SupportPoint.hpp>
 #include <libslic3r/SLA/JobController.hpp>
 
@@ -32,7 +31,7 @@ enum class PillarConnectionMode
     dynamic
 };
 
-struct SupportConfig
+struct SupportTreeConfig
 {
     bool   enabled = true;
     
@@ -44,6 +43,8 @@ struct SupportConfig
 
     // Radius of the back side of the 3d arrow.
     double head_back_radius_mm = 0.5;
+
+    double head_fallback_radius_mm = 0.25;
 
     // Width in mm from the back sphere center to the front sphere center.
     double head_width_mm = 1.0;
@@ -95,36 +96,43 @@ struct SupportConfig
     // /////////////////////////////////////////////////////////////////////////
 
     // The max Z angle for a normal at which it will get completely ignored.
-    static const double normal_cutoff_angle;
+    static const double constexpr normal_cutoff_angle = 150.0 * M_PI / 180.0;
 
     // The shortest distance of any support structure from the model surface
-    static const double safety_distance_mm;
+    static const double constexpr safety_distance_mm = 0.5;
 
-    static const double max_solo_pillar_height_mm;
-    static const double max_dual_pillar_height_mm;
-    static const double   optimizer_rel_score_diff;
-    static const unsigned optimizer_max_iterations;
-    static const unsigned pillar_cascade_neighbors;
+    static const double constexpr max_solo_pillar_height_mm = 15.0;
+    static const double constexpr max_dual_pillar_height_mm = 35.0;
+    static const double constexpr optimizer_rel_score_diff = 1e-6;
+    static const unsigned constexpr optimizer_max_iterations = 1000;
+    static const unsigned constexpr pillar_cascade_neighbors = 3;
     
 };
+
+// TODO: Part of future refactor
+//class SupportConfig {
+//    std::optional<SupportTreeConfig> tree_cfg {std::in_place_t{}}; // fill up
+//    std::optional<PadConfig>         pad_cfg;
+//};
 
 enum class MeshType { Support, Pad };
 
 struct SupportableMesh
 {
-    EigenMesh3D   emesh;
+    IndexedMesh  emesh;
     SupportPoints pts;
-    SupportConfig cfg;
+    SupportTreeConfig cfg;
+//    PadConfig     pad_cfg;
 
-    explicit SupportableMesh(const TriangleMesh & trmsh,
+    explicit SupportableMesh(const indexed_triangle_set & trmsh,
                              const SupportPoints &sp,
-                             const SupportConfig &c)
+                             const SupportTreeConfig &c)
         : emesh{trmsh}, pts{sp}, cfg{c}
     {}
     
-    explicit SupportableMesh(const EigenMesh3D   &em,
+    explicit SupportableMesh(const IndexedMesh   &em,
                              const SupportPoints &sp,
-                             const SupportConfig &c)
+                             const SupportTreeConfig &c)
         : emesh{em}, pts{sp}, cfg{c}
     {}
 };
@@ -141,22 +149,22 @@ public:
 
     virtual ~SupportTree() = default;
 
-    virtual const TriangleMesh &retrieve_mesh(MeshType meshtype) const = 0;
+    virtual const indexed_triangle_set &retrieve_mesh(MeshType meshtype) const = 0;
 
     /// Adding the "pad" under the supports.
     /// modelbase will be used according to the embed_object flag in PoolConfig.
     /// If set, the plate will be interpreted as the model's intrinsic pad. 
     /// Otherwise, the modelbase will be unified with the base plate calculated
     /// from the supports.
-    virtual const TriangleMesh &add_pad(const ExPolygons &modelbase,
-                                        const PadConfig & pcfg) = 0;
-    
+    virtual const indexed_triangle_set &add_pad(const ExPolygons &modelbase,
+                                                const PadConfig & pcfg) = 0;
+
     virtual void remove_pad() = 0;
     
     std::vector<ExPolygons> slice(const std::vector<float> &,
                                   float closing_radius) const;
     
-    void retrieve_full_mesh(TriangleMesh &outmesh) const;
+    void retrieve_full_mesh(indexed_triangle_set &outmesh) const;
     
     const JobController &ctl() const { return m_ctl; }
 };

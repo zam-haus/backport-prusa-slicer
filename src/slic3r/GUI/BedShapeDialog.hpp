@@ -3,9 +3,11 @@
 // The bed shape dialog.
 // The dialog opens from Print Settins tab->Bed Shape : Set...
 
-#include "OptionsGroup.hpp"
+#include "GUI_Utils.hpp"
 #include "2DBed.hpp"
 #include "I18N.hpp"
+
+#include <libslic3r/BuildVolume.hpp>
 
 #include <wx/dialog.h>
 #include <wx/choicebk.h>
@@ -13,7 +15,40 @@
 namespace Slic3r {
 namespace GUI {
 
+class ConfigOptionsGroup;
+
 using ConfigOptionsGroupShp = std::shared_ptr<ConfigOptionsGroup>;
+
+struct BedShape
+{
+    enum class PageType {
+        Rectangle,
+        Circle,
+        Custom
+    };
+
+    enum class Parameter {
+        RectSize,
+        RectOrigin,
+        Diameter
+    };
+
+    BedShape(const ConfigOptionPoints& points);
+
+    bool            is_custom() { return m_build_volume.type() == BuildVolume::Type::Convex || m_build_volume.type() == BuildVolume::Type::Custom; }
+
+    static void     append_option_line(ConfigOptionsGroupShp optgroup, Parameter param);
+    static wxString get_name(PageType type);
+
+    PageType        get_page_type();
+
+    wxString        get_full_name_with_params();
+    void            apply_optgroup_values(ConfigOptionsGroupShp optgroup);
+
+private:
+    BuildVolume m_build_volume;
+};
+
 class BedShapePanel : public wxPanel
 {
     static const std::string NONE;
@@ -37,6 +72,7 @@ public:
 
 private:
     ConfigOptionsGroupShp	init_shape_options_page(const wxString& title);
+    void	    activate_options_page(ConfigOptionsGroupShp options_group);
     wxPanel*    init_texture_panel();
     wxPanel*    init_model_panel();
     void		set_shape(const ConfigOptionPoints& points);

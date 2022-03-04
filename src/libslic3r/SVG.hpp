@@ -16,34 +16,34 @@ public:
     bool arrows;
     std::string fill, stroke;
     Point origin;
-    bool flipY;
+    float height;
+    bool  flipY;
 
     SVG(const char* afilename) :
         arrows(false), fill("grey"), stroke("black"), filename(afilename), flipY(false)
         { open(filename); }
-    SVG(const char* afilename, const BoundingBox &bbox, const coord_t bbox_offset = scale_(1.), bool aflipY = false) : 
-        arrows(false), fill("grey"), stroke("black"), filename(afilename), origin(bbox.min - Point(bbox_offset, bbox_offset)), flipY(aflipY)
-        { open(filename, bbox, bbox_offset, aflipY); }
+    SVG(const char* afilename, const BoundingBox &bbox, const coord_t bbox_offset = scale_(1.), bool flipY = true) : 
+        arrows(false), fill("grey"), stroke("black"), filename(afilename), origin(bbox.min - Point(bbox_offset, bbox_offset)), flipY(flipY)
+        { open(filename, bbox, bbox_offset, flipY); }
     SVG(const std::string &filename) :
         arrows(false), fill("grey"), stroke("black"), filename(filename), flipY(false)
         { open(filename); }
-    SVG(const std::string &filename, const BoundingBox &bbox, const coord_t bbox_offset = scale_(1.), bool aflipY = false) : 
-        arrows(false), fill("grey"), stroke("black"), filename(filename), origin(bbox.min - Point(bbox_offset, bbox_offset)), flipY(aflipY)
-        { open(filename, bbox, bbox_offset, aflipY); }
+    SVG(const std::string &filename, const BoundingBox &bbox, const coord_t bbox_offset = scale_(1.), bool flipY = true) : 
+        arrows(false), fill("grey"), stroke("black"), filename(filename), origin(bbox.min - Point(bbox_offset, bbox_offset)), flipY(flipY)
+        { open(filename, bbox, bbox_offset, flipY); }
     ~SVG() { if (f != NULL) Close(); }
 
     bool open(const char* filename);
-    bool open(const char* filename, const BoundingBox &bbox, const coord_t bbox_offset = scale_(1.), bool flipY = false);
+    bool open(const char* filename, const BoundingBox &bbox, const coord_t bbox_offset = scale_(1.), bool flipY = true);
     bool open(const std::string &filename) 
         { return open(filename.c_str()); }
-    bool open(const std::string &filename, const BoundingBox &bbox, const coord_t bbox_offset = scale_(1.), bool flipY = false)
+    bool open(const std::string &filename, const BoundingBox &bbox, const coord_t bbox_offset = scale_(1.), bool flipY = true)
         { return open(filename.c_str(), bbox, bbox_offset, flipY); }
 
     void draw(const Line &line, std::string stroke = "black", coordf_t stroke_width = 0);
     void draw(const ThickLine &line, const std::string &fill, const std::string &stroke, coordf_t stroke_width = 0);
     void draw(const Lines &lines, std::string stroke = "black", coordf_t stroke_width = 0);
-    void draw(const IntersectionLines &lines, std::string stroke = "black");
-
+    
     void draw(const ExPolygon &expolygon, std::string fill = "grey", const float fill_opacity=1.f);
     void draw_outline(const ExPolygon &polygon, std::string stroke_outer = "black", std::string stroke_holes = "blue", coordf_t stroke_width = 0);
     void draw(const ExPolygons &expolygons, std::string fill = "grey", const float fill_opacity=1.f);
@@ -101,7 +101,7 @@ public:
             ExPolygonAttributes(color, color, color) {}
 
         ExPolygonAttributes(
-            const std::string &color_fill, 
+            const std::string &color_fill,
             const std::string &color_contour,
             const std::string &color_holes,
             const coord_t      outline_width = scale_(0.05),
@@ -117,16 +117,59 @@ public:
             radius_points	(radius_points)
             {}
 
+        ExPolygonAttributes(
+            const std::string &legend,
+            const std::string &color_fill,
+            const std::string &color_contour,
+            const std::string &color_holes,
+            const coord_t      outline_width = scale_(0.05),
+            const float        fill_opacity  = 0.5f,
+            const std::string &color_points = "black",
+            const coord_t      radius_points = 0) :
+            legend          (legend),
+            color_fill      (color_fill),
+            color_contour   (color_contour),
+            color_holes     (color_holes),
+            outline_width   (outline_width),
+            fill_opacity    (fill_opacity),
+            color_points    (color_points),
+            radius_points   (radius_points)
+            {}
+
+        ExPolygonAttributes(
+            const std::string &legend,
+            const std::string &color_fill,
+            const float        fill_opacity) :
+            legend          (legend),
+            color_fill      (color_fill),
+            fill_opacity    (fill_opacity)
+            {}
+
+        std::string     legend;
         std::string     color_fill;
         std::string     color_contour;
         std::string     color_holes;
         std::string   	color_points;
-        coord_t         outline_width;
+        coord_t         outline_width { 0 };
         float           fill_opacity;
-        coord_t			radius_points;
+        coord_t			radius_points { 0 };
     };
 
+    // Paint the expolygons in the order they are presented, thus the latter overwrites the former expolygon.
+    // 1) Paint all areas with the provided ExPolygonAttributes::color_fill and ExPolygonAttributes::fill_opacity.
+    // 2) Optionally paint outlines of the areas if ExPolygonAttributes::outline_width > 0.
+    //    Paint with ExPolygonAttributes::color_contour and ExPolygonAttributes::color_holes.
+    //    If color_contour is empty, color_fill is used. If color_hole is empty, color_contour is used.
+    // 3) Optionally paint points of all expolygon contours with ExPolygonAttributes::radius_points if radius_points > 0.
+    // 4) Paint ExPolygonAttributes::legend into legend using the ExPolygonAttributes::color_fill if legend is not empty. 
     static void export_expolygons(const char *path, const std::vector<std::pair<Slic3r::ExPolygons, ExPolygonAttributes>> &expolygons_with_attributes);
+    static void export_expolygons(const std::string &path, const std::vector<std::pair<Slic3r::ExPolygons, ExPolygonAttributes>> &expolygons_with_attributes) 
+        { export_expolygons(path.c_str(), expolygons_with_attributes); }
+
+private:
+    static float    to_svg_coord(float x) throw() { return unscale<float>(x) * 10.f; }
+    static float    to_svg_x(float x) throw() { return to_svg_coord(x); }
+    float           to_svg_y(float x) const throw() { return flipY ? this->height - to_svg_coord(x) : to_svg_coord(x); }
 };
 
 }

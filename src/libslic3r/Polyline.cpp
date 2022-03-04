@@ -1,5 +1,6 @@
 #include "BoundingBox.hpp"
 #include "Polyline.hpp"
+#include "Exception.hpp"
 #include "ExPolygon.hpp"
 #include "ExPolygonCollection.hpp"
 #include "Line.hpp"
@@ -8,20 +9,6 @@
 #include <utility>
 
 namespace Slic3r {
-
-Polyline::operator Polylines() const
-{
-    Polylines polylines;
-    polylines.push_back(*this);
-    return polylines;
-}
-
-Polyline::operator Line() const
-{
-    if (this->points.size() > 2) 
-        throw std::invalid_argument("Can't convert polyline with more than two points to a line");
-    return Line(this->points.front(), this->points.back());
-}
 
 const Point& Polyline::leftmost_point() const
 {
@@ -119,7 +106,8 @@ void Polyline::simplify(double tolerance)
     this->points = MultiPoint::_douglas_peucker(this->points, tolerance);
 }
 
-/* This method simplifies all *lines* contained in the supplied area */
+#if 0
+// This method simplifies all *lines* contained in the supplied area
 template <class T>
 void Polyline::simplify_by_visibility(const T &area)
 {
@@ -140,6 +128,7 @@ void Polyline::simplify_by_visibility(const T &area)
 }
 template void Polyline::simplify_by_visibility<ExPolygon>(const ExPolygon &area);
 template void Polyline::simplify_by_visibility<ExPolygonCollection>(const ExPolygonCollection &area);
+#endif
 
 void Polyline::split_at(const Point &point, Polyline* p1, Polyline* p2) const
 {
@@ -199,7 +188,7 @@ BoundingBox get_extents(const Polylines &polylines)
     if (! polylines.empty()) {
         bb = polylines.front().bounding_box();
         for (size_t i = 1; i < polylines.size(); ++ i)
-            bb.merge(polylines[i]);
+            bb.merge(polylines[i].points);
     }
     return bb;
 }
@@ -207,7 +196,7 @@ BoundingBox get_extents(const Polylines &polylines)
 const Point& leftmost_point(const Polylines &polylines)
 {
     if (polylines.empty())
-        throw std::invalid_argument("leftmost_point() called on empty PolylineCollection");
+        throw Slic3r::InvalidArgument("leftmost_point() called on empty PolylineCollection");
     Polylines::const_iterator it = polylines.begin();
     const Point *p = &it->leftmost_point();
     for (++ it; it != polylines.end(); ++it) {
