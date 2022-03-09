@@ -1,3 +1,9 @@
+slic3r-prusa (2.4.1~rc1+dfsg-1) unstable; urgency=medium
+
+  * [4dc5b40] New upstream version 2.4.1~rc1+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 09 Mar 2022 11:46:55 +0800
+
 slic3r-prusa (2.4.0+dfsg-2) unstable; urgency=medium
 
   * [ee4ac72] Stop linking against cereal library.
