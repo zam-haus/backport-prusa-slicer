@@ -2378,7 +2378,11 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
     }
 
     const auto loading = _L("Loading") + dots;
-    wxProgressDialog progress_dlg(loading, "", 100, find_toplevel_parent(q), wxPD_AUTO_HIDE);
+
+    // Create wxProgressDialog on heap, see the linux ifdef below.
+    auto progress_dlg = new wxProgressDialog(loading, "", 100, find_toplevel_parent(q), wxPD_AUTO_HIDE);
+    Slic3r::ScopeGuard([&progress_dlg](){ if (progress_dlg) progress_dlg->Destroy(); progress_dlg = nullptr; });
+
     wxBusyCursor busy;
 
     auto *new_model = (!load_model || one_by_one) ? nullptr : new Slic3r::Model();
@@ -2398,8 +2402,10 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
         const auto &path = input_files[i];
 #endif // _WIN32
         const auto filename = path.filename();
-        progress_dlg.Update(static_cast<int>(100.0f * static_cast<float>(i) / static_cast<float>(input_files.size())), _L("Loading file") + ": " + from_path(filename));
-        progress_dlg.Fit();
+        if (progress_dlg) {
+            progress_dlg->Update(static_cast<int>(100.0f * static_cast<float>(i) / static_cast<float>(input_files.size())), _L("Loading file") + ": " + from_path(filename));
+            progress_dlg->Fit();
+        }
 
         const bool type_3mf = std::regex_match(path.string(), pattern_3mf);
         const bool type_zip_amf = !type_3mf && std::regex_match(path.string(), pattern_zip_amf);
@@ -2417,8 +2423,10 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
                 // then related SLA Print and Materials Settings or FFF Print and Filaments Settings will be unparent from the wxNoteBook
                 // and that is why they will never be enabled after destruction of the ProgressDialog.
                 // So, distroy progress_gialog if we are loading project file
-                if (input_files_size == 1)
-                    progress_dlg.Destroy();
+                if (input_files_size == 1 && progress_dlg) {
+                    progress_dlg->Destroy();
+                    progress_dlg = nullptr;
+                }
 #endif
                 DynamicPrintConfig config;
                 PrinterTechnology loaded_printer_technology {ptFFF};
@@ -5378,17 +5386,22 @@ bool Plater::load_files(const wxArrayString& filenames)
         if (boost::algorithm::iends_with(filename, ".3mf") || boost::algorithm::iends_with(filename, ".amf")) {
             LoadType load_type = LoadType::Unknown;
             if (!model().objects.empty()) {
-                if (wxGetApp().app_config->get("show_drop_project_dialog") == "1") {
-                    ProjectDropDialog dlg(filename);
-                    if (dlg.ShowModal() == wxID_OK) {
-                        int choice = dlg.get_action();
-                        load_type = static_cast<LoadType>(choice);
-                        wxGetApp().app_config->set("drop_project_action", std::to_string(choice));
+                if ((boost::algorithm::iends_with(filename, ".3mf") && !is_project_3mf(it->string())) ||
+                    (boost::algorithm::iends_with(filename, ".amf") && !boost::algorithm::iends_with(filename, ".zip.amf")))
+                    load_type = LoadType::LoadGeometry;
+                else {
+                    if (wxGetApp().app_config->get("show_drop_project_dialog") == "1") {
+                        ProjectDropDialog dlg(filename);
+                        if (dlg.ShowModal() == wxID_OK) {
+                            int choice = dlg.get_action();
+                            load_type = static_cast<LoadType>(choice);
+                            wxGetApp().app_config->set("drop_project_action", std::to_string(choice));
+                        }
                     }
+                    else
+                        load_type = static_cast<LoadType>(std::clamp(std::stoi(wxGetApp().app_config->get("drop_project_action")),
+                            static_cast<int>(LoadType::OpenProject), static_cast<int>(LoadType::LoadConfig)));
                 }
-                else
-                    load_type = static_cast<LoadType>(std::clamp(std::stoi(wxGetApp().app_config->get("drop_project_action")),
-                        static_cast<int>(LoadType::OpenProject), static_cast<int>(LoadType::LoadConfig)));
             }
             else
                 load_type = LoadType::OpenProject;
@@ -5621,6 +5634,10 @@ void Plater::convert_unit(ConversionType conv_type)
     wxGetApp().obj_list()->get_selection_indexes(obj_idxs, volume_idxs);
     if (obj_idxs.empty() && volume_idxs.empty())
         return;
+
+    // We will remove object indexes after convertion 
+    // So, resort object indexes descending to avoid the crash after remove 
+    std::sort(obj_idxs.begin(), obj_idxs.end(), std::greater<int>());
 
     TakeSnapshot snapshot(this, conv_type == ConversionType::CONV_FROM_INCH  ? _L("Convert from imperial units") :
                                 conv_type == ConversionType::CONV_TO_INCH    ? _L("Revert conversion from imperial units") :
