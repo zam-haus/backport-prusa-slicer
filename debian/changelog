@@ -1,3 +1,9 @@
+slic3r-prusa (2.4.2+dfsg-1) unstable; urgency=medium
+
+  * [0a0534e] New upstream version 2.4.2+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 29 Apr 2022 10:22:47 +0800
+
 slic3r-prusa (2.4.2~rc2+dfsg-1) experimental; urgency=medium
 
   * [a9164e3] New upstream version 2.4.2~rc2+dfsg
