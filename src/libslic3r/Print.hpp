@@ -35,7 +35,13 @@ namespace FillAdaptive {
     struct Octree;
     struct OctreeDeleter;
     using OctreePtr = std::unique_ptr<Octree, OctreeDeleter>;
-};
+}; // namespace FillAdaptive
+
+namespace FillLightning {
+    class Generator;
+    struct GeneratorDeleter;
+    using GeneratorPtr = std::unique_ptr<Generator, GeneratorDeleter>;
+}; // namespace FillLightning
 
 // Print step IDs for keeping track of the print state.
 // The Print steps are applied in this order.
@@ -118,7 +124,7 @@ public:
     T * const *             begin() const { return m_data->data(); }
     T * const *             end()   const { return m_data->data() + m_data->size(); }
     const T*                front() const { return m_data->front(); }
-    const T*                back()  const { return m_data->front(); }
+    const T*                back()  const { return m_data->back(); }
     size_t                  size()  const { return m_data->size(); }
     bool                    empty() const { return m_data->empty(); }
     const T*                operator[](size_t i) const { return (*m_data)[i]; }
@@ -382,6 +388,7 @@ private:
     void combine_infill();
     void _generate_support_material();
     std::pair<FillAdaptive::OctreePtr, FillAdaptive::OctreePtr> prepare_adaptive_infill_data();
+    FillLightning::GeneratorPtr prepare_lightning_infill_data();
 
     // XYZ in scaled coordinates
     Vec3crd									m_size;

@@ -1031,7 +1031,7 @@ bool UnsavedChangesDialog::save(PresetCollection* dependent_presets, bool show_s
 wxString get_string_from_enum(const std::string& opt_key, const DynamicPrintConfig& config, bool is_infill = false)
 {
     const ConfigOptionDef& def = config.def()->options.at(opt_key);
-    const std::vector<std::string>& names = def.enum_labels;//ConfigOptionEnum<T>::get_enum_names();
+    const std::vector<std::string>& names = def.enum_labels.empty() ? def.enum_values : def.enum_labels;
     int val = config.option(opt_key)->getInt();
 
     // Each infill doesn't use all list of infill declared in PrintConfig.hpp.
@@ -1300,6 +1300,9 @@ void UnsavedChangesDialog::update_tree(Preset::Type type, PresetCollection* pres
                 get_string_value(opt_key, old_config), get_string_value(opt_key, new_config), category_icon_map.at(option.category));
         }
     }
+
+    // Revert sort of searcher back
+    searcher.sort_options_by_label();
 }
 
 void UnsavedChangesDialog::on_dpi_changed(const wxRect& suggested_rect)
@@ -1709,6 +1712,9 @@ void DiffPresetDialog::update_tree()
         Fit();
         Refresh();
     }
+
+    // Revert sort of searcher back
+    searcher.sort_options_by_label();
 }
 
 void DiffPresetDialog::on_dpi_changed(const wxRect&)
