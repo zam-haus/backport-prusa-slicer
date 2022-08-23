@@ -1,3 +1,11 @@
+slic3r-prusa (2.5.0~rc1+dfsg-1) unstable; urgency=medium
+
+  * [208971d] Build-dep on libtbb2-dev
+  * [165bc6c] New upstream version 2.5.0~rc1+dfsg
+  * [66161a1] Refresh patches
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 24 Aug 2022 00:55:12 +0800
+
 slic3r-prusa (2.4.2+dfsg-1) unstable; urgency=medium
 
   * [0a0534e] New upstream version 2.4.2+dfsg
