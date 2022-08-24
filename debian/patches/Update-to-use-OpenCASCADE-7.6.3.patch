@@ -1,0 +1,22 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Wed, 24 Aug 2022 11:20:51 +0800
+Subject: Update to use OpenCASCADE 7.6.3
+
+Forwarded: no
+---
+ src/occt_wrapper/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/occt_wrapper/CMakeLists.txt b/src/occt_wrapper/CMakeLists.txt
+index ed75531..81db637 100644
+--- a/src/occt_wrapper/CMakeLists.txt
++++ b/src/occt_wrapper/CMakeLists.txt
+@@ -19,7 +19,7 @@ include(GenerateExportHeader)
+ 
+ generate_export_header(OCCTWrapper)
+ 
+-find_package(OpenCASCADE 7.6.2 REQUIRED)
++find_package(OpenCASCADE 7.6.3 REQUIRED)
+ 
+ set(OCCT_LIBS
+     TKXDESTEP
