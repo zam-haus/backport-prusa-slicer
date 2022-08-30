@@ -606,28 +606,13 @@ function(prusaslicer_copy_dlls target)
 
 endfunction()
 
-
-# libslic3r, PrusaSlicer GUI and the PrusaSlicer executable.
-add_subdirectory(src)
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT PrusaSlicer_app_console)
-
-add_dependencies(gettext_make_pot hintsToPot)
-
-if(SLIC3R_BUILD_SANDBOXES)
-    add_subdirectory(sandboxes)
-endif()
-
-if(SLIC3R_BUILD_TESTS)
-    add_subdirectory(tests)
-endif()
-
-
 # Resources install target, configure fhs.hpp on UNIX
 if (WIN32)
     install(DIRECTORY "${SLIC3R_RESOURCES_DIR}/" DESTINATION "${CMAKE_INSTALL_PREFIX}/resources")
 elseif (SLIC3R_FHS)
     # CMAKE_INSTALL_FULL_DATAROOTDIR: read-only architecture-independent data root (share)
     set(SLIC3R_FHS_RESOURCES "${CMAKE_INSTALL_FULL_DATAROOTDIR}/PrusaSlicer")
+    set(SLIC3R_FHS_LIBS "${CMAKE_INSTALL_FULL_LIBDIR}/PrusaSlicer")
     install(DIRECTORY ${SLIC3R_RESOURCES_DIR}/ DESTINATION ${SLIC3R_FHS_RESOURCES}
         PATTERN "*/udev" EXCLUDE
     )
@@ -649,3 +634,17 @@ else ()
 endif ()
 
 configure_file(${LIBDIR}/platform/unix/fhs.hpp.in ${LIBDIR_BIN}/platform/unix/fhs.hpp)
+
+# libslic3r, PrusaSlicer GUI and the PrusaSlicer executable.
+add_subdirectory(src)
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT PrusaSlicer_app_console)
+
+add_dependencies(gettext_make_pot hintsToPot)
+
+if(SLIC3R_BUILD_SANDBOXES)
+    add_subdirectory(sandboxes)
+endif()
+
+if(SLIC3R_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
