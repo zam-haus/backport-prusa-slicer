@@ -4,3 +4,4 @@ Stop-building-test_voronoi.cpp.patch
 Use-packaged-catch2-library.patch
 Drop-lcereal.patch
 Update-to-use-OpenCASCADE-7.6.3.patch
+Move-OCCTWrapper.so-into-package-specific-libdir.patch
