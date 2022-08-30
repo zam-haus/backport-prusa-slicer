@@ -3,5 +3,5 @@ Install-XS-files-into-usr-lib-slic3r-prusa3d.patch
 Stop-building-test_voronoi.cpp.patch
 Use-packaged-catch2-library.patch
 Drop-lcereal.patch
-Update-to-use-OpenCASCADE-7.6.3.patch
+Drop-OpenCASCADE-version-from-find_package.patch
 Move-OCCTWrapper.so-into-package-specific-libdir.patch

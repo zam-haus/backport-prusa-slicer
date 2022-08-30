@@ -106,7 +106,7 @@ index 0817267..270eae1 100644
          libpath /= "OCCTWrapper.dll";
          HMODULE module = LoadLibraryW(libpath.wstring().c_str());
 diff --git a/src/occt_wrapper/CMakeLists.txt b/src/occt_wrapper/CMakeLists.txt
-index 81db637..3b94ad7 100644
+index 16de4e0..65e8c1f 100644
 --- a/src/occt_wrapper/CMakeLists.txt
 +++ b/src/occt_wrapper/CMakeLists.txt
 @@ -56,5 +56,8 @@ target_link_libraries(OCCTWrapper ${OCCT_LIBS})
