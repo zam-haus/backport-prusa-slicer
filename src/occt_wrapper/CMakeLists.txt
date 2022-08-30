@@ -58,5 +58,8 @@ target_link_libraries(OCCTWrapper ${OCCT_LIBS})
 
 include(GNUInstallDirs)
 
-install(TARGETS OCCTWrapper DESTINATION "${CMAKE_INSTALL_BINDIR}")
-
+if (SLIC3R_FHS)
+    install(TARGETS OCCTWrapper LIBRARY DESTINATION "${SLIC3R_FHS_LIBS}")
+else ()
+    install(TARGETS OCCTWrapper LIBRARY DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif ()

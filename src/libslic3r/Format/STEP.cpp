@@ -9,6 +9,8 @@
 #include "libslic3r/TriangleMesh.hpp"
 #include "libslic3r/Utils.hpp"
 
+#include "unix/fhs.hpp"
+
 #include <boost/filesystem.hpp>
 #include <boost/dll/runtime_symbol_info.hpp>
 #include <boost/log/trivial.hpp>
@@ -39,7 +41,12 @@ LoadStepFn get_load_step_fn()
 #endif
 
     if (!load_step_fn) {
-        auto libpath = boost::dll::program_location().parent_path();
+#ifdef SLIC3R_FHS
+        boost::filesystem::path libpath = SLIC3R_FHS_LIBS;
+#else
+        boost::filesystem::path libpath = boost::dll::program_location().parent_path();
+#endif
+
 #ifdef _WIN32
         libpath /= "OCCTWrapper.dll";
         HMODULE module = LoadLibraryW(libpath.wstring().c_str());
