@@ -10,6 +10,7 @@
 #define DIR_SEPARATOR '/'
 #endif
 
+#include "TDocStd_Document.hxx"
 #include "STEPCAFControl_Reader.hxx"
 #include "BRepMesh_IncrementalMesh.hxx"
 #include "XCAFDoc_DocumentTool.hxx"
