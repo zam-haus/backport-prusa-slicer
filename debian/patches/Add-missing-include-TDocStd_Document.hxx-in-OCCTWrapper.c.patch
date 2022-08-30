@@ -1,0 +1,21 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Tue, 30 Aug 2022 17:50:55 +0800
+Subject: Add missing #include "TDocStd_Document.hxx" in OCCTWrapper.cpp
+
+This fixes FTBFS with OpenCASCADE 7.5.1
+---
+ src/occt_wrapper/OCCTWrapper.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/occt_wrapper/OCCTWrapper.cpp b/src/occt_wrapper/OCCTWrapper.cpp
+index e41d895..26ac6a2 100644
+--- a/src/occt_wrapper/OCCTWrapper.cpp
++++ b/src/occt_wrapper/OCCTWrapper.cpp
+@@ -10,6 +10,7 @@
+ #define DIR_SEPARATOR '/'
+ #endif
+ 
++#include "TDocStd_Document.hxx"
+ #include "STEPCAFControl_Reader.hxx"
+ #include "BRepMesh_IncrementalMesh.hxx"
+ #include "XCAFDoc_DocumentTool.hxx"

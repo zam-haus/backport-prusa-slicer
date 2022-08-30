@@ -5,3 +5,4 @@ Use-packaged-catch2-library.patch
 Drop-lcereal.patch
 Drop-OpenCASCADE-version-from-find_package.patch
 Move-OCCTWrapper.so-into-package-specific-libdir.patch
+Add-missing-include-TDocStd_Document.hxx-in-OCCTWrapper.c.patch
