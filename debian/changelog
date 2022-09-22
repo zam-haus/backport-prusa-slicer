@@ -1,10 +1,21 @@
-slic3r-prusa (2.5.0~rc1+dfsg-1) unstable; urgency=medium
+slic3r-prusa (2.5.0+dfsg-1) unstable; urgency=medium
 
-  * [208971d] Build-dep on libtbb2-dev
-  * [165bc6c] New upstream version 2.5.0~rc1+dfsg
-  * [66161a1] Refresh patches
+  * [b9075f6] Revert "Build-dep on libtbb2-dev"
+    This reverts commit 208971db19690029a694f7def25190b8af55d248. The package
+    has changed back to libtbb-dev.
+  * [5fa0d52] Add opencascade build-deps
+  * [0e6eee9] Update opencascade version to 7.6.3
+  * [ab9b5bb] Set OPENVDB_FIND_MODULE_PATH to use upstream FindOpenVDB.cmake
+  * [8b859a4] Patch to move OCCTWrapper.so into its own directory
+  * [837ce0b] Drop version from find_package(OpenCASCADE...)
+  * [5321bab] Fix FTBFS with older opencascade
+  * [3c3b30e] New upstream version 2.5.0+dfsg
+  * [6f214b1] Change wx build-dep to libwxgtk3.2-dev (Closes: #1019825)
+  * [ffc8381] Drop prusa-slicer.desktop.
+    This is duplicated by the upstream-provided PrusaSlicer.desktop
+    (Closes: #1004132)
 
- -- Chow Loong Jin <hyperair@debian.org>  Wed, 24 Aug 2022 00:55:12 +0800
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 22 Sep 2022 20:49:15 +0800
 
 slic3r-prusa (2.4.2+dfsg-1) unstable; urgency=medium
 
