@@ -1,3 +1,10 @@
+slic3r-prusa (2.5.0+dfsg-2) unstable; urgency=medium
+
+  * [3e9240e] Patch to fix wxTranslations::Get() nullptr segfault
+    (Closes: #1020702)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 11 Oct 2022 10:45:56 +0800
+
 slic3r-prusa (2.5.0+dfsg-1) unstable; urgency=medium
 
   * [b9075f6] Revert "Build-dep on libtbb2-dev"
