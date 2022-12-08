@@ -567,7 +567,9 @@ void HintDatabase::clear_used()
 
 void NotificationManager::HintNotification::count_spaces()
 {
-	//determine line width 
+	ImGuiWrapper& imgui = *wxGetApp().imgui();
+	imgui.new_frame();
+	//determine line width
 	m_line_height = ImGui::CalcTextSize("A").y;
 
 	
