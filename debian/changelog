@@ -1,3 +1,10 @@
+slic3r-prusa (2.5.0+dfsg-3) unstable; urgency=medium
+
+  * [c460829] Patch to fix segfault due to imgui initialization error.
+    Thanks to Thomas Viehmann <tv@beamnet.de> (Closes: #1022234)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 09 Dec 2022 17:48:42 +0800
+
 slic3r-prusa (2.5.0+dfsg-2) unstable; urgency=medium
 
   * [3e9240e] Patch to fix wxTranslations::Get() nullptr segfault
