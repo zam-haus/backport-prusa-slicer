@@ -1,3 +1,14 @@
+slic3r-prusa (2.5.0+dfsg-4) unstable; urgency=medium
+
+  [ Adrian Bunk ]
+  * [b4f4711] Link with libatomic on architectures that need it (Closes:
+    #1025827)
+
+  [ Chow Loong Jin ]
+  * Rebuild against updated wxgtk3.2 for GLEW fixes (Closes: #1023365)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 05 Jan 2023 13:42:45 +0800
+
 slic3r-prusa (2.5.0+dfsg-3) unstable; urgency=medium
 
   * [c460829] Patch to fix segfault due to imgui initialization error.
