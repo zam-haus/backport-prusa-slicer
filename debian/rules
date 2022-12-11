@@ -13,6 +13,10 @@ ifneq (,$(filter $(DEB_HOST_ARCH), i386))
         export DEB_CXXFLAGS_MAINT_APPEND += -ffloat-store
 endif
 
+ifneq (,$(filter $(DEB_HOST_ARCH), armel m68k mipsel powerpc riscv64 sh4))
+  export DEB_LDFLAGS_MAINT_APPEND += -Wl,--no-as-needed -latomic -Wl,--as-needed
+endif
+
 %:
 	dh $@ --buildsystem=cmake
 
