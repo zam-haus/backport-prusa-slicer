@@ -2,4 +2,10 @@ Move-Slic3r-data-to-usr-share-slic3r-prusa.patch
 Install-XS-files-into-usr-lib-slic3r-prusa3d.patch
 Stop-building-test_voronoi.cpp.patch
 Use-packaged-catch2-library.patch
+Drop-lcereal.patch
+Drop-OpenCASCADE-version-from-find_package.patch
+Move-OCCTWrapper.so-into-package-specific-libdir.patch
+Add-missing-include-TDocStd_Document.hxx-in-OCCTWrapper.c.patch
+Fix-segfault-due-to-WxTranslations-Get-returning-nullptr.patch
+Fix-segfault-due-to-uninitialized-imgui-in-wxwidgets3.2.patch
 Secured-self-updates-and-disable-by-default.patch

@@ -11,10 +11,10 @@ Bug-Debian: https://bugs.debian.org/984338
  1 file changed, 1 deletion(-)
 
 diff --git a/tests/libslic3r/CMakeLists.txt b/tests/libslic3r/CMakeLists.txt
-index 501af0c..d7a6968 100644
+index 352580f..bc568da 100644
 --- a/tests/libslic3r/CMakeLists.txt
 +++ b/tests/libslic3r/CMakeLists.txt
-@@ -16,7 +16,6 @@ add_executable(${_TEST_NAME}_tests
+@@ -18,7 +18,6 @@ add_executable(${_TEST_NAME}_tests
  	test_meshboolean.cpp
  	test_marchingsquares.cpp
  	test_timeutils.cpp

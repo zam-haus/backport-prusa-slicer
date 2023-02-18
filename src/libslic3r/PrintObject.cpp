@@ -14,6 +14,7 @@
 #include "TriangleMeshSlicer.hpp"
 #include "Utils.hpp"
 #include "Fill/FillAdaptive.hpp"
+#include "Fill/FillLightning.hpp"
 #include "Format/STL.hpp"
 
 #include <float.h>
@@ -353,14 +354,15 @@ void PrintObject::infill()
 
     if (this->set_started(posInfill)) {
         auto [adaptive_fill_octree, support_fill_octree] = this->prepare_adaptive_infill_data();
+        auto lightning_generator                         = this->prepare_lightning_infill_data();
 
         BOOST_LOG_TRIVIAL(debug) << "Filling layers in parallel - start";
         tbb::parallel_for(
             tbb::blocked_range<size_t>(0, m_layers.size()),
-            [this, &adaptive_fill_octree = adaptive_fill_octree, &support_fill_octree = support_fill_octree](const tbb::blocked_range<size_t>& range) {
+            [this, &adaptive_fill_octree = adaptive_fill_octree, &support_fill_octree = support_fill_octree, &lightning_generator](const tbb::blocked_range<size_t>& range) {
                 for (size_t layer_idx = range.begin(); layer_idx < range.end(); ++ layer_idx) {
                     m_print->throw_if_canceled();
-                    m_layers[layer_idx]->make_fills(adaptive_fill_octree.get(), support_fill_octree.get());
+                    m_layers[layer_idx]->make_fills(adaptive_fill_octree.get(), support_fill_octree.get(), lightning_generator.get());
                 }
             }
         );
@@ -451,6 +453,24 @@ std::pair<FillAdaptive::OctreePtr, FillAdaptive::OctreePtr> PrintObject::prepare
     return std::make_pair(
         adaptive_line_spacing ? build_octree(mesh, overhangs.front(), adaptive_line_spacing, false) : OctreePtr(),
         support_line_spacing  ? build_octree(mesh, overhangs.front(), support_line_spacing, true) : OctreePtr());
+}
+
+FillLightning::GeneratorPtr PrintObject::prepare_lightning_infill_data()
+{
+    bool     has_lightning_infill = false;
+    coordf_t lightning_density    = 0.;
+    size_t   lightning_cnt        = 0;
+    for (size_t region_id = 0; region_id < this->num_printing_regions(); ++region_id)
+        if (const PrintRegionConfig &config = this->printing_region(region_id).config(); config.fill_density > 0 && config.fill_pattern == ipLightning) {
+            has_lightning_infill = true;
+            lightning_density   += config.fill_density;
+            ++lightning_cnt;
+        }
+
+    if (has_lightning_infill)
+        lightning_density /= coordf_t(lightning_cnt);
+
+    return has_lightning_infill ? FillLightning::build_generator(std::as_const(*this), lightning_density, [this]() -> void { this->throw_if_canceled(); }) : FillLightning::GeneratorPtr();
 }
 
 void PrintObject::clear_layers()
@@ -607,12 +627,21 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "bottom_fill_pattern"
             || opt_key == "external_fill_link_max_length"
             || opt_key == "fill_angle"
-            || opt_key == "fill_pattern"
             || opt_key == "infill_anchor"
             || opt_key == "infill_anchor_max"
             || opt_key == "top_infill_extrusion_width"
             || opt_key == "first_layer_extrusion_width") {
             steps.emplace_back(posInfill);
+        } else if (opt_key == "fill_pattern") {
+            steps.emplace_back(posInfill);
+
+            const auto *old_fill_pattern = old_config.option<ConfigOptionEnum<InfillPattern>>(opt_key);
+            const auto *new_fill_pattern = new_config.option<ConfigOptionEnum<InfillPattern>>(opt_key);
+            assert(old_fill_pattern && new_fill_pattern);
+            // We need to recalculate infill surfaces when infill_only_where_needed is enabled, and we are switching from
+            // the Lightning infill to another infill or vice versa.
+            if (m_config.infill_only_where_needed && (new_fill_pattern->value == ipLightning || old_fill_pattern->value == ipLightning))
+                steps.emplace_back(posPrepareInfill);
         } else if (opt_key == "fill_density") {
             // One likely wants to reslice only when switching between zero infill to simulate boolean difference (subtracting volumes),
             // normal infill and 100% (solid) infill.
@@ -647,6 +676,15 @@ bool PrintObject::invalidate_state_by_config_options(
             	steps.emplace_back(posInfill);
 	            steps.emplace_back(posSupportMaterial);
 	        }
+        } else if (
+            opt_key == "perimeter_generator"
+            || opt_key == "wall_transition_length"
+            || opt_key == "wall_transition_filter_deviation"
+            || opt_key == "wall_transition_angle"
+            || opt_key == "wall_distribution_count"
+            || opt_key == "min_feature_size"
+            || opt_key == "min_bead_width") {
+            steps.emplace_back(posSlice);
         } else if (
                opt_key == "seam_position"
             || opt_key == "seam_preferred_direction"
@@ -1704,7 +1742,14 @@ bool PrintObject::update_layer_height_profile(const ModelObject &model_object, c
 // fill_surfaces but we only turn them into VOID surfaces, thus preserving the boundaries.
 void PrintObject::clip_fill_surfaces()
 {
-    if (! m_config.infill_only_where_needed.value)
+    bool has_lightning_infill = false;
+    for (size_t region_id = 0; region_id < this->num_printing_regions(); ++region_id)
+        if (const PrintRegionConfig &config = this->printing_region(region_id).config(); config.fill_density > 0 && config.fill_pattern == ipLightning)
+            has_lightning_infill = true;
+
+    // For Lightning infill, infill_only_where_needed is ignored because both
+    // do a similar thing, and their combination doesn't make much sense.
+    if (! m_config.infill_only_where_needed.value || has_lightning_infill)
         return;
     bool has_infill = false;
     for (size_t i = 0; i < this->num_printing_regions(); ++ i)

@@ -125,6 +125,9 @@ namespace Slic3r {
         std::vector<float> filament_densities;
         PrintEstimatedStatistics print_statistics;
         std::vector<CustomGCode::Item> custom_gcode_per_print_z;
+#if ENABLE_SPIRAL_VASE_LAYERS
+        std::vector<std::pair<float, std::pair<size_t, size_t>>> spiral_vase_layers;
+#endif // ENABLE_SPIRAL_VASE_LAYERS
 
 #if ENABLE_GCODE_VIEWER_STATISTICS
         int64_t time{ 0 };
@@ -169,7 +172,7 @@ namespace Slic3r {
 #endif // ENABLE_GCODE_VIEWER_DATA_CHECKING
 
     private:
-        using AxisCoords = std::array<float, 4>;
+        using AxisCoords = std::array<double, 4>;
         using ExtruderColors = std::vector<unsigned char>;
         using ExtruderTemps = std::vector<float>;
 
@@ -353,18 +356,20 @@ namespace Slic3r {
             std::map<size_t, double> volumes_per_extruder;
 
             double role_cache;
-            std::map<ExtrusionRole, std::pair<double, double>> filaments_per_role;
+            std::map<ExtrusionRole, std::pair<double, double>> filaments_per_role; // ExtrusionRole -> (m, g)
+
 
             void reset();
 
-            void increase_caches(double extruded_volume);
+            void increase_caches(double extruded_volume, unsigned char extruder_id, double parking_volume, double extra_loading_volume);
 
             void process_color_change_cache();
-            void process_extruder_cache(GCodeProcessor* processor);
-            void process_role_cache(GCodeProcessor* processor);
-            void process_caches(GCodeProcessor* processor);
-
-            friend class GCodeProcessor;
+            void process_extruder_cache(unsigned char extruder_id);
+            void process_role_cache(const GCodeProcessor* processor);
+            void process_caches(const GCodeProcessor* processor);
+       private:
+            std::vector<double> extruder_retracted_volume;
+            bool recent_toolchange = false;
         };
 
     public:
@@ -518,10 +523,15 @@ namespace Slic3r {
         float m_forced_height; // mm
         float m_mm3_per_mm;
         float m_fan_speed; // percentage
+#if ENABLE_Z_OFFSET_CORRECTION
+        float m_z_offset; // mm
+#endif // ENABLE_Z_OFFSET_CORRECTION
         ExtrusionRole m_extrusion_role;
         unsigned char m_extruder_id;
         ExtruderColors m_extruder_colors;
         ExtruderTemps m_extruder_temps;
+        float m_parking_position;
+        float m_extra_loading_move;
         float m_extruded_last_z;
         float m_first_layer_height; // mm
         bool m_processing_start_custom_gcode;
@@ -532,6 +542,9 @@ namespace Slic3r {
         SeamsDetector m_seams_detector;
         OptionsZCorrector m_options_z_corrector;
         size_t m_last_default_color_id;
+#if ENABLE_SPIRAL_VASE_LAYERS
+        bool m_spiral_vase_active;
+#endif // ENABLE_SPIRAL_VASE_LAYERS
 #if ENABLE_GCODE_VIEWER_STATISTICS
         std::chrono::time_point<std::chrono::high_resolution_clock> m_start_time;
 #endif // ENABLE_GCODE_VIEWER_STATISTICS

@@ -284,29 +284,32 @@ void fix_model_by_win10_sdk(const std::string &path_src, const std::string &path
 
 		// Open the destination file.
 		FILE *fout = boost::nowide::fopen(path_dst.c_str(), "wb");
-
-		Microsoft::WRL::ComPtr<ABI::Windows::Storage::Streams::IBuffer> buffer;
-		byte														   *buffer_ptr;
-		bufferFactory->Create(65536 * 2048, buffer.GetAddressOf());
-		{
-			Microsoft::WRL::ComPtr<Windows::Storage::Streams::IBufferByteAccess> bufferByteAccess;
-			buffer.As(&bufferByteAccess);
-			hr = bufferByteAccess->Buffer(&buffer_ptr);
-		}
-		uint32_t length;
-		hr = buffer->get_Length(&length);
-
-		Microsoft::WRL::ComPtr<ABI::Windows::Foundation::IAsyncOperationWithProgress<ABI::Windows::Storage::Streams::IBuffer*, UINT32>> asyncRead;
-		for (;;) {
-			hr = inputStream->ReadAsync(buffer.Get(), 65536 * 2048, ABI::Windows::Storage::Streams::InputStreamOptions_ReadAhead, asyncRead.GetAddressOf());
-			status = winrt_async_await(asyncRead, throw_on_cancel);
-			if (status != AsyncStatus::Completed)
-				throw Slic3r::RuntimeError(L("Saving mesh into the 3MF container failed."));
+		try {
+			Microsoft::WRL::ComPtr<ABI::Windows::Storage::Streams::IBuffer> buffer;
+			byte														                  *buffer_ptr;
+			bufferFactory->Create(65536 * 2048, buffer.GetAddressOf());
+			{
+				Microsoft::WRL::ComPtr<Windows::Storage::Streams::IBufferByteAccess> bufferByteAccess;
+				buffer.As(&bufferByteAccess);
+				hr = bufferByteAccess->Buffer(&buffer_ptr);
+			}
+			uint32_t length;
 			hr = buffer->get_Length(&length);
-			if (length == 0)
-				break;
-			fwrite(buffer_ptr, length, 1, fout);
-		}
+			Microsoft::WRL::ComPtr<ABI::Windows::Foundation::IAsyncOperationWithProgress<ABI::Windows::Storage::Streams::IBuffer*, UINT32>> asyncRead;
+			for (;;) {
+				hr = inputStream->ReadAsync(buffer.Get(), 65536 * 2048, ABI::Windows::Storage::Streams::InputStreamOptions_ReadAhead, asyncRead.GetAddressOf());
+				status = winrt_async_await(asyncRead, throw_on_cancel);
+				if (status != AsyncStatus::Completed)
+					throw Slic3r::RuntimeError(L("Saving mesh into the 3MF container failed."));
+				hr = buffer->get_Length(&length);
+				if (length == 0)
+					break;
+				fwrite(buffer_ptr, length, 1, fout);
+			}
+		} catch (...) {
+			fclose(fout);
+			throw;
+ 		}
 		fclose(fout);
 		// Here all the COM objects will be released through the ComPtr destructors.
 	}
@@ -323,9 +326,8 @@ public:
 // fix_result containes a message if fixing failed 
 bool fix_model_by_win10_sdk_gui(ModelObject &model_object, int volume_idx, wxProgressDialog& progress_dialog, const wxString& msg_header, std::string& fix_result)
 {
-	std::mutex 						mutex;
-	std::condition_variable			condition;
-	std::unique_lock<std::mutex>	lock(mutex);
+    std::mutex mtx;
+    std::condition_variable condition;
 	struct Progress {
 		std::string 				message;
 		int 						percent  = 0;
@@ -344,8 +346,8 @@ bool fix_model_by_win10_sdk_gui(ModelObject &model_object, int volume_idx, wxPro
 	// (It seems like wxWidgets initialize the COM contex as single threaded and we need a multi-threaded context).
 	bool   success = false;
 	size_t ivolume = 0;
-	auto on_progress = [&mutex, &condition, &ivolume, &volumes, &progress](const char *msg, unsigned prcnt) {
-        std::lock_guard<std::mutex> lk(mutex);
+	auto on_progress = [&mtx, &condition, &ivolume, &volumes, &progress](const char *msg, unsigned prcnt) {
+	    std::unique_lock<std::mutex> lock(mtx);
 		progress.message = msg;
 		progress.percent = (int)floor((float(prcnt) + float(ivolume) * 100.f) / float(volumes.size()));
 		progress.updated = true;
@@ -421,6 +423,7 @@ bool fix_model_by_win10_sdk_gui(ModelObject &model_object, int volume_idx, wxPro
 		}
 	});
     while (! finished) {
+        std::unique_lock<std::mutex> lock(mtx);
 		condition.wait_for(lock, std::chrono::milliseconds(250), [&progress]{ return progress.updated; });
 		// decrease progress.percent value to avoid closing of the progress dialog
 		if (!progress_dialog.Update(progress.percent-1, msg_header + _(progress.message)))

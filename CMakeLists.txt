@@ -33,6 +33,7 @@ option(SLIC3R_MSVC_COMPILE_PARALLEL "Compile on Visual Studio in parallel" 1)
 option(SLIC3R_MSVC_PDB          "Generate PDB files on MSVC in Release mode" 1)
 option(SLIC3R_PERL_XS           "Compile XS Perl module and enable Perl unit and integration tests" 0)
 option(SLIC3R_ASAN              "Enable ASan on Clang and GCC" 0)
+option(SLIC3R_ENABLE_FORMAT_STEP "Enable compilation of STEP file support" 1)
 # If SLIC3R_FHS is 1 -> SLIC3R_DESKTOP_INTEGRATION is always 0, othrewise variable.
 CMAKE_DEPENDENT_OPTION(SLIC3R_DESKTOP_INTEGRATION "Allow perfoming desktop integration during runtime" 1 "NOT SLIC3R_FHS" 0)
 
@@ -405,23 +406,6 @@ else()
     target_link_libraries(libcurl INTERFACE crypt32)
 endif()
 
-if (SLIC3R_STATIC AND NOT SLIC3R_STATIC_EXCLUDE_CURL)
-    if (NOT APPLE)
-        # libcurl is always linked dynamically to the system libcurl on OSX.
-        # On other systems, libcurl is linked statically if SLIC3R_STATIC is set.
-        target_compile_definitions(libcurl INTERFACE CURL_STATICLIB)
-    endif()
-    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        # As of now, our build system produces a statically linked libcurl,
-        # which links the OpenSSL library dynamically.
-        find_package(OpenSSL REQUIRED)
-        message("OpenSSL include dir: ${OPENSSL_INCLUDE_DIR}")
-        message("OpenSSL libraries: ${OPENSSL_LIBRARIES}")
-        target_include_directories(libcurl INTERFACE ${OPENSSL_INCLUDE_DIR})
-        target_link_libraries(libcurl INTERFACE ${OPENSSL_LIBRARIES})
-    endif()
-endif()
-
 ## OPTIONAL packages
 
 # Find eigen3 or use bundled version
@@ -434,21 +418,9 @@ if (NOT EIGEN3_FOUND)
 endif ()
 include_directories(BEFORE SYSTEM ${EIGEN3_INCLUDE_DIR})
 
-# Find expat or use bundled version
-# Always use the system libexpat on Linux.
-
-find_package(EXPAT)
-
-if (NOT EXPAT_FOUND)
-    add_library(expat STATIC
-        ${LIBDIR}/expat/xmlparse.c
-        ${LIBDIR}/expat/xmlrole.c
-        ${LIBDIR}/expat/xmltok.c
-    )
-    set(EXPAT_FOUND 1)
-    set(EXPAT_INCLUDE_DIRS ${LIBDIR}/expat/)
-    set(EXPAT_LIBRARIES expat)
-endif ()
+# Find expat. We have our overriden FindEXPAT which exports libexpat target
+# no matter what.
+find_package(EXPAT REQUIRED)
 
 find_package(PNG REQUIRED)
 
@@ -485,23 +457,52 @@ add_custom_target(gettext_make_pot
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     COMMENT "Generate pot file from strings in the source tree"
 )
-add_custom_target(gettext_merge_po_with_pot
+
+add_custom_target(gettext_merge_community_po_with_pot
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    COMMENT "Merge localization po with new generted pot file"
+    COMMENT "Merge community po with new generated pot file"
+)
+file(GLOB L10N_PO_FILES "${L10N_DIR}/*/PrusaSlicer*.po")
+# list of names of directories, which are licalized by PS internally
+list(APPEND PS_L10N_DIRS "cs" "de" "es" "fr" "it" "ja" "pl")
+foreach(po_file ${L10N_PO_FILES})
+    GET_FILENAME_COMPONENT(po_dir "${po_file}" DIRECTORY)
+    GET_FILENAME_COMPONENT(po_dir_name "${po_dir}" NAME)
+    list(FIND PS_L10N_DIRS ${po_dir_name} found_dir_id)
+    # found_dir_id==-1 means that po_dir_name wasn't found in PS_L10N_DIRS
+    if(found_dir_id LESS 0)
+        add_custom_command(
+            TARGET gettext_merge_community_po_with_pot PRE_BUILD
+            COMMAND msgmerge -N -o ${po_file} ${po_file} "${L10N_DIR}/PrusaSlicer.pot"
+            # delete obsolete lines from resulting PO to avoid conflicts after a merging of it with wxWidgets.po
+            COMMAND msgattrib --no-obsolete -o ${po_file} ${po_file}
+            DEPENDS ${po_file}
+        )
+    endif()
+endforeach()
+
+add_custom_target(gettext_concat_wx_po_with_po
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    COMMENT "Concatenate and merge wxWidgets localization po with PrusaSlicer po file"
 )
 file(GLOB L10N_PO_FILES "${L10N_DIR}/*/PrusaSlicer*.po")
 foreach(po_file ${L10N_PO_FILES})
     GET_FILENAME_COMPONENT(po_dir "${po_file}" DIRECTORY)
-    SET(po_new_file "${po_dir}/PrusaSlicer_.po")
+    GET_FILENAME_COMPONENT(po_dir_name "${po_dir}" NAME)
+    SET(wx_po_file "${L10N_DIR}/wx_locale/${po_dir_name}.po")
+    #SET(po_new_file "${po_dir}/PrusaSlicer_.po")
     add_custom_command(
-        TARGET gettext_merge_po_with_pot PRE_BUILD
-        COMMAND msgmerge -N -o ${po_file} ${po_file} "${L10N_DIR}/PrusaSlicer.pot"
+        TARGET gettext_concat_wx_po_with_po PRE_BUILD
+        COMMAND msgcat --use-first -o ${po_file} ${po_file} ${wx_po_file}
+        # delete obsolete lines from resulting PO
+        COMMAND msgattrib --no-obsolete -o ${po_file} ${po_file}
         DEPENDS ${po_file}
     )
 endforeach()
+
 add_custom_target(gettext_po_to_mo
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    COMMENT "Generate localization po files (binary) from mo files (texts)"
+    COMMENT "Generate localization mo files (binary) from po files (texts)"
 )
 file(GLOB L10N_PO_FILES "${L10N_DIR}/*/PrusaSlicer*.po")
 foreach(po_file ${L10N_PO_FILES})

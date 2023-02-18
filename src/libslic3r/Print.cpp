@@ -13,6 +13,7 @@
 #include "GCode.hpp"
 #include "GCode/WipeTower.hpp"
 #include "Utils.hpp"
+#include "BuildVolume.hpp"
 
 #include <float.h>
 
@@ -22,6 +23,7 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/format.hpp>
 #include <boost/log/trivial.hpp>
+#include <boost/regex.hpp>
 
 // Mark string for localization and translate.
 #define L(s) Slic3r::I18N::translate(s)
@@ -101,15 +103,14 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "min_print_speed",
         "max_print_speed",
         "max_volumetric_speed",
-#ifdef HAS_PRESSURE_EQUALIZER
         "max_volumetric_extrusion_rate_slope_positive",
         "max_volumetric_extrusion_rate_slope_negative",
-#endif /* HAS_PRESSURE_EQUALIZER */
         "notes",
         "only_retract_when_crossing_perimeters",
         "output_filename_format",
         "perimeter_acceleration",
         "post_process",
+        "gcode_substitutions",
         "printer_notes",
         "retract_before_travel",
         "retract_before_wipe",
@@ -128,7 +129,8 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "start_gcode",
         "start_filament_gcode",
         "toolchange_gcode",
-        "threads",
+        "thumbnails",
+        "thumbnails_format",
         "use_firmware_retraction",
         "use_relative_e_distances",
         "use_volumetric_e",
@@ -348,7 +350,9 @@ bool Print::has_infinite_skirt() const
 
 bool Print::has_skirt() const
 {
-    return (m_config.skirt_height > 0 && m_config.skirts > 0) || m_config.draft_shield != dsDisabled;
+    return (m_config.skirt_height > 0 && m_config.skirts > 0) || has_infinite_skirt();
+    // case dsLimited should only be taken into account when skirt_height and skirts are positive,
+    // so it is covered by the first condition.
 }
 
 bool Print::has_brim() const
@@ -382,7 +386,7 @@ bool Print::sequential_print_horizontal_clearance_valid(const Print& print, Poly
                     Geometry::assemble_transform({ 0.0, 0.0, model_instance0->get_offset().z() }, model_instance0->get_rotation(), model_instance0->get_scaling_factor(), model_instance0->get_mirror())),
                     // Shrink the extruder_clearance_radius a tiny bit, so that if the object arrangement algorithm placed the objects
                     // exactly by satisfying the extruder_clearance_radius, this test will not trigger collision.
-                    float(scale_(0.5 * print.config().extruder_clearance_radius.value - EPSILON)),
+                    float(scale_(0.5 * print.config().extruder_clearance_radius.value - BuildVolume::BedEpsilon)),
                     jtRound, scale_(0.1)).front());
         }
 	    // Make a copy, so it may be rotated for instances.
@@ -435,7 +439,8 @@ static inline bool sequential_print_vertical_clearance_valid(const Print &print)
     return it == print_instances_ordered.end() || (*it)->print_object->height() <= scale_(print.config().extruder_clearance_height.value);
 }
 
-
+// Matches "G92 E0" with various forms of writing the zero and with an optional comment.
+boost::regex regex_g92e0 { "^[ \\t]*[gG]92[ \\t]*[eE](0(\\.0*)?|\\.0+)[ \\t]*(;.*)?$" };
 
 // Precondition: Print::validate() requires the Print::apply() to be called its invocation.
 std::string Print::validate(std::string* warning) const
@@ -532,8 +537,21 @@ std::string Print::validate(std::string* warning) const
                 for (size_t idx_object = 0; idx_object < m_objects.size(); ++ idx_object) {
                     if (idx_object == tallest_object_idx)
                         continue;
-                    if (layer_height_profiles[idx_object] != layer_height_profiles[tallest_object_idx])
-                        return L("The Wipe tower is only supported if all objects have the same variable layer height");
+                    // Check that the layer height profiles are equal. This will happen when one object is
+                    // a copy of another, or when a layer height modifier is used the same way on both objects.
+                    // The latter case might create a floating point inaccuracy mismatch, so compare
+                    // element-wise using an epsilon check.
+                    size_t i = 0;
+                    const coordf_t eps = 0.5 * EPSILON; // layers closer than EPSILON will be merged later. Let's make
+                    // this check a bit more sensitive to make sure we never consider two different layers as one.
+                    while (i < layer_height_profiles[idx_object].size()
+                        && i < layer_height_profiles[tallest_object_idx].size()) {
+                        if (i%2 == 0 && layer_height_profiles[tallest_object_idx][i] > layer_height_profiles[idx_object][layer_height_profiles[idx_object].size() - 2 ])
+                            break;
+                        if (std::abs(layer_height_profiles[idx_object][i] - layer_height_profiles[tallest_object_idx][i]) > eps)
+                            return L("The Wipe tower is only supported if all objects have the same variable layer height");
+                        ++i;
+                    }
                 }
             }
         }
@@ -648,6 +666,19 @@ std::string Print::validate(std::string* warning) const
             		if (! validate_extrusion_width(region.config(), opt_key, layer_height, err_msg))
 		            	return err_msg;
         }
+    }
+    {
+        bool before_layer_gcode_resets_extruder = boost::regex_search(m_config.before_layer_gcode.value, regex_g92e0);
+        bool layer_gcode_resets_extruder        = boost::regex_search(m_config.layer_gcode.value, regex_g92e0);
+        if (m_config.use_relative_e_distances) {
+            // See GH issues #6336 #5073
+            if ((m_config.gcode_flavor == gcfMarlinLegacy || m_config.gcode_flavor == gcfMarlinFirmware) &&
+                ! before_layer_gcode_resets_extruder && ! layer_gcode_resets_extruder)
+                return L("Relative extruder addressing requires resetting the extruder position at each layer to prevent loss of floating point accuracy. Add \"G92 E0\" to layer_gcode.");
+        } else if (before_layer_gcode_resets_extruder)
+            return L("\"G92 E0\" was found in before_layer_gcode, which is incompatible with absolute extruder addressing.");
+        else if (layer_gcode_resets_extruder)
+                return L("\"G92 E0\" was found in layer_gcode, which is incompatible with absolute extruder addressing.");
     }
 
     return std::string();
@@ -1248,6 +1279,13 @@ DynamicConfig PrintStatistics::config() const
     config.set_key_value("total_weight",              new ConfigOptionFloat(this->total_weight));
     config.set_key_value("total_wipe_tower_cost",     new ConfigOptionFloat(this->total_wipe_tower_cost));
     config.set_key_value("total_wipe_tower_filament", new ConfigOptionFloat(this->total_wipe_tower_filament));
+    config.set_key_value("initial_tool",              new ConfigOptionInt(int(this->initial_extruder_id)));
+    config.set_key_value("initial_extruder",          new ConfigOptionInt(int(this->initial_extruder_id)));
+    config.set_key_value("initial_filament_type",     new ConfigOptionString(this->initial_filament_type));
+    config.set_key_value("printing_filament_types",   new ConfigOptionString(this->printing_filament_types));
+    config.set_key_value("num_printing_extruders",    new ConfigOptionInt(int(this->printing_extruders.size())));
+//    config.set_key_value("printing_extruders",        new ConfigOptionInts(std::vector<int>(this->printing_extruders.begin(), this->printing_extruders.end())));
+    
     return config;
 }
 
@@ -1257,7 +1295,8 @@ DynamicConfig PrintStatistics::placeholders()
     for (const std::string &key : { 
         "print_time", "normal_print_time", "silent_print_time", 
         "used_filament", "extruded_volume", "total_cost", "total_weight", 
-        "total_toolchanges", "total_wipe_tower_cost", "total_wipe_tower_filament"})
+        "total_toolchanges", "total_wipe_tower_cost", "total_wipe_tower_filament",
+        "initial_tool", "initial_extruder", "initial_filament_type", "printing_filament_types", "num_printing_extruders" })
         config.set_key_value(key, new ConfigOptionString(std::string("{") + key + "}"));
     return config;
 }

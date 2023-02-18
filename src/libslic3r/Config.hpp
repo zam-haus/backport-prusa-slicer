@@ -194,7 +194,8 @@ enum ConfigOptionType {
 enum ConfigOptionMode {
     comSimple = 0,
     comAdvanced,
-    comExpert
+    comExpert,
+    comUndef
 };
 
 enum PrinterTechnology : unsigned char
@@ -758,6 +759,8 @@ public:
     ConfigOptionIntsTempl() : ConfigOptionVector<int>() {}
     explicit ConfigOptionIntsTempl(size_t n, int value) : ConfigOptionVector<int>(n, value) {}
     explicit ConfigOptionIntsTempl(std::initializer_list<int> il) : ConfigOptionVector<int>(std::move(il)) {}
+    explicit ConfigOptionIntsTempl(const std::vector<int> &v) : ConfigOptionVector<int>(v) {}
+    explicit ConfigOptionIntsTempl(std::vector<int> &&v) : ConfigOptionVector<int>(std::move(v)) {}
 
     static ConfigOptionType static_type() { return coInts; }
     ConfigOptionType        type()  const override { return static_type(); }

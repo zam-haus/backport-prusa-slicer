@@ -1,0 +1,32 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Tue, 11 Oct 2022 10:42:05 +0800
+Subject: Fix segfault due to WxTranslations::Get() returning nullptr
+
+Bug-Debian: https://bugs.debian.org/1020702
+Bug: https://github.com/prusa3d/PrusaSlicer/issues/9024
+Origin: https://github.com/prusa3d/PrusaSlicer/issues/8299#issuecomment-1236874810
+Author: Lukas Matena <lukasmatena@seznam.cz>
+---
+ src/slic3r/GUI/GUI_App.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/slic3r/GUI/GUI_App.cpp b/src/slic3r/GUI/GUI_App.cpp
+index 0aeebc7..fd22f2c 100644
+--- a/src/slic3r/GUI/GUI_App.cpp
++++ b/src/slic3r/GUI/GUI_App.cpp
+@@ -2075,6 +2075,15 @@ bool GUI_App::load_language(wxString language, bool initial)
+         {
+ 	    	// Allocating a temporary locale will switch the default wxTranslations to its internal wxTranslations instance.
+ 	    	wxLocale temp_locale;
++#ifdef __WXOSX__
++	    	// ysFIXME - temporary workaround till it isn't fixed in wxWidgets:
++	    	// Use English as an initial language, because of under OSX it try to load "inappropriate" language for wxLANGUAGE_DEFAULT.
++	    	// For example in our case it's trying to load "en_CZ" and as a result PrusaSlicer catch warning message.
++	    	// But wxWidgets guys work on it.
++	    	temp_locale.Init(wxLANGUAGE_ENGLISH);
++#else
++	    	temp_locale.Init();
++#endif // __WXOSX__
+ 	    	// Set the current translation's language to default, otherwise GetBestTranslation() may not work (see the wxWidgets source code).
+ 	    	wxTranslations::Get()->SetLanguage(wxLANGUAGE_DEFAULT);
+ 	    	// Let the wxFileTranslationsLoader enumerate all translation dictionaries for PrusaSlicer

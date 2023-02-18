@@ -35,7 +35,13 @@ namespace FillAdaptive {
     struct Octree;
     struct OctreeDeleter;
     using OctreePtr = std::unique_ptr<Octree, OctreeDeleter>;
-};
+}; // namespace FillAdaptive
+
+namespace FillLightning {
+    class Generator;
+    struct GeneratorDeleter;
+    using GeneratorPtr = std::unique_ptr<Generator, GeneratorDeleter>;
+}; // namespace FillLightning
 
 // Print step IDs for keeping track of the print state.
 // The Print steps are applied in this order.
@@ -118,7 +124,7 @@ public:
     T * const *             begin() const { return m_data->data(); }
     T * const *             end()   const { return m_data->data() + m_data->size(); }
     const T*                front() const { return m_data->front(); }
-    const T*                back()  const { return m_data->front(); }
+    const T*                back()  const { return m_data->back(); }
     size_t                  size()  const { return m_data->size(); }
     bool                    empty() const { return m_data->empty(); }
     const T*                operator[](size_t i) const { return (*m_data)[i]; }
@@ -382,6 +388,7 @@ private:
     void combine_infill();
     void _generate_support_material();
     std::pair<FillAdaptive::OctreePtr, FillAdaptive::OctreePtr> prepare_adaptive_infill_data();
+    FillLightning::GeneratorPtr prepare_lightning_infill_data();
 
     // XYZ in scaled coordinates
     Vec3crd									m_size;
@@ -455,6 +462,10 @@ struct PrintStatistics
     double                          total_weight;
     double                          total_wipe_tower_cost;
     double                          total_wipe_tower_filament;
+    std::vector<unsigned int>       printing_extruders;
+    unsigned int                    initial_extruder_id;
+    std::string                     initial_filament_type;
+    std::string                     printing_filament_types;
     std::map<size_t, double>        filament_stats;
 
     // Config with the filled in print statistics.
@@ -472,7 +483,11 @@ struct PrintStatistics
         total_weight           = 0.;
         total_wipe_tower_cost  = 0.;
         total_wipe_tower_filament = 0.;
+        initial_extruder_id    = 0;
+        initial_filament_type.clear();
+        printing_filament_types.clear();
         filament_stats.clear();
+        printing_extruders.clear();
     }
 };
 

@@ -124,7 +124,9 @@ void CopyrightsDialog::fill_entries()
         { "lib_fts"
                             , "Forrest Smith"                               , "https://www.forrestthewoods.com/" },
         { "fast_float"
-                            , "Daniel Lemire, João Paulo Magalhaes and contributors", "https://github.com/fastfloat/fast_float" }
+                            , "Daniel Lemire, João Paulo Magalhaes and contributors", "https://github.com/fastfloat/fast_float" },
+        { "CuraEngine (Arachne, etc.)"
+                            , "Ultimaker", "https://github.com/Ultimaker/CuraEngine" }
     };
 }
 
@@ -132,7 +134,7 @@ wxString CopyrightsDialog::get_html_text()
 {
     wxColour bgr_clr = wxGetApp().get_window_default_clr();//wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
 
-    const auto text_clr = wxGetApp().get_label_clr_default();// wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+    const auto text_clr = wxGetApp().get_label_clr_default();
     const auto text_clr_str = wxString::Format(wxT("#%02X%02X%02X"), text_clr.Red(), text_clr.Green(), text_clr.Blue());
     const auto bgr_clr_str = wxString::Format(wxT("#%02X%02X%02X"), bgr_clr.Red(), bgr_clr.Green(), bgr_clr.Blue());
 
@@ -151,7 +153,7 @@ wxString CopyrightsDialog::get_html_text()
         , text_clr_str
         , header_str);
 
-    for (auto& entry : m_entries) {
+    for (const auto& entry : m_entries) {
         text += wxString::Format(
                     "<a href=\"%s\">%s</a><br/>"
                     , entry.link, entry.lib_name);
@@ -256,7 +258,7 @@ AboutDialog::AboutDialog()
     {
         m_html->SetMinSize(wxSize(-1, 16 * wxGetApp().em_unit()));
         wxFont font = get_default_font(this);
-        const auto text_clr = wxGetApp().get_label_clr_default();//wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+        const auto text_clr = wxGetApp().get_label_clr_default();
 		auto text_clr_str = wxString::Format(wxT("#%02X%02X%02X"), text_clr.Red(), text_clr.Green(), text_clr.Blue());
 		auto bgr_clr_str = wxString::Format(wxT("#%02X%02X%02X"), bgr_clr.Red(), bgr_clr.Green(), bgr_clr.Blue());
 
@@ -275,7 +277,7 @@ AboutDialog::AboutDialog()
             "<html>"
             "<body bgcolor= %1% link= %2%>"
             "<font color=%3%>"
-            "%4% &copy; 2016-2021 Prusa Research. <br />"
+            "%4% &copy; 2016-2022 Prusa Research. <br />"
             "%5% &copy; 2011-2018 Alessandro Ranellucci. <br />"
             "<a href=\"http://slic3r.org/\">Slic3r</a> %6% "
             "<a href=\"http://www.gnu.org/licenses/agpl-3.0.html\">%7%</a>."

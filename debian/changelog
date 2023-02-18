@@ -1,3 +1,85 @@
+slic3r-prusa (2.5.0+dfsg-4) unstable; urgency=medium
+
+  [ Adrian Bunk ]
+  * [b4f4711] Link with libatomic on architectures that need it (Closes:
+    #1025827)
+
+  [ Chow Loong Jin ]
+  * Rebuild against updated wxgtk3.2 for GLEW fixes (Closes: #1023365)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 05 Jan 2023 13:42:45 +0800
+
+slic3r-prusa (2.5.0+dfsg-3) unstable; urgency=medium
+
+  * [c460829] Patch to fix segfault due to imgui initialization error.
+    Thanks to Thomas Viehmann <tv@beamnet.de> (Closes: #1022234)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 09 Dec 2022 17:48:42 +0800
+
+slic3r-prusa (2.5.0+dfsg-2) unstable; urgency=medium
+
+  * [3e9240e] Patch to fix wxTranslations::Get() nullptr segfault
+    (Closes: #1020702)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 11 Oct 2022 10:45:56 +0800
+
+slic3r-prusa (2.5.0+dfsg-1) unstable; urgency=medium
+
+  * [b9075f6] Revert "Build-dep on libtbb2-dev"
+    This reverts commit 208971db19690029a694f7def25190b8af55d248. The package
+    has changed back to libtbb-dev.
+  * [5fa0d52] Add opencascade build-deps
+  * [0e6eee9] Update opencascade version to 7.6.3
+  * [ab9b5bb] Set OPENVDB_FIND_MODULE_PATH to use upstream FindOpenVDB.cmake
+  * [8b859a4] Patch to move OCCTWrapper.so into its own directory
+  * [837ce0b] Drop version from find_package(OpenCASCADE...)
+  * [5321bab] Fix FTBFS with older opencascade
+  * [3c3b30e] New upstream version 2.5.0+dfsg
+  * [6f214b1] Change wx build-dep to libwxgtk3.2-dev (Closes: #1019825)
+  * [ffc8381] Drop prusa-slicer.desktop.
+    This is duplicated by the upstream-provided PrusaSlicer.desktop
+    (Closes: #1004132)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 22 Sep 2022 20:49:15 +0800
+
+slic3r-prusa (2.4.2+dfsg-1) unstable; urgency=medium
+
+  * [0a0534e] New upstream version 2.4.2+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 29 Apr 2022 10:22:47 +0800
+
+slic3r-prusa (2.4.2~rc2+dfsg-1) experimental; urgency=medium
+
+  * [a9164e3] New upstream version 2.4.2~rc2+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 14 Apr 2022 15:40:44 +0800
+
+slic3r-prusa (2.4.2~rc1+dfsg-1) experimental; urgency=medium
+
+  * [a903389] New upstream version 2.4.2~rc1+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 11 Apr 2022 14:19:03 +0800
+
+slic3r-prusa (2.4.1+dfsg-1) unstable; urgency=medium
+
+  * [c913848] New upstream version 2.4.1+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sun, 13 Mar 2022 21:02:25 +0800
+
+slic3r-prusa (2.4.1~rc1+dfsg-1) UNRELEASED; urgency=medium
+
+  * [4dc5b40] New upstream version 2.4.1~rc1+dfsg
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 09 Mar 2022 11:46:55 +0800
+
+slic3r-prusa (2.4.0+dfsg-2) unstable; urgency=medium
+
+  * [ee4ac72] Stop linking against cereal library.
+    It doesn't exist and it's causing FTBFS. (Closes: #1005492)
+  * [8f58b90] Refresh Stop-building-test_voronoi.cpp.patch
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 25 Feb 2022 16:24:09 +0800
+
 slic3r-prusa (2.4.0+dfsg-1) unstable; urgency=medium
 
   * [a97954a] New upstream version 2.4.0+dfsg

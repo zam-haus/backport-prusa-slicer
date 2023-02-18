@@ -412,6 +412,8 @@ void Preset::set_visible_from_appconfig(const AppConfig &app_config)
 	    	for (auto it = this->renamed_from.begin(); ! is_visible && it != this->renamed_from.end(); ++ it)
 	    		is_visible = has(*it);
 	    }
+        else 
+			is_visible = false;
     }
 }
 
@@ -425,9 +427,7 @@ static std::vector<std::string> s_Preset_print_options {
     "ironing", "ironing_type", "ironing_flowrate", "ironing_speed", "ironing_spacing",
     "max_print_speed", "max_volumetric_speed", "avoid_crossing_perimeters_max_detour",
     "fuzzy_skin", "fuzzy_skin_thickness", "fuzzy_skin_point_dist",
-#ifdef HAS_PRESSURE_EQUALIZER
     "max_volumetric_extrusion_rate_slope_positive", "max_volumetric_extrusion_rate_slope_negative",
-#endif /* HAS_PRESSURE_EQUALIZER */
     "perimeter_speed", "small_perimeter_speed", "external_perimeter_speed", "infill_speed", "solid_infill_speed",
     "top_solid_infill_speed", "support_material_speed", "support_material_xy_spacing", "support_material_interface_speed",
     "bridge_speed", "gap_fill_speed", "gap_fill_enabled", "travel_speed", "travel_speed_z", "first_layer_speed", "first_layer_speed_over_raft", "perimeter_acceleration", "infill_acceleration",
@@ -439,14 +439,16 @@ static std::vector<std::string> s_Preset_print_options {
     "support_material_interface_pattern", "support_material_interface_spacing", "support_material_interface_contact_loops", 
     "support_material_contact_distance", "support_material_bottom_contact_distance",
     "support_material_buildplate_only", "dont_support_bridges", "thick_bridges", "notes", "complete_objects", "extruder_clearance_radius",
-    "extruder_clearance_height", "gcode_comments", "gcode_label_objects", "output_filename_format", "post_process", "perimeter_extruder",
+    "extruder_clearance_height", "gcode_comments", "gcode_label_objects", "output_filename_format", "post_process", "gcode_substitutions", "perimeter_extruder",
     "infill_extruder", "solid_infill_extruder", "support_material_extruder", "support_material_interface_extruder",
     "ooze_prevention", "standby_temperature_delta", "interface_shells", "extrusion_width", "first_layer_extrusion_width",
     "perimeter_extrusion_width", "external_perimeter_extrusion_width", "infill_extrusion_width", "solid_infill_extrusion_width",
     "top_infill_extrusion_width", "support_material_extrusion_width", "infill_overlap", "infill_anchor", "infill_anchor_max", "bridge_flow_ratio", "clip_multipart_objects",
     "elefant_foot_compensation", "xy_size_compensation", "threads", "resolution", "gcode_resolution", "wipe_tower", "wipe_tower_x", "wipe_tower_y",
     "wipe_tower_width", "wipe_tower_rotation_angle", "wipe_tower_brim_width", "wipe_tower_bridging", "single_extruder_multi_material_priming", "mmu_segmented_region_max_width",
-    "wipe_tower_no_sparse_layers", "compatible_printers", "compatible_printers_condition", "inherits"
+    "wipe_tower_no_sparse_layers", "compatible_printers", "compatible_printers_condition", "inherits",
+    "perimeter_generator", "wall_transition_length", "wall_transition_filter_deviation", "wall_transition_angle",
+    "wall_distribution_count", "min_feature_size", "min_bead_width"
 };
 
 static std::vector<std::string> s_Preset_filament_options {
@@ -484,7 +486,7 @@ static std::vector<std::string> s_Preset_printer_options {
     "cooling_tube_length", "high_current_on_filament_swap", "parking_pos_retraction", "extra_loading_move", "max_print_height",
     "default_print_profile", "inherits",
     "remaining_times", "silent_mode",
-    "machine_limits_usage", "thumbnails"
+    "machine_limits_usage", "thumbnails", "thumbnails_format"
 };
 
 static std::vector<std::string> s_Preset_sla_print_options {
@@ -563,7 +565,7 @@ static std::vector<std::string> s_Preset_sla_printer_options {
     "display_width", "display_height", "display_pixels_x", "display_pixels_y",
     "display_mirror_x", "display_mirror_y",
     "display_orientation",
-    "fast_tilt_time", "slow_tilt_time", "area_fill",
+    "fast_tilt_time", "slow_tilt_time", "high_viscosity_tilt_time", "area_fill",
     "relative_correction",
     "relative_correction_x",
     "relative_correction_y",
@@ -791,7 +793,8 @@ std::pair<Preset*, bool> PresetCollection::load_external_preset(
             // The source config may contain keys from many possible preset types. Just copy those that relate to this preset.
             this->get_edited_preset().config.apply_only(combined_config, keys, true);
             this->update_dirty();
-            update_saved_preset_from_current_preset();
+            // Don't save the newly loaded project as a "saved into project" state.
+            //update_saved_preset_from_current_preset();
             assert(this->get_edited_preset().is_dirty);
             return std::make_pair(&(*it), this->get_edited_preset().is_dirty);
         }
@@ -1133,6 +1136,21 @@ void add_correct_opts_to_diff(const std::string &opt_key, t_config_option_keys& 
     }
 }
 
+// list of options with vector variable, which is independent from number of extruders
+static const std::vector<std::string> independent_from_extruder_number_options = {
+    "bed_shape",
+    "thumbnails",
+    "filament_ramming_parameters",
+    "gcode_substitutions",
+    "compatible_prints",
+    "compatible_printers"
+};
+
+bool PresetCollection::is_independent_from_extruder_number_option(const std::string& opt_key)
+{
+    return std::find(independent_from_extruder_number_options.begin(), independent_from_extruder_number_options.end(), opt_key) != independent_from_extruder_number_options.end();
+}
+
 // Use deep_diff to correct return of changed options, considering individual options for each extruder.
 inline t_config_option_keys deep_diff(const ConfigBase &config_this, const ConfigBase &config_other)
 {
@@ -1142,7 +1160,7 @@ inline t_config_option_keys deep_diff(const ConfigBase &config_this, const Confi
         const ConfigOption *other_opt = config_other.option(opt_key);
         if (this_opt != nullptr && other_opt != nullptr && *this_opt != *other_opt)
         {
-            if (opt_key == "bed_shape" || opt_key == "thumbnails" || opt_key == "compatible_prints" || opt_key == "compatible_printers") {
+            if (PresetCollection::is_independent_from_extruder_number_option(opt_key)) {
                 // Scalar variable, or a vector variable, which is independent from number of extruders,
                 // thus the vector is presented to the user as a single input.
                 diff.emplace_back(opt_key);
@@ -1211,7 +1229,6 @@ Preset& PresetCollection::select_preset(size_t idx)
         idx = first_visible_idx();
     m_idx_selected = idx;
     m_edited_preset = m_presets[idx];
-    update_saved_preset_from_current_preset();
     bool default_visible = ! m_default_suppressed || m_idx_selected < m_num_default_presets;
     for (size_t i = 0; i < m_num_default_presets; ++i)
         m_presets[i].is_visible = default_visible;

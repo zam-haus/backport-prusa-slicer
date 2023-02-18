@@ -33,6 +33,8 @@ class GLGizmoCut : public GLGizmoBase
         Vec3d shift{ Vec3d::Zero() };
         ObjectID object_id;
         int instance_idx{ -1 };
+        std::vector<ObjectID> volumes_idxs;
+        std::vector<Transform3d> volumes_trafos;
     };
 
     CutContours m_cut_contours;

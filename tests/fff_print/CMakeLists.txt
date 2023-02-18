@@ -1,12 +1,14 @@
 get_filename_component(_TEST_NAME ${CMAKE_CURRENT_LIST_DIR} NAME)
 add_executable(${_TEST_NAME}_tests 
 	${_TEST_NAME}_tests.cpp
+	test_clipper.cpp
 	test_data.cpp
 	test_data.hpp
 	test_extrusion_entity.cpp
 	test_fill.cpp
 	test_flow.cpp
 	test_gcode.cpp
+	test_gcodefindreplace.cpp
 	test_gcodewriter.cpp
 	test_model.cpp
 	test_print.cpp
