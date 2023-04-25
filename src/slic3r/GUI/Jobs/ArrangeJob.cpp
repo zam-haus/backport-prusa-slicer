@@ -14,6 +14,9 @@
 
 #include "libnest2d/common.hpp"
 
+#include <numeric>
+#include <random>
+
 namespace Slic3r { namespace GUI {
 
 // Cache the wti info
@@ -182,7 +185,8 @@ void ArrangeJob::process()
     arrangement::ArrangeParams params = get_arrange_params(m_plater);
 
     auto count = unsigned(m_selected.size() + m_unprintable.size());
-    Points bedpts = get_bed_shape(*m_plater->config());
+    arrangement::ArrangeBed bed;
+    get_bed_shape(*m_plater->config(), bed);
     
     params.stopcondition = [this]() { return was_canceled(); };
     
@@ -191,13 +195,13 @@ void ArrangeJob::process()
         if (st > 0) update_status(int(count - st), arrangestr);
     };
 
-    arrangement::arrange(m_selected, m_unselected, bedpts, params);
+    arrangement::arrange(m_selected, m_unselected, bed, params);
 
     params.progressind = [this, count](unsigned st) {
         if (st > 0) update_status(int(count - st), arrangestr);
     };
 
-    arrangement::arrange(m_unprintable, {}, bedpts, params);
+    arrangement::arrange(m_unprintable, {}, bed, params);
 
     // finalize just here.
     update_status(int(count),
@@ -278,11 +282,28 @@ arrangement::ArrangePolygon get_arrange_poly(ModelInstance *inst,
 arrangement::ArrangeParams get_arrange_params(Plater *p)
 {
     const GLCanvas3D::ArrangeSettings &settings =
-        static_cast<const GLCanvas3D*>(p->canvas3D())->get_arrange_settings();
+        p->canvas3D()->get_arrange_settings();
 
     arrangement::ArrangeParams params;
     params.allow_rotations  = settings.enable_rotation;
     params.min_obj_distance = scaled(settings.distance);
+
+    arrangement::Pivots pivot = arrangement::Pivots::Center;
+
+    int pivot_max = static_cast<int>(arrangement::Pivots::TopRight);
+    if (settings.alignment < 0) {
+        pivot = arrangement::Pivots::Center;
+    } else if (settings.alignment > pivot_max) {
+        // means it should be random
+        std::random_device rd{};
+        std::mt19937 rng(rd());
+        std::uniform_int_distribution<std::mt19937::result_type> dist(0, pivot_max);
+        pivot = static_cast<arrangement::Pivots>(dist(rng));
+    } else {
+        pivot = static_cast<arrangement::Pivots>(settings.alignment);
+    }
+
+    params.alignment = pivot;
 
     return params;
 }
