@@ -18,6 +18,7 @@
 
 #include "libslic3r.h"
 #include "Config.hpp"
+#include "libslic3r/Arrange.hpp"
 
 #include <boost/preprocessor/facilities/empty.hpp>
 #include <boost/preprocessor/punctuation/comma_if.hpp>
@@ -56,7 +57,7 @@ enum class FuzzySkinType {
 };
 
 enum InfillPattern : int {
-    ipRectilinear, ipMonotonic, ipAlignedRectilinear, ipGrid, ipTriangles, ipStars, ipCubic, ipLine, ipConcentric, ipHoneycomb, ip3DHoneycomb,
+    ipRectilinear, ipMonotonic, ipMonotonicLines, ipAlignedRectilinear, ipGrid, ipTriangles, ipStars, ipCubic, ipLine, ipConcentric, ipHoneycomb, ip3DHoneycomb,
     ipGyroid, ipHilbertCurve, ipArchimedeanChords, ipOctagramSpiral, ipAdaptiveCubic, ipSupportCubic, ipSupportBase,
     ipLightning,
 ipCount,
@@ -726,6 +727,7 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionInts,               disable_fan_first_layers))
     ((ConfigOptionEnum<DraftShield>,  draft_shield))
     ((ConfigOptionFloat,              duplicate_distance))
+    ((ConfigOptionFloat,              external_perimeter_acceleration))
     ((ConfigOptionFloat,              extruder_clearance_height))
     ((ConfigOptionFloat,              extruder_clearance_radius))
     ((ConfigOptionStrings,            extruder_colour))
@@ -767,12 +769,14 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionInt,                skirt_height))
     ((ConfigOptionInt,                skirts))
     ((ConfigOptionInts,               slowdown_below_layer_time))
+    ((ConfigOptionFloat,              solid_infill_acceleration))
     ((ConfigOptionBool,               spiral_vase))
     ((ConfigOptionInt,                standby_temperature_delta))
     ((ConfigOptionInts,               temperature))
     ((ConfigOptionInt,                threads))
     ((ConfigOptionPoints,             thumbnails))
     ((ConfigOptionEnum<GCodeThumbnailsFormat>,  thumbnails_format))
+    ((ConfigOptionFloat,              top_solid_infill_acceleration))
     ((ConfigOptionBools,              wipe))
     ((ConfigOptionBool,               wipe_tower))
     ((ConfigOptionFloat,              wipe_tower_x))
@@ -1081,10 +1085,13 @@ private:
     static PrintAndCLIConfigDef s_def;
 };
 
+bool is_XL_printer(const DynamicPrintConfig &cfg);
+
 Points get_bed_shape(const DynamicPrintConfig &cfg);
 Points get_bed_shape(const PrintConfig &cfg);
 Points get_bed_shape(const SLAPrinterConfig &cfg);
 
+void get_bed_shape(const DynamicPrintConfig &cfg, arrangement::ArrangeBed &out);
 // ModelConfig is a wrapper around DynamicPrintConfig with an addition of a timestamp.
 // Each change of ModelConfig is tracked by assigning a new timestamp from a global counter.
 // The counter is used for faster synchronization of the background slicing thread

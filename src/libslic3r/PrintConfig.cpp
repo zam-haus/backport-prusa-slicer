@@ -93,6 +93,7 @@ CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(FuzzySkinType)
 static const t_config_enum_values s_keys_map_InfillPattern {
     { "rectilinear",        ipRectilinear },
     { "monotonic",          ipMonotonic },
+    { "monotoniclines",     ipMonotonicLines },
     { "alignedrectilinear", ipAlignedRectilinear },
     { "grid",               ipGrid },
     { "triangles",          ipTriangles },
@@ -718,6 +719,7 @@ void PrintConfigDef::init_fff_params()
     def->enum_keys_map = &ConfigOptionEnum<InfillPattern>::get_enum_values();
     def->enum_values.push_back("rectilinear");
     def->enum_values.push_back("monotonic");
+    def->enum_values.push_back("monotoniclines");
     def->enum_values.push_back("alignedrectilinear");
     def->enum_values.push_back("concentric");
     def->enum_values.push_back("hilbertcurve");
@@ -725,11 +727,13 @@ void PrintConfigDef::init_fff_params()
     def->enum_values.push_back("octagramspiral");
     def->enum_labels.push_back(L("Rectilinear"));
     def->enum_labels.push_back(L("Monotonic"));
+    def->enum_labels.push_back(L("Monotonic Lines"));
     def->enum_labels.push_back(L("Aligned Rectilinear"));
     def->enum_labels.push_back(L("Concentric"));
     def->enum_labels.push_back(L("Hilbert Curve"));
     def->enum_labels.push_back(L("Archimedean Chords"));
     def->enum_labels.push_back(L("Octagram Spiral"));
+
     // solid_fill_pattern is an obsolete equivalent to top_fill_pattern/bottom_fill_pattern.
     def->aliases = { "solid_fill_pattern", "external_fill_pattern" };
     def->set_default_value(new ConfigOptionEnum<InfillPattern>(ipMonotonic));
@@ -1393,11 +1397,30 @@ void PrintConfigDef::init_fff_params()
     def = this->add("infill_acceleration", coFloat);
     def->label = L("Infill");
     def->tooltip = L("This is the acceleration your printer will use for infill. Set zero to disable "
-                   "acceleration control for infill.");
+                     "acceleration control for infill.");
     def->sidetext = L("mm/s²");
     def->min = 0;
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(0));
+
+    def = this->add("solid_infill_acceleration", coFloat);
+    def->label = L("Solid infill");
+    def->tooltip = L("This is the acceleration your printer will use for solid infill. Set zero to use "
+                     "the value for infill.");
+    def->sidetext = L("mm/s²");
+    def->min = 0;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(0));
+
+    def = this->add("top_solid_infill_acceleration", coFloat);
+    def->label = L("Top solid infill");
+    def->tooltip = L("This is the acceleration your printer will use for top solid infill. Set zero to use "
+                     "the value for solid infill.");
+    def->sidetext = L("mm/s²");
+    def->min = 0;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(0));
+    
 
     def = this->add("infill_every_layers", coInt);
     def->label = L("Combine infill every");
@@ -1957,6 +1980,14 @@ void PrintConfigDef::init_fff_params()
     def->label = L("Perimeters");
     def->tooltip = L("This is the acceleration your printer will use for perimeters. "
                      "Set zero to disable acceleration control for perimeters.");
+    def->sidetext = L("mm/s²");
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(0));
+
+    def = this->add("external_perimeter_acceleration", coFloat);
+    def->label = L("External perimeters");
+    def->tooltip = L("This is the acceleration your printer will use for external perimeters. "
+                     "Set zero to use the value for perimeters.");
     def->sidetext = L("mm/s²");
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(0));
@@ -4629,6 +4660,17 @@ Points get_bed_shape(const DynamicPrintConfig &config)
     return to_points(bed_shape_opt->values);
 }
 
+void get_bed_shape(const DynamicPrintConfig &cfg, arrangement::ArrangeBed &out)
+{
+    if (is_XL_printer(cfg)) {
+        arrangement::SegmentedRectangleBed bed{get_extents(get_bed_shape(cfg)), 4, 4};
+        bed.inset = scaled(10.);
+        out = bed;
+    } else {
+        out = arrangement::to_arrange_bed(get_bed_shape(cfg));
+    }
+}
+
 Points get_bed_shape(const PrintConfig &cfg)
 {
     return to_points(cfg.bed_shape.values);
@@ -4636,6 +4678,19 @@ Points get_bed_shape(const PrintConfig &cfg)
 
 Points get_bed_shape(const SLAPrinterConfig &cfg) { return to_points(cfg.bed_shape.values); }
 
+bool is_XL_printer(const DynamicPrintConfig &cfg)
+{
+    static constexpr const char *ALIGN_ONLY_FOR = "XL";
+
+    bool ret = false;
+
+    auto *printer_model = cfg.opt<ConfigOptionString>("printer_model");
+
+    if (printer_model)
+        ret = boost::algorithm::starts_with(printer_model->value, ALIGN_ONLY_FOR);
+
+    return ret;
+}
 } // namespace Slic3r
 
 #include <cereal/types/polymorphic.hpp>
