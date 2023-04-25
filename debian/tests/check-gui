@@ -1,0 +1,78 @@
+#!/bin/sh
+
+set -eu
+
+if [ "$(id -u)" = 0 ]; then
+    echo "Running as root user"
+    echo "Generating en_US.UTF-8 locale as root"
+    localedef -i /usr/share/i18n/locales/en_US -c -f UTF-8 en_US.UTF-8
+
+    if [ -n "${AUTOPKGTEST_NORMAL_USER:-}" ]; then
+        echo "AUTOPKGTEST_NORMAL_USER=$AUTOPKGTEST_NORMAL_USER"
+
+        # shellcheck disable=SC2016
+        echo 'chowning $AUTOPKGTEST_TMP'
+        chown -R "$AUTOPKGTEST_NORMAL_USER" "$AUTOPKGTEST_TMP"
+
+        echo "Dropping privileges to: $AUTOPKGTEST_NORMAL_USER"
+        exec su -p -c "$0" -- "$AUTOPKGTEST_NORMAL_USER"
+    fi
+fi
+
+echo "Running the rest of the test"
+
+export HOME="$AUTOPKGTEST_TMP"
+export TMPDIR="$AUTOPKGTEST_TMP"
+
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+export LANGUAGE=en_US:en
+
+# shellcheck disable=SC2016
+xvfb-run bash -c '
+set -eu
+
+self_pid=$$
+
+echo "Launching window manager"
+matchbox-window-manager >/dev/null 2>&1 &
+wm_pid=$!
+echo "wm_pid=$wm_pid"
+
+echo "Launching Prusa Slicer"
+prusa-slicer &
+prusa_slicer_pid=$!
+echo "prusa_slicer_pid=$prusa_slicer_pid"
+
+trap '\''kill $wm_pid $prusa_slicer_pid'\'' INT TERM EXIT
+
+echo "Waiting for 10 seconds to ensure Prusa Slicer has not crashed"
+sleep 10
+
+echo "Dumping windows list"
+wmctrl -l
+
+echo "Checking for Prusa Slicer config window..."
+conf_winid=$(wmctrl -l | awk '\''/PrusaSlicer.*Configuration Wizard/ { print $1; }'\'')
+test -n "$conf_winid" && echo Found || exit 10
+
+echo "Checking for Prusa Slicer main window..."
+main_winid=$(wmctrl -l | awk '\''/PrusaSlicer.*based on/ { print $1; }'\'')
+test -n "$main_winid" && echo Found || exit 11
+
+echo "Closing Prusa Slicer windows"
+wmctrl -i -c "$conf_winid"
+wmctrl -i -c "$main_winid"
+
+echo "Waiting for prusa-slicer to exit..."
+wait "$prusa_slicer_pid"
+echo Done
+
+echo "Killing window manager"
+kill -TERM "$wm_pid"
+echo "Waiting for window manager to exit..."
+wait "$wm_pid" || true
+
+echo "Done"
+trap - INT TERM EXIT
+'

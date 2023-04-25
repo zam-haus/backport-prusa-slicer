@@ -1,0 +1,7 @@
+Tests: check-cli
+Depends: @
+Restrictions: allow-stderr
+
+Tests: check-gui
+Depends: @, matchbox-window-manager, wmctrl, xvfb, xauth, locales
+Restrictions: allow-stderr, needs-root

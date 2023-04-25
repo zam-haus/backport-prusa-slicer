@@ -1,0 +1,14 @@
+#!/bin/sh
+
+die() {
+    echo "$2" >&2
+    exit "$1"
+}
+
+srcdir="$(pwd)"
+cd "$AUTOPKGTEST_TMP" || die 1 "Couldn't chdir into $AUTOPKGTEST_TMP"
+cp "$srcdir/resources/shapes/box.stl" .
+prusa-slicer -g box.stl
+
+test -f box.gcode || die 2 "Failed to generate box.gcode"
+grep -q prusaslicer_config box.gcode || die 3 "Prusa Slicer config not found in gcode file"
