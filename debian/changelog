@@ -1,3 +1,10 @@
+slic3r-prusa (2.5.2+dfsg-1) unstable; urgency=medium
+
+  * [12fed9e] New upstream version 2.5.2+dfsg
+  * [d1fa111] Add autopkgtest
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 27 Apr 2023 17:04:34 +0800
+
 slic3r-prusa (2.5.0+dfsg-4) unstable; urgency=medium
 
   [ Adrian Bunk ]
