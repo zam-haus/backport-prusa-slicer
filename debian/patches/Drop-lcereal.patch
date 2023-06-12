@@ -10,40 +10,40 @@ libcereal in Debian has become a header-only library, so drop the link
  3 files changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index b75dcaa..442575b 100644
+index 50eccfc..4dc314a 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
-@@ -127,7 +127,7 @@ if (NOT WIN32 AND NOT APPLE)
+@@ -147,7 +147,7 @@ if (NOT WIN32 AND NOT APPLE)
      set_target_properties(PrusaSlicer PROPERTIES OUTPUT_NAME "prusa-slicer")
  endif ()
  
--target_link_libraries(PrusaSlicer libslic3r cereal)
+-target_link_libraries(PrusaSlicer libslic3r libcereal)
 +target_link_libraries(PrusaSlicer libslic3r)
  
  if (APPLE)
  #    add_compile_options(-stdlib=libc++)
 diff --git a/src/libslic3r/CMakeLists.txt b/src/libslic3r/CMakeLists.txt
-index 5998dd6..3fb11ce 100644
+index 0de0b4e..9e0ead9 100644
 --- a/src/libslic3r/CMakeLists.txt
 +++ b/src/libslic3r/CMakeLists.txt
-@@ -395,7 +395,6 @@ find_package(JPEG REQUIRED)
+@@ -490,7 +490,6 @@ find_package(JPEG REQUIRED)
  target_link_libraries(libslic3r
      libnest2d
      admesh
--    cereal
+-    libcereal
      libigl
      miniz
      boost_libs
 diff --git a/src/slic3r/CMakeLists.txt b/src/slic3r/CMakeLists.txt
-index 81a7740..d3685b8 100644
+index 5d7b2c0..93d175c 100644
 --- a/src/slic3r/CMakeLists.txt
 +++ b/src/slic3r/CMakeLists.txt
-@@ -260,7 +260,7 @@ add_library(libslic3r_gui STATIC ${SLIC3R_GUI_SOURCES})
+@@ -319,7 +319,7 @@ endforeach()
  
  encoding_check(libslic3r_gui)
  
--target_link_libraries(libslic3r_gui libslic3r avrdude cereal imgui GLEW::GLEW OpenGL::GL hidapi libcurl ${wxWidgets_LIBRARIES})
-+target_link_libraries(libslic3r_gui libslic3r avrdude imgui GLEW::GLEW OpenGL::GL hidapi libcurl ${wxWidgets_LIBRARIES})
+-target_link_libraries(libslic3r_gui libslic3r avrdude libcereal imgui GLEW::GLEW OpenGL::GL hidapi libcurl ${wxWidgets_LIBRARIES} NanoSVG::nanosvg NanoSVG::nanosvgrast)
++target_link_libraries(libslic3r_gui libslic3r avrdude imgui GLEW::GLEW OpenGL::GL hidapi libcurl ${wxWidgets_LIBRARIES} NanoSVG::nanosvg NanoSVG::nanosvgrast)
  
  if (MSVC)
      target_link_libraries(libslic3r_gui Setupapi.lib)

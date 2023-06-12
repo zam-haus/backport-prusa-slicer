@@ -13,10 +13,10 @@ Applied-Upstream: no
  4 files changed, 36 insertions(+), 26 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 449f753..7150454 100644
+index 49fe343..afc5ffa 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -565,35 +565,13 @@ function(prusaslicer_copy_dlls target)
+@@ -595,35 +595,13 @@ function(prusaslicer_copy_dlls target)
  
  endfunction()
  
@@ -53,7 +53,7 @@ index 449f753..7150454 100644
      install(DIRECTORY ${SLIC3R_RESOURCES_DIR}/ DESTINATION ${SLIC3R_FHS_RESOURCES}
          PATTERN "*/udev" EXCLUDE
      )
-@@ -615,3 +593,24 @@ else ()
+@@ -645,3 +623,24 @@ else ()
  endif ()
  
  configure_file(${LIBDIR}/platform/unix/fhs.hpp.in ${LIBDIR_BIN}/platform/unix/fhs.hpp)
@@ -106,10 +106,10 @@ index 0817267..270eae1 100644
          libpath /= "OCCTWrapper.dll";
          HMODULE module = LoadLibraryW(libpath.wstring().c_str());
 diff --git a/src/occt_wrapper/CMakeLists.txt b/src/occt_wrapper/CMakeLists.txt
-index 16de4e0..65e8c1f 100644
+index d8dd8e1..2265dd7 100644
 --- a/src/occt_wrapper/CMakeLists.txt
 +++ b/src/occt_wrapper/CMakeLists.txt
-@@ -56,5 +56,8 @@ target_link_libraries(OCCTWrapper ${OCCT_LIBS})
+@@ -58,5 +58,8 @@ target_link_libraries(OCCTWrapper ${OCCT_LIBS})
  
  include(GNUInstallDirs)
  

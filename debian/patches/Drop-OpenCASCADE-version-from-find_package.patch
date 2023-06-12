@@ -10,7 +10,7 @@ Forwarded: no
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/occt_wrapper/CMakeLists.txt b/src/occt_wrapper/CMakeLists.txt
-index ed75531..16de4e0 100644
+index 8ab9fb4..d8dd8e1 100644
 --- a/src/occt_wrapper/CMakeLists.txt
 +++ b/src/occt_wrapper/CMakeLists.txt
 @@ -19,7 +19,7 @@ include(GenerateExportHeader)
