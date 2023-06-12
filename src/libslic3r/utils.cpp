@@ -9,6 +9,7 @@
 
 #include "Platform.hpp"
 #include "Time.hpp"
+#include "format.hpp"
 #include "libslic3r.h"
 
 #ifdef WIN32
@@ -125,19 +126,13 @@ static struct RunOnInit {
     }
 } g_RunOnInit;
 
-void trace(unsigned int level, const char *message)
-{
-    boost::log::trivial::severity_level severity = level_to_boost(level);
-
-    BOOST_LOG_STREAM_WITH_PARAMS(::boost::log::trivial::logger::get(),\
-        (::boost::log::keywords::severity = severity)) << message;
-}
-
 void disable_multi_threading()
 {
-    // Disable parallelization so the Shiny profiler works
+    // Disable parallelization to simplify debugging.
 #ifdef TBB_HAS_GLOBAL_CONTROL
-    tbb::global_control(tbb::global_control::max_allowed_parallelism, 1);
+	{
+		static tbb::global_control gc(tbb::global_control::max_allowed_parallelism, 1);
+	}
 #else // TBB_HAS_GLOBAL_CONTROL
     static tbb::task_scheduler_init *tbb_init = new tbb::task_scheduler_init(1);
     UNUSED(tbb_init);
@@ -820,49 +815,6 @@ bool is_shapes_dir(const std::string& dir)
 
 namespace Slic3r {
 
-// Encode an UTF-8 string to the local code page.
-std::string encode_path(const char *src)
-{    
-#ifdef WIN32
-    // Convert the source utf8 encoded string to a wide string.
-    std::wstring wstr_src = boost::nowide::widen(src);
-    if (wstr_src.length() == 0)
-        return std::string();
-    // Convert a wide string to a local code page.
-    int size_needed = ::WideCharToMultiByte(0, 0, wstr_src.data(), (int)wstr_src.size(), nullptr, 0, nullptr, nullptr);
-    std::string str_dst(size_needed, 0);
-    ::WideCharToMultiByte(0, 0, wstr_src.data(), (int)wstr_src.size(), str_dst.data(), size_needed, nullptr, nullptr);
-    return str_dst;
-#else /* WIN32 */
-    return src;
-#endif /* WIN32 */
-}
-
-// Encode an 8-bit string from a local code page to UTF-8.
-// Multibyte to utf8
-std::string decode_path(const char *src)
-{  
-#ifdef WIN32
-    int len = int(strlen(src));
-    if (len == 0)
-        return std::string();
-    // Convert the string encoded using the local code page to a wide string.
-    int size_needed = ::MultiByteToWideChar(0, 0, src, len, nullptr, 0);
-    std::wstring wstr_dst(size_needed, 0);
-    ::MultiByteToWideChar(0, 0, src, len, wstr_dst.data(), size_needed);
-    // Convert a wide string to utf8.
-    return boost::nowide::narrow(wstr_dst.c_str());
-#else /* WIN32 */
-    return src;
-#endif /* WIN32 */
-}
-
-std::string normalize_utf8_nfc(const char *src)
-{
-    static std::locale locale_utf8(boost::locale::generator().generate(""));
-    return boost::locale::normalize(src, boost::locale::norm_nfc, locale_utf8);
-}
-
 size_t get_utf8_sequence_length(const std::string& text, size_t pos)
 {
 	assert(pos < text.size());
@@ -933,18 +885,6 @@ size_t get_utf8_sequence_length(const char *seq, size_t size)
 	return length;
 }
 
-namespace PerlUtils {
-    // Get a file name including the extension.
-    std::string path_to_filename(const char *src)       { return boost::filesystem::path(src).filename().string(); }
-    // Get a file name without the extension.
-    std::string path_to_stem(const char *src)           { return boost::filesystem::path(src).stem().string(); }
-    // Get just the extension.
-    std::string path_to_extension(const char *src)      { return boost::filesystem::path(src).extension().string(); }
-    // Get a directory without the trailing slash.
-    std::string path_to_parent_path(const char *src)    { return boost::filesystem::path(src).parent_path().string(); }
-};
-
-
 std::string string_printf(const char *format, ...)
 {
     va_list args1;
@@ -961,9 +901,11 @@ std::string string_printf(const char *format, ...)
         buffer.resize(size_t(bufflen) + 1);
         ::vsnprintf(buffer.data(), buffer.size(), format, args2);
     }
+
+    va_end(args1);
+    va_end(args2);
     
     buffer.resize(bufflen);
-    
     return buffer;
 }
 
@@ -1003,7 +945,7 @@ std::string xml_escape(std::string text, bool is_marked/* = false*/)
         case '\'': replacement = "&apos;"; break;
         case '&':  replacement = "&amp;";  break;
         case '<':  replacement = is_marked ? "<" :"&lt;"; break;
-        case '>':  replacement = is_marked ? ">" :"&gt;"; break;
+        case '>': replacement = is_marked ? ">" : "&gt;"; break;
         default: break;
         }
 
@@ -1012,6 +954,89 @@ std::string xml_escape(std::string text, bool is_marked/* = false*/)
     }
 
     return text;
+}
+
+// Definition of escape symbols https://www.w3.org/TR/REC-xml/#AVNormalize
+// During the read of xml attribute normalization of white spaces is applied
+// Soo for not lose white space character it is escaped before store
+std::string xml_escape_double_quotes_attribute_value(std::string text)
+{
+    std::string::size_type pos = 0;
+    for (;;) {
+        pos = text.find_first_of("\"&<\r\n\t", pos);
+        if (pos == std::string::npos) break;
+
+        std::string replacement;
+        switch (text[pos]) {
+        case '\"': replacement = "&quot;"; break;
+        case '&': replacement = "&amp;"; break;
+        case '<': replacement = "&lt;"; break;
+        case '\r': replacement = "&#xD;"; break;
+        case '\n': replacement = "&#xA;"; break;
+        case '\t': replacement = "&#x9;"; break;
+        default: break;
+        }
+
+        text.replace(pos, 1, replacement);
+        pos += replacement.size();
+    }
+
+    return text;
+}
+
+std::string short_time(const std::string &time, bool force_localization /*= false*/)
+{
+	// Parse the dhms time format.
+	int days = 0;
+	int hours = 0;
+	int minutes = 0;
+	int seconds = 0;
+	if (time.find('d') != std::string::npos)
+		::sscanf(time.c_str(), "%dd %dh %dm %ds", &days, &hours, &minutes, &seconds);
+	else if (time.find('h') != std::string::npos)
+		::sscanf(time.c_str(), "%dh %dm %ds", &hours, &minutes, &seconds);
+	else if (time.find('m') != std::string::npos)
+		::sscanf(time.c_str(), "%dm %ds", &minutes, &seconds);
+	else if (time.find('s') != std::string::npos)
+		::sscanf(time.c_str(), "%ds", &seconds);
+	// Round to full minutes.
+	if (days + hours + minutes > 0 && seconds >= 30) {
+		if (++minutes == 60) {
+			minutes = 0;
+			if (++hours == 24) {
+				hours = 0;
+				++days;
+			}
+		}
+	}
+
+	// Format the dhm time
+
+	if (force_localization) {
+		auto get_d = [days]() { return format(_u8L("%1%d"), days); };
+		auto get_h = [hours]() { return format(_u8L("%1%h"), hours); };
+		// TRN "m" means "minutes"
+		auto get_m = [minutes]() { return format(_u8L("%1%m"), minutes); };
+
+		if (days > 0)
+			return get_d() + get_h() + get_m();
+		if (hours > 0)
+			return get_h() + get_m();
+		if (minutes > 0)
+			return get_m();
+		return format(_u8L("%1%s"), seconds);
+	}
+
+	char buffer[64];
+	if (days > 0)
+		::sprintf(buffer, "%dd%dh%dm", days, hours, minutes);
+	else if (hours > 0)
+		::sprintf(buffer, "%dh%dm", hours, minutes);
+	else if (minutes > 0)
+		::sprintf(buffer, "%dm", minutes);
+	else
+		::sprintf(buffer, "%ds", seconds);
+    return buffer;
 }
 
 std::string format_memsize_MB(size_t n) 
