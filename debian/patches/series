@@ -6,3 +6,4 @@ Drop-OpenCASCADE-version-from-find_package.patch
 Move-OCCTWrapper.so-into-package-specific-libdir.patch
 Add-missing-include-TDocStd_Document.hxx-in-OCCTWrapper.c.patch
 Fix-segfault-due-to-uninitialized-imgui-in-wxwidgets3.2.patch
+Remove-redundant-add_library-libexpat-INTERFACE.patch
