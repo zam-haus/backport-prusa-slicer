@@ -1,9 +1,9 @@
 #ifndef ARRANGE_HPP
 #define ARRANGE_HPP
 
-#include "ExPolygon.hpp"
-
 #include <boost/variant.hpp>
+
+#include <libslic3r/ExPolygon.hpp>
 #include <libslic3r/BoundingBox.hpp>
 
 namespace Slic3r {
@@ -28,7 +28,7 @@ class CircleBed {
     double radius_;
 public:
 
-    inline CircleBed(): center_(0, 0), radius_(std::nan("")) {}
+    inline CircleBed(): center_(0, 0), radius_(NaNd) {}
     explicit inline CircleBed(const Point& c, double r): center_(c), radius_(r) {}
 
     inline double radius() const { return radius_; }
@@ -38,7 +38,6 @@ public:
 struct SegmentedRectangleBed {
     Vec<2, size_t> segments;
     BoundingBox bb;
-    coord_t inset = 0;
 
     SegmentedRectangleBed (const BoundingBox &bb,
                            size_t segments_x,
@@ -56,6 +55,25 @@ struct IrregularBed {
 
 using ArrangeBed = boost::variant<InfiniteBed, RectangleBed, CircleBed, SegmentedRectangleBed, IrregularBed>;
 
+BoundingBox bounding_box(const InfiniteBed &bed);
+inline BoundingBox bounding_box(const RectangleBed &b) { return b.bb; }
+inline BoundingBox bounding_box(const SegmentedRectangleBed &b) { return b.bb; }
+inline BoundingBox bounding_box(const CircleBed &b)
+{
+    auto r = static_cast<coord_t>(std::round(b.radius()));
+    Point R{r, r};
+
+    return {b.center() - R, b.center() + R};
+}
+inline BoundingBox bounding_box(const ArrangeBed &b)
+{
+    BoundingBox ret;
+    auto visitor = [&ret](const auto &b) { ret = bounding_box(b); };
+    boost::apply_visitor(visitor, b);
+
+    return ret;
+}
+
 ArrangeBed to_arrange_bed(const Points &bedpts);
 
 /// A logical bed representing an object not being arranged. Either the arrange
@@ -72,18 +90,18 @@ static const constexpr int UNARRANGED = -1;
 /// polygon belongs: UNARRANGED means no place for the polygon
 /// (also the initial state before arrange), 0..N means the index of the bed.
 /// Zero is the physical bed, larger than zero means a virtual bed.
-struct ArrangePolygon { 
+struct ArrangePolygon {
     ExPolygon poly;                 /// The 2D silhouette to be arranged
     Vec2crd   translation{0, 0};    /// The translation of the poly
     double    rotation{0.0};        /// The rotation of the poly in radians
     coord_t   inflation = 0;        /// Arrange with inflated polygon
     int       bed_idx{UNARRANGED};  /// To which logical bed does poly belong...
     int       priority{0};
-    
+
     // If empty, any rotation is allowed (currently unsupported)
     // If only a zero is there, no rotation is allowed
     std::vector<double> allowed_rotations = {0.};
-    
+
     /// Optional setter function which can store arbitrary data in its closure
     std::function<void(const ArrangePolygon&)> setter = nullptr;
     
@@ -110,15 +128,18 @@ enum class Pivots {
 };
 
 struct ArrangeParams {
-    
+
     /// The minimum distance which is allowed for any 
     /// pair of items on the print bed in any direction.
     coord_t min_obj_distance = 0;
-    
+
+    /// The minimum distance of any object from bed edges
+    coord_t min_bed_distance = 0;
+
     /// The accuracy of optimization.
     /// Goes from 0.0 to 1.0 and scales performance as well
     float accuracy = 1.f;
-    
+
     /// Allow parallel execution.
     bool parallel = true;
 
@@ -135,10 +156,10 @@ struct ArrangeParams {
     std::function<void(unsigned)> progressind;
 
     std::function<void(const ArrangePolygon &)> on_packed;
-    
+
     /// A predicate returning true if abort is needed.
     std::function<bool(void)>     stopcondition;
-    
+
     ArrangeParams() = default;
     explicit ArrangeParams(coord_t md) : min_obj_distance(md) {}
 };
