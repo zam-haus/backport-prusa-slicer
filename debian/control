@@ -38,25 +38,6 @@ Homepage: http://github.com/prusa3d/slic3r
 Vcs-Git: https://salsa.debian.org/3dprinting-team/slic3r-prusa
 Vcs-Browser: https://salsa.debian.org/3dprinting-team/slic3r-prusa.git
 
-Package: slic3r-prusa
-Section: oldlibs
-Architecture: all
-Depends: prusa-slicer, ${misc:Depends}
-Description: Transitional package for prusa-slicer
- PrusaSlicer converts digital 3D models into printing instructions (G-code)
- for your 3D printer. It cuts the model into horizontal slices (layers),
- generates toolpaths to fill them and calculates the amount of material
- to be extruded.
- .
- PrusaSlicer supports input in the STL, AMF and OBJ formats, and can output
- G-code for several series of 3D printers, including RepRap, Ultimaker,
- Makerbot, as well as SVG files for DLP printers.
- .
- It can be used with a graphical interface, or in batch mode via the
- command-line.
- .
- This is a transitional package. It can safely be removed.
-
 Package: prusa-slicer
 Architecture: any
 Depends: ${misc:Depends}, ${shlibs:Depends}, fonts-noto-hinted
