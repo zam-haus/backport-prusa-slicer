@@ -1,4 +1,21 @@
-slic3r-prusa (2.6.0~rc1+dfsg-1) experimental; urgency=medium
+slic3r-prusa (2.6.0+dfsg-1) unstable; urgency=medium
+
+  * [8a284f5] Refresh patches and drop upstreamed patches
+  * [43d53c6] Patch to fix libexpat cmake issue
+  * [a3ea152] New upstream version 2.6.0~rc2+dfsg
+  * [8f466d4] New upstream version 2.6.0+dfsg
+  * [a88d80a] Drop transitional package slic3r-prusa.
+    It has been released in bullseye and bookworm already. (Closes: #1038307)
+  * [66a38d7] Build-dep on libnanosvg-dev
+  * [19cc709] Build-dep on qhull
+  * [8f0f096] Drop superfluous files from debian/copyright
+    qhull, nanosvg, and shiny have been unbundled
+  * [8ab4dca] Import patch to fix wxWidgets resizer assertion.
+    Thanks to Pascal de Bruijn <pmjdebruijn@pcode.nl>
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 17 Jul 2023 15:33:29 +0800
+
+slic3r-prusa (2.6.0~rc1+dfsg-1) UNRELEASED; urgency=medium
 
   * [349feb1] New upstream version 2.6.0~rc1+dfsg
 
