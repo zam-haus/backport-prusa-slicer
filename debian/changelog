@@ -1,3 +1,12 @@
+slic3r-prusa (2.6.0+dfsg-2) unstable; urgency=medium
+
+  * [7e02ab9] Reduce debug info on i386 to fix ftbfs.
+    Thanks to Adrian Bunk <bunk@debian.org> (Closes: #1041870)
+  * [9c707ed] Import patch to fix ftbfs on arches where sizeof(std::float) != 4.
+    Thanks to Adrian Bunk <bunk@debian.org> (Closes: #1041870)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 25 Jul 2023 16:02:36 +0800
+
 slic3r-prusa (2.6.0+dfsg-1) unstable; urgency=medium
 
   * [8a284f5] Refresh patches and drop upstreamed patches
