@@ -5,7 +5,7 @@ include /usr/share/dpkg/default.mk
 # less debug info to avoid running out of address space
 ifneq (,$(filter $(DEB_HOST_ARCH), mips mipsel))
 	export DEB_CXXFLAGS_MAINT_APPEND += --param ggc-min-expand=5 -g0
-else ifeq (,$(filter $(DEB_HOST_ARCH_BITS), 32))
+else ifeq ($(DEB_HOST_ARCH_BITS), 32)
 	export DEB_CXXFLAGS_MAINT_APPEND += -g1
 endif
 
