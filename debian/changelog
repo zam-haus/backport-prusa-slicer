@@ -1,3 +1,11 @@
+slic3r-prusa (2.6.0+dfsg-3) unstable; urgency=medium
+
+  * [975876e] Update fonts-noto-* dependencies (Closes: #1050046)
+  * [20431a6] Build-dep on python3-imath.
+  * [f9a5eb5] Patch to fix compilation error
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 22 Aug 2023 16:25:44 +0800
+
 slic3r-prusa (2.6.0+dfsg-2) unstable; urgency=medium
 
   * [7e02ab9] Reduce debug info on i386 to fix ftbfs.
