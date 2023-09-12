@@ -1,0 +1,22 @@
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Tue, 12 Sep 2023 15:08:55 +0800
+Subject: Disable automatic app version check in distro package
+
+Forwarded: not-needed
+---
+ src/slic3r/GUI/GUI_App.cpp | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/slic3r/GUI/GUI_App.cpp b/src/slic3r/GUI/GUI_App.cpp
+index a916f53..3cedb57 100644
+--- a/src/slic3r/GUI/GUI_App.cpp
++++ b/src/slic3r/GUI/GUI_App.cpp
+@@ -843,8 +843,6 @@ void GUI_App::post_init()
+                 // sees something else than "we want something" on the first start.
+                 show_send_system_info_dialog_if_needed();   
+             }  
+-            // app version check is asynchronous and triggers blocking dialog window, better call it last
+-            this->app_version_check(false);
+         });
+     }
+ 
