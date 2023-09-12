@@ -1,3 +1,14 @@
+slic3r-prusa (2.6.1+dfsg-1) unstable; urgency=medium
+
+  * [d069dc3] New upstream version 2.6.1+dfsg
+  * [37f1207] Drop upstreamed patches
+  * [fd9fa33] Refresh patches
+  * [e94669b] Disable automatic app version check.
+    This doesn't serve much purpose in a distro package and causes segfaults in
+    autopkgtests.
+
+ -- Chow Loong Jin <hyperair@debian.org>  Tue, 12 Sep 2023 16:59:17 +0800
+
 slic3r-prusa (2.6.0+dfsg-3) unstable; urgency=medium
 
   * [975876e] Update fonts-noto-* dependencies (Closes: #1050046)
