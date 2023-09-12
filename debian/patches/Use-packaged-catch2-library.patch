@@ -8,7 +8,7 @@ Bug-Debian: https://bugs.debian.org/979826
  1 file changed, 3 insertions(+), 10 deletions(-)
 
 diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
-index b91f75b..1322cab 100644
+index d6d16db..20795bb 100644
 --- a/tests/CMakeLists.txt
 +++ b/tests/CMakeLists.txt
 @@ -4,15 +4,8 @@

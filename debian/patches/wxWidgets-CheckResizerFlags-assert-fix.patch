@@ -15,10 +15,10 @@ From: https://github.com/prusa3d/PrusaSlicer/pull/10811/
  4 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/src/slic3r/GUI/Field.cpp b/src/slic3r/GUI/Field.cpp
-index 74ad028..6789ce2 100644
+index c478a44..e5de19f 100644
 --- a/src/slic3r/GUI/Field.cpp
 +++ b/src/slic3r/GUI/Field.cpp
-@@ -1660,7 +1660,7 @@ void SliderCtrl::BUILD()
+@@ -1668,7 +1668,7 @@ void SliderCtrl::BUILD()
  	m_textctrl->SetFont(Slic3r::GUI::wxGetApp().normal_font());
  	m_textctrl->SetBackgroundStyle(wxBG_STYLE_PAINT);
  
@@ -28,10 +28,10 @@ index 74ad028..6789ce2 100644
  
  	m_slider->Bind(wxEVT_SLIDER, ([this](wxCommandEvent e) {
 diff --git a/src/slic3r/GUI/FirmwareDialog.cpp b/src/slic3r/GUI/FirmwareDialog.cpp
-index 4740264..46d2fdb 100644
+index c3828fe..fa035ab 100644
 --- a/src/slic3r/GUI/FirmwareDialog.cpp
 +++ b/src/slic3r/GUI/FirmwareDialog.cpp
-@@ -841,7 +841,7 @@ FirmwareDialog::FirmwareDialog(wxWindow *parent) :
+@@ -845,7 +845,7 @@ FirmwareDialog::FirmwareDialog(wxWindow *parent) :
  	grid->Add(port_sizer, 0, wxEXPAND);
  
  	grid->Add(label_progress, 0, wxALIGN_CENTER_VERTICAL);
@@ -41,10 +41,10 @@ index 4740264..46d2fdb 100644
  	grid->Add(label_status, 0, wxALIGN_CENTER_VERTICAL);
  	grid->Add(p->txt_status, 0, wxEXPAND);
 diff --git a/src/slic3r/GUI/Tab.cpp b/src/slic3r/GUI/Tab.cpp
-index ad93afa..866d986 100644
+index ec8ae11..4c8aeda 100644
 --- a/src/slic3r/GUI/Tab.cpp
 +++ b/src/slic3r/GUI/Tab.cpp
-@@ -217,7 +217,7 @@ void Tab::create_preset_tab()
+@@ -236,7 +236,7 @@ void Tab::create_preset_tab()
  
      const float scale_factor = em_unit(this)*0.1;// GetContentScaleFactor();
      m_top_hsizer = new wxBoxSizer(wxHORIZONTAL);
@@ -53,7 +53,7 @@ index ad93afa..866d986 100644
      m_top_hsizer->Add(m_presets_choice, 0, wxLEFT | wxRIGHT | wxTOP | wxALIGN_CENTER_VERTICAL, 3);
      m_top_hsizer->AddSpacer(int(4*scale_factor));
  
-@@ -243,7 +243,7 @@ void Tab::create_preset_tab()
+@@ -262,7 +262,7 @@ void Tab::create_preset_tab()
      m_h_buttons_sizer->AddSpacer(int(8*scale_factor));
      m_h_buttons_sizer->Add(m_btn_compare_preset, 0, wxALIGN_CENTER_VERTICAL);
  
@@ -63,10 +63,10 @@ index ad93afa..866d986 100644
      // StretchSpacer has a strange behavior under OSX, so
      // There is used just additional sizer for m_mode_sizer with right alignment
 diff --git a/src/slic3r/GUI/WipeTowerDialog.cpp b/src/slic3r/GUI/WipeTowerDialog.cpp
-index 4d117ff..6d48daa 100644
+index a8324da..6671b68 100644
 --- a/src/slic3r/GUI/WipeTowerDialog.cpp
 +++ b/src/slic3r/GUI/WipeTowerDialog.cpp
-@@ -353,7 +353,7 @@ WipingPanel::WipingPanel(wxWindow* parent, const std::vector<float>& matrix, con
+@@ -357,7 +357,7 @@ WipingPanel::WipingPanel(wxWindow* parent, const std::vector<float>& matrix, con
          hsizer->AddSpacer(10);
          hsizer->Add(new wxStaticText(m_page_simple, wxID_ANY, wxString(_(L("Tool #"))) << i + 1 << ": "), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
  

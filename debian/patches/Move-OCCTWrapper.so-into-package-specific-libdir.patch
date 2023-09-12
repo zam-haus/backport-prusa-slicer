@@ -13,10 +13,10 @@ Applied-Upstream: no
  4 files changed, 36 insertions(+), 26 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 49fe343..afc5ffa 100644
+index 0ad8993..e6ce2fe 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -595,35 +595,13 @@ function(prusaslicer_copy_dlls target)
+@@ -603,35 +603,13 @@ function(prusaslicer_copy_dlls target)
  
  endfunction()
  
@@ -53,7 +53,7 @@ index 49fe343..afc5ffa 100644
      install(DIRECTORY ${SLIC3R_RESOURCES_DIR}/ DESTINATION ${SLIC3R_FHS_RESOURCES}
          PATTERN "*/udev" EXCLUDE
      )
-@@ -645,3 +623,24 @@ else ()
+@@ -653,3 +631,24 @@ else ()
  endif ()
  
  configure_file(${LIBDIR}/platform/unix/fhs.hpp.in ${LIBDIR_BIN}/platform/unix/fhs.hpp)
@@ -79,10 +79,10 @@ index 49fe343..afc5ffa 100644
 +    add_subdirectory(tests)
 +endif()
 diff --git a/src/libslic3r/Format/STEP.cpp b/src/libslic3r/Format/STEP.cpp
-index 0817267..270eae1 100644
+index 2894d45..bfbbf24 100644
 --- a/src/libslic3r/Format/STEP.cpp
 +++ b/src/libslic3r/Format/STEP.cpp
-@@ -5,6 +5,8 @@
+@@ -9,6 +9,8 @@
  #include "libslic3r/TriangleMesh.hpp"
  #include "libslic3r/Utils.hpp"
  
@@ -91,7 +91,7 @@ index 0817267..270eae1 100644
  #include <boost/filesystem.hpp>
  #include <boost/dll/runtime_symbol_info.hpp>
  #include <boost/log/trivial.hpp>
-@@ -35,7 +37,12 @@ LoadStepFn get_load_step_fn()
+@@ -39,7 +41,12 @@ LoadStepFn get_load_step_fn()
  #endif
  
      if (!load_step_fn) {

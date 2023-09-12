@@ -15,10 +15,10 @@ This causes the following build failure:
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index afc5ffa..922c816 100644
+index e6ce2fe..912dc8a 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -446,7 +446,7 @@ include_directories(BEFORE SYSTEM ${EIGEN3_INCLUDE_DIR})
+@@ -454,7 +454,7 @@ include_directories(BEFORE SYSTEM ${EIGEN3_INCLUDE_DIR})
  # no matter what.
  find_package(EXPAT REQUIRED)
  

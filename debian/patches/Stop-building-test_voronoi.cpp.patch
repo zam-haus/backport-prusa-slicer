@@ -11,7 +11,7 @@ Bug-Debian: https://bugs.debian.org/984338
  1 file changed, 1 deletion(-)
 
 diff --git a/tests/libslic3r/CMakeLists.txt b/tests/libslic3r/CMakeLists.txt
-index 971db52..af5f4b6 100644
+index 69ae901..ab9b169 100644
 --- a/tests/libslic3r/CMakeLists.txt
 +++ b/tests/libslic3r/CMakeLists.txt
 @@ -26,7 +26,6 @@ add_executable(${_TEST_NAME}_tests

@@ -10,10 +10,10 @@ libcereal in Debian has become a header-only library, so drop the link
  3 files changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 50eccfc..4dc314a 100644
+index dc23da2..c9e3c67 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
-@@ -147,7 +147,7 @@ if (NOT WIN32 AND NOT APPLE)
+@@ -131,7 +131,7 @@ if (NOT WIN32 AND NOT APPLE)
      set_target_properties(PrusaSlicer PROPERTIES OUTPUT_NAME "prusa-slicer")
  endif ()
  
@@ -23,10 +23,10 @@ index 50eccfc..4dc314a 100644
  if (APPLE)
  #    add_compile_options(-stdlib=libc++)
 diff --git a/src/libslic3r/CMakeLists.txt b/src/libslic3r/CMakeLists.txt
-index 0de0b4e..9e0ead9 100644
+index 81fefdd..e0563db 100644
 --- a/src/libslic3r/CMakeLists.txt
 +++ b/src/libslic3r/CMakeLists.txt
-@@ -490,7 +490,6 @@ find_package(JPEG REQUIRED)
+@@ -550,7 +550,6 @@ find_package(JPEG REQUIRED)
  target_link_libraries(libslic3r
      libnest2d
      admesh
@@ -35,10 +35,10 @@ index 0de0b4e..9e0ead9 100644
      miniz
      boost_libs
 diff --git a/src/slic3r/CMakeLists.txt b/src/slic3r/CMakeLists.txt
-index 5d7b2c0..93d175c 100644
+index 0cf6638..31f3c06 100644
 --- a/src/slic3r/CMakeLists.txt
 +++ b/src/slic3r/CMakeLists.txt
-@@ -319,7 +319,7 @@ endforeach()
+@@ -330,7 +330,7 @@ endforeach()
  
  encoding_check(libslic3r_gui)
  

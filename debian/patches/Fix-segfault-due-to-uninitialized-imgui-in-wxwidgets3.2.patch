@@ -10,10 +10,10 @@ Forwarded: no
  1 file changed, 3 insertions(+), 1 deletion(-)
 
 diff --git a/src/slic3r/GUI/HintNotification.cpp b/src/slic3r/GUI/HintNotification.cpp
-index 95583a3..0092498 100644
+index 15eb9f6..6c7d017 100644
 --- a/src/slic3r/GUI/HintNotification.cpp
 +++ b/src/slic3r/GUI/HintNotification.cpp
-@@ -562,7 +562,9 @@ void HintDatabase::clear_used()
+@@ -567,7 +567,9 @@ void HintDatabase::clear_used()
  
  void NotificationManager::HintNotification::count_spaces()
  {
