@@ -9,4 +9,3 @@ Fix-segfault-due-to-uninitialized-imgui-in-wxwidgets3.2.patch
 Remove-redundant-add_library-libexpat-INTERFACE.patch
 wxWidgets-CheckResizerFlags-assert-fix.patch
 format-AnycubicSLA-use-float-instead-of-float_t.patch
-Fix-compilation-errors-with-std-gnu-17.patch
