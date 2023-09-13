@@ -3,5 +3,5 @@ Depends: @
 Restrictions: allow-stderr
 
 Tests: check-gui
-Depends: @, matchbox-window-manager, wmctrl, xvfb, xauth, locales
+Depends: @, matchbox-window-manager, wmctrl, xvfb, xauth, locales, scrot
 Restrictions: allow-stderr, needs-root

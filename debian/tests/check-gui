@@ -52,13 +52,27 @@ sleep 10
 echo "Dumping windows list"
 wmctrl -l
 
-echo "Checking for Prusa Slicer config window..."
-conf_winid=$(wmctrl -l | awk '\''/PrusaSlicer.*Configuration Wizard/ { print $1; }'\'')
-test -n "$conf_winid" && echo Found || exit 10
+echo "Dumping screenshot"
+scrot "$AUTOPKGTEST_ARTIFACTS/screenshot.png"
 
-echo "Checking for Prusa Slicer main window..."
+echo -n "Checking for Prusa Slicer config window..."
+conf_winid=$(wmctrl -l | awk '\''/PrusaSlicer.*Configuration Wizard/ { print $1; }'\'')
+
+if [[ -n "$conf_winid" ]]; then
+    echo Found
+else
+    echo Missing
+    exit 10
+fi
+
+echo -n "Checking for Prusa Slicer main window... "
 main_winid=$(wmctrl -l | awk '\''/PrusaSlicer.*based on/ { print $1; }'\'')
-test -n "$main_winid" && echo Found || exit 11
+if [[ -n "$main_winid" ]]; then
+    echo Found
+else
+    echo Missing
+    exit 11
+fi
 
 echo "Closing Prusa Slicer windows"
 wmctrl -i -c "$conf_winid"
