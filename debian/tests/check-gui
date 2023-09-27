@@ -46,8 +46,8 @@ echo "prusa_slicer_pid=$prusa_slicer_pid"
 
 trap '\''kill $wm_pid $prusa_slicer_pid'\'' INT TERM EXIT
 
-echo "Waiting for 10 seconds to ensure Prusa Slicer has not crashed"
-sleep 10
+echo "Waiting for 30 seconds to ensure Prusa Slicer has not crashed"
+sleep 30
 
 echo "Dumping windows list"
 wmctrl -l
