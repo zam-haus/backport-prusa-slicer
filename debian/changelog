@@ -1,3 +1,11 @@
+slic3r-prusa (2.6.1+dfsg-2) unstable; urgency=medium
+
+  * [9e1e3d7] Save screenshot as artifact in check-gui autopkgtest
+  * [ae3a89d] Extend sleep time for check-gui.
+    10 seconds isn't enough to initialize on arm* boxes
+
+ -- Chow Loong Jin <hyperair@debian.org>  Wed, 27 Sep 2023 13:13:30 +0800
+
 slic3r-prusa (2.6.1+dfsg-1) unstable; urgency=medium
 
   * [d069dc3] New upstream version 2.6.1+dfsg
