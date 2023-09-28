@@ -1,3 +1,11 @@
+slic3r-prusa (2.6.1+dfsg-3) unstable; urgency=medium
+
+  [ Antoni Villalonga ]
+  * [1d54f79] Patch slic3r-prusa to use https in self-update operations and
+    disable by default (Closes: #961903)
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 28 Sep 2023 15:46:43 +0800
+
 slic3r-prusa (2.6.1+dfsg-2) unstable; urgency=medium
 
   * [9e1e3d7] Save screenshot as artifact in check-gui autopkgtest
