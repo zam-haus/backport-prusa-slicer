@@ -1,0 +1,41 @@
+From: Antoni Villalonga <antoni@friki.cat>
+Date: Sun, 9 Aug 2020 00:15:17 +0200
+Subject: Disable preset update and app version check by default
+
+Bug-Debian: http://bugs.debian.org/961903
+Forwarded: not-needed
+Last-Update: 2023-09-28
+Origin: vendor
+
+===================================================================
+---
+ src/libslic3r/AppConfig.cpp | 2 +-
+ src/slic3r/GUI/GUI_App.cpp  | 2 --
+ 2 files changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/src/libslic3r/AppConfig.cpp b/src/libslic3r/AppConfig.cpp
+index f79f48c..921910a 100644
+--- a/src/libslic3r/AppConfig.cpp
++++ b/src/libslic3r/AppConfig.cpp
+@@ -91,7 +91,7 @@ void AppConfig::set_defaults()
+             set("drop_project_action", "1");
+ 
+         if (get("preset_update").empty())
+-            set("preset_update", "1");
++            set("preset_update", "0");
+ 
+         if (get("export_sources_full_pathnames").empty())
+             set("export_sources_full_pathnames", "0");
+diff --git a/src/slic3r/GUI/GUI_App.cpp b/src/slic3r/GUI/GUI_App.cpp
+index a916f53..3cedb57 100644
+--- a/src/slic3r/GUI/GUI_App.cpp
++++ b/src/slic3r/GUI/GUI_App.cpp
+@@ -843,8 +843,6 @@ void GUI_App::post_init()
+                 // sees something else than "we want something" on the first start.
+                 show_send_system_info_dialog_if_needed();   
+             }  
+-            // app version check is asynchronous and triggers blocking dialog window, better call it last
+-            this->app_version_check(false);
+         });
+     }
+ 
