@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <test_utils.hpp>
 
 #include <random>
@@ -9,6 +9,7 @@
 #include <libslic3r/libslic3r.h>
 
 using namespace Slic3r;
+using Catch::Matchers::WithinRel;
 
 TEST_CASE("arc basics", "[ArcWelder]") {
     using namespace Slic3r::Geometry;
@@ -22,8 +23,8 @@ TEST_CASE("arc basics", "[ArcWelder]") {
             Vec2f c = ArcWelder::arc_center(p1, p2, r, true);
             Vec2f m = ArcWelder::arc_middle_point(p1, p2, r, true);
             REQUIRE(is_approx(c, Vec2f{ 1000.f, 1000.f }));
-            REQUIRE(ArcWelder::arc_angle(p1, p2, r) == Approx(0.5 * M_PI));
-            REQUIRE(ArcWelder::arc_length(p1, p2, r) == Approx(r * 0.5 * M_PI).epsilon(0.001));
+            REQUIRE_THAT(ArcWelder::arc_angle(p1, p2, r), WithinRel(0.5 * M_PI, EPSILON));
+            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, r), WithinRel(r * 0.5 * M_PI, 0.001));
             REQUIRE(is_approx(m, Vec2f{ 1000.f + s, 1000.f + s }, 0.001f));
         }
         THEN("90 degrees arc, CW") {
@@ -36,8 +37,8 @@ TEST_CASE("arc basics", "[ArcWelder]") {
             Vec2f c = ArcWelder::arc_center(p1, p2, - r, true);
             Vec2f m = ArcWelder::arc_middle_point(p1, p2, - r, true);
             REQUIRE(is_approx(c, Vec2f{ 2000.f, 2000.f }));
-            REQUIRE(ArcWelder::arc_angle(p1, p2, - r) == Approx(1.5 * M_PI));
-            REQUIRE(ArcWelder::arc_length(p1, p2, - r) == Approx(r * 1.5 * M_PI).epsilon(0.001));
+            REQUIRE_THAT(ArcWelder::arc_angle(p1, p2, - r), WithinRel(1.5 * M_PI, EPSILON));
+            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, - r), WithinRel(r * 1.5 * M_PI, 0.001));
             REQUIRE(is_approx(m, Vec2f{ 2000.f + s, 2000.f + s }, 0.001f));
         }
         THEN("270 degrees arc, CW") {
@@ -57,8 +58,8 @@ TEST_CASE("arc basics", "[ArcWelder]") {
         THEN("45 degrees arc, CCW") {
             Vec2f c = ArcWelder::arc_center(p1, p2, r, true);
             REQUIRE(is_approx(c, center1, 1.f));
-            REQUIRE(ArcWelder::arc_angle(p1, p2, r) == Approx(0.25 * M_PI));
-            REQUIRE(ArcWelder::arc_length(p1, p2, r) == Approx(r * 0.25 * M_PI).epsilon(0.001));
+            REQUIRE_THAT(ArcWelder::arc_angle(p1, p2, r), WithinRel(0.25 * M_PI, EPSILON));
+            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, r), WithinRel(r * 0.25 * M_PI, 0.001));
         }
         THEN("45 degrees arc, CW") {
             Vec2f c = ArcWelder::arc_center(p1, p2, r, false);
@@ -67,8 +68,8 @@ TEST_CASE("arc basics", "[ArcWelder]") {
         THEN("315 degrees arc, CCW") {
             Vec2f c = ArcWelder::arc_center(p1, p2, - r, true);
             REQUIRE(is_approx(c, center2, 1.f));
-            REQUIRE(ArcWelder::arc_angle(p1, p2, - r) == Approx((2. - 0.25) * M_PI));
-            REQUIRE(ArcWelder::arc_length(p1, p2, - r) == Approx(r * (2. - 0.25) * M_PI).epsilon(0.001));
+            REQUIRE_THAT(ArcWelder::arc_angle(p1, p2, - r), WithinRel((2. - 0.25) * M_PI, EPSILON));
+            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, - r), WithinRel(r * (2. - 0.25) * M_PI, 0.001));
         }
         THEN("315 degrees arc, CW") {
             Vec2f c = ArcWelder::arc_center(p1, p2, - r, false);
@@ -86,7 +87,7 @@ TEST_CASE("arc basics", "[ArcWelder]") {
             Vec2f c = ArcWelder::arc_center(p1, p2, r, true);
             REQUIRE(is_approx(c, center1, 1.f));
             REQUIRE(is_approx(ArcWelder::arc_angle(p1, p2, r), float(M_PI / 3.), 0.001f));
-            REQUIRE(ArcWelder::arc_length(p1, p2, r) == Approx(r * M_PI / 3.).epsilon(0.001));
+            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, r), WithinRel(r * M_PI / 3., 0.001));
         }
         THEN("60 degrees arc, CW") {
             Vec2f c = ArcWelder::arc_center(p1, p2, r, false);
@@ -96,7 +97,7 @@ TEST_CASE("arc basics", "[ArcWelder]") {
             Vec2f c = ArcWelder::arc_center(p1, p2, - r, true);
             REQUIRE(is_approx(c, center2, 1.f));
             REQUIRE(is_approx(ArcWelder::arc_angle(p1, p2, - r), float((2. - 1./3.) * M_PI), 0.001f));
-            REQUIRE(ArcWelder::arc_length(p1, p2, - r) == Approx(r * (2. - 1. / 3.) * M_PI).epsilon(0.001));
+            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, - r), WithinRel(r * (2. - 1. / 3.) * M_PI, 0.001));
         }
         THEN("300 degrees arc, CW") {
             Vec2f c = ArcWelder::arc_center(p1, p2, - r, false);
@@ -115,8 +116,8 @@ TEST_CASE("arc discretization", "[ArcWelder]") {
         const float resolution = scaled<float>(0.002);
         auto test = [center, resolution, radius](const Point &p1, const Point &p2, const float r, const bool ccw) {
             Vec2f  c = ArcWelder::arc_center(p1.cast<float>(), p2.cast<float>(), r, ccw);
-            REQUIRE((p1.cast<float>() - c).norm() == Approx(radius));
-            REQUIRE((c - center.cast<float>()).norm() == Approx(0.));
+            REQUIRE_THAT((p1.cast<float>() - c).norm(), WithinRel(radius));
+            REQUIRE_THAT((c - center.cast<float>()).norm(), WithinRel(0.));
             Points pts = ArcWelder::arc_discretize(p1, p2, r, ccw, resolution);
             REQUIRE(pts.size() >= 2);
             REQUIRE(pts.front() == p1);

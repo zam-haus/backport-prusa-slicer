@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <memory>
 
@@ -6,6 +6,9 @@
 
 using namespace Slic3r;
 using namespace Slic3r::GCode::Impl;
+
+using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
 
 SCENARIO("Origin manipulation", "[GCode]") {
 	Slic3r::GCodeGenerator gcodegen;
@@ -22,7 +25,7 @@ SCENARIO("Origin manipulation", "[GCode]") {
     }
 }
 
-struct ApproxEqualsPoints : public Catch::MatcherBase<Points> {
+struct ApproxEqualsPoints : public Catch::Matchers::MatcherBase<Points> {
     ApproxEqualsPoints(const Points& expected, unsigned tolerance): expected(expected), tolerance(tolerance) {}
     bool match(const Points& points) const override {
         if (points.size() != expected.size()) {
@@ -180,12 +183,12 @@ TEST_CASE("Get first crossed line distance", "[GCode]") {
 
     // Try different cases by skipping lines in the travel.
     AABBTreeLines::LinesDistancer<Linef> distancer = get_expolygons_distancer({square_with_hole, square_above});
-    CHECK(*get_first_crossed_line_distance(travel, distancer) == Approx(1));
-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(1), distancer) == Approx(0.2));
-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(2), distancer) == Approx(0.5));
-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(3), distancer) == Approx(1.0)); //Edge case
-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(4), distancer) == Approx(0.7));
-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(5), distancer) == Approx(1.6));
+    CHECK_THAT(*get_first_crossed_line_distance(travel, distancer), WithinRel(1.0));
+    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(1), distancer), WithinRel(0.2));
+    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(2), distancer), WithinRel(0.5));
+    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(3), distancer), WithinRel(1.0)); //Edge case
+    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(4), distancer), WithinRel(0.7));
+    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(5), distancer), WithinRel(1.6));
     CHECK_FALSE(get_first_crossed_line_distance(tcb::span{travel}.subspan(6), distancer));
 }
 
@@ -196,8 +199,8 @@ TEST_CASE("Generate regular polygon", "[GCode]") {
     const Point oposite_point{centroid * 2};
 
     REQUIRE(result.size() == 32);
-    CHECK(result[16].x() == Approx(oposite_point.x()));
-    CHECK(result[16].y() == Approx(oposite_point.y()));
+    CHECK_THAT((double)result[16].x(), WithinRel((double)oposite_point.x(), EPSILON));
+    CHECK_THAT((double)result[16].y(), WithinRel((double)oposite_point.y(), EPSILON));
 
     std::vector<double> angles;
     angles.reserve(points_count);
