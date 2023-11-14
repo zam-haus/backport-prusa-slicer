@@ -1,17 +1,17 @@
-From: Tobias Frost <tobi@debian.org>
-Date: Mon, 20 Dec 2021 02:29:22 +0800
-Subject: Use packaged catch2 library
+From: Chow Loong Jin <hyperair@debian.org>
+Date: Wed, 15 Nov 2023 09:23:14 +0800
+Subject: Use system catch2
 
-Bug-Debian: https://bugs.debian.org/979826
+Forwarded: not-needed
 ---
- tests/CMakeLists.txt | 13 +++----------
- 1 file changed, 3 insertions(+), 10 deletions(-)
+ tests/CMakeLists.txt | 10 +---------
+ 1 file changed, 1 insertion(+), 9 deletions(-)
 
 diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
-index d6d16db..20795bb 100644
+index d6d16db..fca13a9 100644
 --- a/tests/CMakeLists.txt
 +++ b/tests/CMakeLists.txt
-@@ -4,15 +4,8 @@
+@@ -4,15 +4,7 @@
  set(TEST_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
  file(TO_NATIVE_PATH "${TEST_DATA_DIR}" TEST_DATA_DIR)
  
@@ -25,16 +25,6 @@ index d6d16db..20795bb 100644
 -	target_compile_definitions(Catch2 INTERFACE -DCATCH_CONFIG_NO_CPP17_UNCAUGHT_EXCEPTIONS)
 -endif()
 +find_package(Catch2 REQUIRED)
-+
  include(Catch)
  
  set(CATCH_EXTRA_ARGS "" CACHE STRING "Extra arguments for catch2 test suites.")
-@@ -20,7 +13,7 @@ set(CATCH_EXTRA_ARGS "" CACHE STRING "Extra arguments for catch2 test suites.")
- add_library(test_common INTERFACE)
- target_compile_definitions(test_common INTERFACE TEST_DATA_DIR=R"\(${TEST_DATA_DIR}\)" CATCH_CONFIG_FAST_COMPILE)
- target_link_libraries(test_common INTERFACE Catch2::Catch2)
--
-+target_include_directories(test_common INTERFACE ${CMAKE_CURRENT_LIST_DIR})
- if (APPLE)
-     target_link_libraries(test_common INTERFACE "-liconv -framework IOKit" "-framework CoreFoundation" -lc++)
- endif()

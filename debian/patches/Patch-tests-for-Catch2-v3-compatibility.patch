@@ -1,0 +1,2087 @@
+From: Gregor Riepl <onitake@gmail.com>
+Date: Thu, 2 Nov 2023 20:02:49 +0100
+Subject: Patch tests for Catch2 v3 compatibility
+
+Bug-Debian: https://bugs.debian.org/1054697
+Bug: https://github.com/prusa3d/PrusaSlicer/pull/11576
+Forwarded: yes
+---
+ tests/CMakeLists.txt                               |  3 +-
+ tests/arrange/test_arrange.cpp                     |  8 ++--
+ tests/arrange/test_arrange_integration.cpp         | 12 +++---
+ tests/catch_main.hpp                               | 48 +---------------------
+ tests/fff_print/test_avoid_crossing_perimeters.cpp |  2 +-
+ tests/fff_print/test_bridges.cpp                   |  2 +-
+ tests/fff_print/test_clipper.cpp                   |  2 +-
+ tests/fff_print/test_cooling.cpp                   |  2 +-
+ tests/fff_print/test_custom_gcode.cpp              |  2 +-
+ tests/fff_print/test_data.cpp                      |  2 +-
+ tests/fff_print/test_extrusion_entity.cpp          | 21 +++++-----
+ tests/fff_print/test_fill.cpp                      |  5 ++-
+ tests/fff_print/test_flow.cpp                      | 23 ++++++-----
+ tests/fff_print/test_gaps.cpp                      |  2 +-
+ tests/fff_print/test_gcode.cpp                     |  2 +-
+ tests/fff_print/test_gcodefindreplace.cpp          |  2 +-
+ tests/fff_print/test_gcodewriter.cpp               | 11 ++---
+ tests/fff_print/test_model.cpp                     |  2 +-
+ tests/fff_print/test_multi.cpp                     |  2 +-
+ tests/fff_print/test_perimeters.cpp                |  2 +-
+ tests/fff_print/test_print.cpp                     |  2 +-
+ tests/fff_print/test_printgcode.cpp                | 11 ++---
+ tests/fff_print/test_printobject.cpp               | 15 +++----
+ tests/fff_print/test_shells.cpp                    |  2 +-
+ tests/fff_print/test_skirt_brim.cpp                | 17 ++++----
+ tests/fff_print/test_support_material.cpp          |  2 +-
+ tests/fff_print/test_thin_walls.cpp                |  2 +-
+ tests/fff_print/test_trianglemesh.cpp              |  2 +-
+ tests/libslic3r/test_3mf.cpp                       |  2 +-
+ tests/libslic3r/test_aabbindirect.cpp              | 37 +++++++++--------
+ tests/libslic3r/test_anyptr.cpp                    |  2 +-
+ tests/libslic3r/test_arachne.cpp                   |  2 +-
+ tests/libslic3r/test_astar.cpp                     |  5 ++-
+ tests/libslic3r/test_clipper_offset.cpp            | 23 ++++++-----
+ tests/libslic3r/test_clipper_utils.cpp             | 37 +++++++++--------
+ tests/libslic3r/test_color.cpp                     |  2 +-
+ tests/libslic3r/test_config.cpp                    |  2 +-
+ tests/libslic3r/test_curve_fitting.cpp             | 18 ++++----
+ tests/libslic3r/test_cut_surface.cpp               |  4 +-
+ .../libslic3r/test_elephant_foot_compensation.cpp  |  2 +-
+ tests/libslic3r/test_emboss.cpp                    |  6 +--
+ tests/libslic3r/test_expolygon.cpp                 |  5 ++-
+ tests/libslic3r/test_geometry.cpp                  |  2 +-
+ tests/libslic3r/test_hollowing.cpp                 |  2 +-
+ tests/libslic3r/test_indexed_triangle_set.cpp      |  2 +-
+ tests/libslic3r/test_jump_point_search.cpp         |  2 +-
+ tests/libslic3r/test_kdtreeindirect.cpp            |  2 +-
+ tests/libslic3r/test_marchingsquares.cpp           |  2 +-
+ tests/libslic3r/test_meshboolean.cpp               |  5 ++-
+ tests/libslic3r/test_mutable_polygon.cpp           |  2 +-
+ tests/libslic3r/test_mutable_priority_queue.cpp    |  2 +-
+ tests/libslic3r/test_optimizers.cpp                |  2 +-
+ tests/libslic3r/test_placeholder_parser.cpp        | 33 +++++++--------
+ tests/libslic3r/test_png_io.cpp                    |  2 +-
+ tests/libslic3r/test_polygon.cpp                   |  2 +-
+ tests/libslic3r/test_polyline.cpp                  |  2 +-
+ tests/libslic3r/test_quadric_edge_collapse.cpp     |  4 +-
+ tests/libslic3r/test_region_expansion.cpp          | 15 +++----
+ tests/libslic3r/test_stl.cpp                       |  2 +-
+ tests/libslic3r/test_surface_mesh.cpp              |  2 +-
+ tests/libslic3r/test_timeutils.cpp                 |  2 +-
+ tests/libslic3r/test_triangulation.cpp             |  2 +-
+ tests/libslic3r/test_utils.cpp                     |  2 +-
+ tests/libslic3r/test_voronoi.cpp                   |  6 ++-
+ tests/sla_print/sla_archive_readwrite_tests.cpp    |  2 +-
+ tests/sla_print/sla_print_tests.cpp                |  8 ++--
+ tests/sla_print/sla_raycast_tests.cpp              | 16 ++++----
+ tests/sla_print/sla_supptgen_tests.cpp             |  2 +-
+ tests/sla_print/sla_supptreeutils_tests.cpp        | 16 ++++----
+ tests/sla_print/sla_test_utils.cpp                 | 14 ++++---
+ tests/sla_print/sla_test_utils.hpp                 |  2 +-
+ tests/slic3rutils/slic3r_arrangejob_tests.cpp      | 12 +++---
+ tests/slic3rutils/slic3r_jobs_tests.cpp            |  2 +-
+ tests/slic3rutils/slic3r_version_tests.cpp         |  2 +-
+ 74 files changed, 255 insertions(+), 273 deletions(-)
+
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index fca13a9..e3a0042 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -10,8 +10,9 @@ include(Catch)
+ set(CATCH_EXTRA_ARGS "" CACHE STRING "Extra arguments for catch2 test suites.")
+ 
+ add_library(test_common INTERFACE)
++target_include_directories(test_common INTERFACE ${CMAKE_CURRENT_LIST_DIR})
+ target_compile_definitions(test_common INTERFACE TEST_DATA_DIR=R"\(${TEST_DATA_DIR}\)" CATCH_CONFIG_FAST_COMPILE)
+-target_link_libraries(test_common INTERFACE Catch2::Catch2)
++target_link_libraries(test_common INTERFACE Catch2::Catch2WithMain)
+ 
+ if (APPLE)
+     target_link_libraries(test_common INTERFACE "-liconv -framework IOKit" "-framework CoreFoundation" -lc++)
+diff --git a/tests/arrange/test_arrange.cpp b/tests/arrange/test_arrange.cpp
+index dec1fc1..cfea0ea 100644
+--- a/tests/arrange/test_arrange.cpp
++++ b/tests/arrange/test_arrange.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include "test_utils.hpp"
+ 
+ #include <libslic3r/Execution/ExecutionSeq.hpp>
+@@ -40,6 +40,8 @@
+ 
+ #include <random>
+ 
++using Catch::Matchers::WithinRel;
++
+ template<class ArrItem = Slic3r::arr2::ArrangeItem>
+ static std::vector<ArrItem> prusa_parts(double infl = 0.) {
+     using namespace Slic3r;
+@@ -930,7 +932,7 @@ TEST_CASE("Optimal nfp position search with GravityKernel using RectangleItem an
+ 
+                 Slic3r::Vec2crd D = bed.center - item.shape.center();
+                 REQUIRE(item.translation == D);
+-                REQUIRE(score == Approx(0.).margin(EPSILON));
++                REQUIRE_THAT(score, WithinRel(0., EPSILON));
+             }
+         }
+     }
+@@ -1063,7 +1065,7 @@ TEMPLATE_TEST_CASE("Test if allowed item rotations are considered", "[arrange2]"
+     bool packed = pack(strategy, bed, itm);
+ 
+     REQUIRE(packed);
+-    REQUIRE(get_rotation(itm) == Approx(PI));
++    REQUIRE_THAT(get_rotation(itm), WithinRel(PI));
+ }
+ 
+ //TEST_CASE("NFP optimizing test", "[arrange2]") {
+diff --git a/tests/arrange/test_arrange_integration.cpp b/tests/arrange/test_arrange_integration.cpp
+index 6d8fda6..6516bc9 100644
+--- a/tests/arrange/test_arrange_integration.cpp
++++ b/tests/arrange/test_arrange_integration.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include "test_utils.hpp"
+ 
+ #include <libslic3r/Arrange/Arrange.hpp>
+@@ -12,6 +12,8 @@
+ #include "libslic3r/Format/3mf.hpp"
+ #include "libslic3r/ModelArrange.hpp"
+ 
++using Catch::Matchers::WithinRel;
++
+ static Slic3r::Model get_example_model_with_20mm_cube()
+ {
+     using namespace Slic3r;
+@@ -560,10 +562,10 @@ TEST_CASE("Virtual bed handlers - StriderVBedHandler", "[arrange2][integration][
+                 auto ref_pos = tr * Vec3d::Zero();
+ 
+                 auto displace = bed_index * (unscaled(vbh.stride_scaled()));
+-                REQUIRE(ref_pos.x() == Approx(-displace));
++                REQUIRE_THAT(ref_pos.x(), WithinRel(-displace));
+ 
+                 auto ref_pos_mi = mi_to_move.get_matrix() * Vec3d::Zero();
+-                REQUIRE(ref_pos_mi.x() == Approx(instance_displace.x() + (bed_index >= 0) * displace));
++                REQUIRE_THAT(ref_pos_mi.x(), WithinRel(instance_displace.x() + (bed_index >= 0) * displace));
+             }
+         }
+     }
+@@ -868,8 +870,8 @@ bool settings_eq(const Slic3r::arr2::ArrangeSettingsView &v1,
+ {
+     return v1.is_rotation_enabled() == v2.is_rotation_enabled() &&
+            v1.get_arrange_strategy() == v2.get_arrange_strategy() &&
+-           v1.get_distance_from_bed() == Approx(v2.get_distance_from_bed()) &&
+-           v1.get_distance_from_objects() == Approx(v2.get_distance_from_objects()) &&
++           WithinRel(v2.get_distance_from_bed()).match(v1.get_distance_from_bed()) &&
++           WithinRel(v2.get_distance_from_objects()).match(v1.get_distance_from_objects()) &&
+            v1.get_geometry_handling() == v2.get_geometry_handling() &&
+            v1.get_xl_alignment() == v2.get_xl_alignment();
+         ;
+diff --git a/tests/catch_main.hpp b/tests/catch_main.hpp
+index ca5b47d..f7df13b 100644
+--- a/tests/catch_main.hpp
++++ b/tests/catch_main.hpp
+@@ -3,52 +3,6 @@
+ 
+ #define CATCH_CONFIG_EXTERNAL_INTERFACES
+ #define CATCH_CONFIG_MAIN
+-// #define CATCH_CONFIG_DEFAULT_REPORTER "verboseconsole"
+-#include <catch2/catch.hpp>
+-
+-namespace Catch {
+-struct VerboseConsoleReporter : public ConsoleReporter {
+-    double duration = 0.;
+-    using ConsoleReporter::ConsoleReporter;
+-    
+-    void testCaseStarting(TestCaseInfo const& _testInfo) override
+-    {
+-        Colour::use(Colour::Cyan);
+-        stream << "Testing ";
+-        Colour::use(Colour::None);
+-        stream << _testInfo.name << std::endl;
+-        ConsoleReporter::testCaseStarting(_testInfo);
+-    }
+-    
+-    void sectionStarting(const SectionInfo &_sectionInfo) override
+-    {
+-        if (_sectionInfo.name != currentTestCaseInfo->name)
+-            stream << _sectionInfo.name << std::endl;
+-        
+-        ConsoleReporter::sectionStarting(_sectionInfo);
+-    }
+-    
+-    void sectionEnded(const SectionStats &_sectionStats) override {
+-        duration += _sectionStats.durationInSeconds;
+-        ConsoleReporter::sectionEnded(_sectionStats);
+-    } 
+-    
+-    void testCaseEnded(TestCaseStats const& stats) override
+-    {
+-        if (stats.totals.assertions.allOk()) {
+-            Colour::use(Colour::BrightGreen);
+-            stream << "Passed";
+-            Colour::use(Colour::None);
+-            stream << " in " << duration << " [seconds]\n" << std::endl;
+-        }
+-        
+-        duration = 0.;            
+-        ConsoleReporter::testCaseEnded(stats);
+-    }
+-};
+-
+-CATCH_REGISTER_REPORTER( "verboseconsole", VerboseConsoleReporter )
+-
+-} // namespace Catch
++#include <catch2/catch_all.hpp>
+ 
+ #endif // CATCH_MAIN
+diff --git a/tests/fff_print/test_avoid_crossing_perimeters.cpp b/tests/fff_print/test_avoid_crossing_perimeters.cpp
+index a76ac12..450bf03 100644
+--- a/tests/fff_print/test_avoid_crossing_perimeters.cpp
++++ b/tests/fff_print/test_avoid_crossing_perimeters.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "test_data.hpp"
+ 
+diff --git a/tests/fff_print/test_bridges.cpp b/tests/fff_print/test_bridges.cpp
+index 91ab9b6..d71aaf4 100644
+--- a/tests/fff_print/test_bridges.cpp
++++ b/tests/fff_print/test_bridges.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <libslic3r/BridgeDetector.hpp>
+ #include <libslic3r/Geometry.hpp>
+diff --git a/tests/fff_print/test_clipper.cpp b/tests/fff_print/test_clipper.cpp
+index 5968769..de4ab71 100644
+--- a/tests/fff_print/test_clipper.cpp
++++ b/tests/fff_print/test_clipper.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "test_data.hpp"
+ #include "libslic3r/ClipperZUtils.hpp"
+diff --git a/tests/fff_print/test_cooling.cpp b/tests/fff_print/test_cooling.cpp
+index 778a7da..684d7c6 100644
+--- a/tests/fff_print/test_cooling.cpp
++++ b/tests/fff_print/test_cooling.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <numeric>
+ #include <sstream>
+diff --git a/tests/fff_print/test_custom_gcode.cpp b/tests/fff_print/test_custom_gcode.cpp
+index 0d10907..7fe74f6 100644
+--- a/tests/fff_print/test_custom_gcode.cpp
++++ b/tests/fff_print/test_custom_gcode.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <exception>
+ #include <numeric>
+diff --git a/tests/fff_print/test_data.cpp b/tests/fff_print/test_data.cpp
+index fa41f88..ff74680 100644
+--- a/tests/fff_print/test_data.cpp
++++ b/tests/fff_print/test_data.cpp
+@@ -367,7 +367,7 @@ bool contains_regex(const std::string &data, const std::string &pattern)
+ 
+ } } // namespace Slic3r::Test
+ 
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ SCENARIO("init_print functionality", "[test_data]") {
+ 	GIVEN("A default config") {
+diff --git a/tests/fff_print/test_extrusion_entity.cpp b/tests/fff_print/test_extrusion_entity.cpp
+index 5f7de1f..051fb04 100644
+--- a/tests/fff_print/test_extrusion_entity.cpp
++++ b/tests/fff_print/test_extrusion_entity.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <cstdlib>
+ 
+@@ -11,6 +11,7 @@
+ #include "test_data.hpp"
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ static inline Slic3r::Point random_point(float LO=-50, float HI=50) 
+ {
+@@ -66,10 +67,10 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+         ExtrusionLoop loop;
+         loop.paths.emplace_back(new_extrusion_path(square.split_at_first_point(), ExtrusionRole::ExternalPerimeter, 1.));
+         THEN("polygon area") {
+-            REQUIRE(loop.polygon().area() == Approx(square.area()));
++            REQUIRE_THAT(loop.polygon().area(), WithinRel(square.area()));
+         }
+         THEN("loop length") {
+-            REQUIRE(loop.length() == Approx(square.length()));
++            REQUIRE_THAT(loop.length(), WithinRel(square.length()));
+         }
+ 
+         WHEN("cloned") {
+@@ -112,14 +113,14 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+ 
+         double tot_len = polyline1.length() + polyline2.length();
+         THEN("length") {
+-            REQUIRE(loop.length() == Approx(tot_len));
++            REQUIRE_THAT(loop.length(), WithinRel(tot_len));
+         }
+ 
+         WHEN("splitting at intermediate point") {
+             auto loop2 = std::unique_ptr<ExtrusionLoop>(dynamic_cast<ExtrusionLoop*>(loop.clone()));
+             loop2->split_at_vertex(polyline1.points[1]);
+             THEN("length after splitting is unchanged") {
+-                REQUIRE(loop2->length() == Approx(tot_len));
++                REQUIRE_THAT(loop2->length(), WithinRel(tot_len));
+             }
+             THEN("loop contains three paths after splitting") {
+                 REQUIRE(loop2->paths.size() == 3);
+@@ -151,7 +152,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+                 double l2 = 0;
+                 for (const ExtrusionPath &p : paths)
+                     l2 += p.length();
+-                REQUIRE(l2 == Approx(l - 3.));
++                REQUIRE_THAT(l2, WithinRel(l - 3.));
+             }
+         }
+         
+@@ -159,7 +160,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+             auto loop2 = std::unique_ptr<ExtrusionLoop>(dynamic_cast<ExtrusionLoop*>(loop.clone()));
+             loop2->split_at_vertex(polyline2.points.front());
+             THEN("length after splitting is unchanged") {
+-                REQUIRE(loop2->length() == Approx(tot_len));
++                REQUIRE_THAT(loop2->length(), WithinRel(tot_len));
+             }
+             THEN("loop contains two paths after splitting") {
+                 REQUIRE(loop2->paths.size() == 2);
+@@ -189,7 +190,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+             auto loop2 = std::unique_ptr<ExtrusionLoop>(dynamic_cast<ExtrusionLoop*>(loop.clone()));
+             loop2->split_at(point, false, 0);
+             THEN("length after splitting is unchanged") {
+-                REQUIRE(loop2->length() == Approx(tot_len));
++                REQUIRE_THAT(loop2->length(), WithinRel(tot_len));
+             }
+             Point expected_start_point(200, 150);
+             THEN("expected starting point") {
+@@ -217,7 +218,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+             if (! loop.split_at_vertex(point))
+                 loop.split_at(point, false, 0);
+             THEN("total length is preserved after splitting") {
+-                REQUIRE(loop.length() == Approx(len));
++                REQUIRE_THAT(loop.length(), WithinRel(len));
+             }
+             THEN("order is correctly preserved after splitting") {
+                 REQUIRE(loop.paths.front().role() == ExtrusionRole::ExternalPerimeter);
+@@ -237,7 +238,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+         double len = loop.length();
+         THEN("split_at() preserves total length") {
+             loop.split_at({ 15896783, 15868739 }, false, 0);
+-            REQUIRE(loop.length() == Approx(len));
++            REQUIRE_THAT(loop.length(), WithinRel(len));
+         }
+     }
+ }
+diff --git a/tests/fff_print/test_fill.cpp b/tests/fff_print/test_fill.cpp
+index 6d8422c..f389e08 100644
+--- a/tests/fff_print/test_fill.cpp
++++ b/tests/fff_print/test_fill.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <numeric>
+ #include <sstream>
+@@ -19,6 +19,7 @@
+ 
+ using namespace Slic3r;
+ using namespace std::literals;
++using Catch::Matchers::WithinRel;
+ 
+ bool test_if_solid_surface_filled(const ExPolygon& expolygon, double flow_spacing, double angle = 0, double density = 1.0);
+ 
+@@ -26,7 +27,7 @@ bool test_if_solid_surface_filled(const ExPolygon& expolygon, double flow_spacin
+ TEST_CASE("Fill: adjusted solid distance") {
+     int surface_width = 250;
+     int distance = Slic3r::Flow::solid_spacing(surface_width, 47);
+-    REQUIRE(distance == Approx(50));
++    REQUIRE_THAT(distance, WithinRel(50));
+     REQUIRE(surface_width % distance == 0);
+ }
+ #endif
+diff --git a/tests/fff_print/test_flow.cpp b/tests/fff_print/test_flow.cpp
+index b24b59c..c78b7c6 100644
+--- a/tests/fff_print/test_flow.cpp
++++ b/tests/fff_print/test_flow.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <numeric>
+ #include <sstream>
+@@ -12,6 +12,7 @@
+ 
+ using namespace Slic3r::Test;
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ SCENARIO("Extrusion width specifics", "[Flow]") {
+ 
+@@ -22,7 +23,7 @@ SCENARIO("Extrusion width specifics", "[Flow]") {
+         parser.parse_buffer(Slic3r::Test::slice({ Slic3r::Test::TestMesh::cube_20x20x20 }, config),
+             [&E_per_mm_bottom, layer_height] (Slic3r::GCodeReader& self, const Slic3r::GCodeReader::GCodeLine& line)
+         { 
+-            if (self.z() == Approx(layer_height).margin(0.01)) { // only consider first layer
++            if (WithinRel(layer_height, 0.01).match(self.z())) { // only consider first layer
+                 if (line.extruding(self) && line.dist_XY(self) > 0)
+                     E_per_mm_bottom.emplace_back(line.dist_E(self) / line.dist_XY(self));
+             }
+@@ -30,7 +31,7 @@ SCENARIO("Extrusion width specifics", "[Flow]") {
+         THEN("First layer width applies to everything on first layer.") {
+             REQUIRE(E_per_mm_bottom.size() > 0);
+             const double E_per_mm_avg = std::accumulate(E_per_mm_bottom.cbegin(), E_per_mm_bottom.cend(), 0.0) / static_cast<double>(E_per_mm_bottom.size());
+-            bool pass = (std::count_if(E_per_mm_bottom.cbegin(), E_per_mm_bottom.cend(), [E_per_mm_avg] (const double& v) { return v == Approx(E_per_mm_avg); }) == 0);
++            bool pass = (std::count_if(E_per_mm_bottom.cbegin(), E_per_mm_bottom.cend(), [E_per_mm_avg] (const double& v) { return WithinRel(E_per_mm_avg).match(v); }) == 0);
+             REQUIRE(pass);
+         }
+         THEN("First layer width does not apply to upper layer.") {
+@@ -156,18 +157,18 @@ SCENARIO("Flow: Flow math for non-bridges", "[Flow]") {
+         // Spacing for non-bridges is has some overlap
+         THEN("External perimeter flow has spacing fixed to 1.125 * nozzle_diameter") {
+             auto flow = Flow::new_from_config_width(frExternalPerimeter, ConfigOptionFloatOrPercent(0, false), nozzle_diameter, layer_height);
+-            REQUIRE(flow.spacing() == Approx(1.125 * nozzle_diameter - layer_height * (1.0 - PI / 4.0)));
++            REQUIRE_THAT(flow.spacing(), WithinRel(1.125 * nozzle_diameter - layer_height * (1.0 - PI / 4.0), EPSILON));
+         }
+ 
+         THEN("Internal perimeter flow has spacing fixed to 1.125 * nozzle_diameter") {
+             auto flow = Flow::new_from_config_width(frPerimeter, ConfigOptionFloatOrPercent(0, false), nozzle_diameter, layer_height);
+-            REQUIRE(flow.spacing() == Approx(1.125 *nozzle_diameter - layer_height * (1.0 - PI / 4.0)));
++            REQUIRE_THAT(flow.spacing(), WithinRel(1.125 *nozzle_diameter - layer_height * (1.0 - PI / 4.0), EPSILON));
+         }
+         THEN("Spacing for supplied width is 0.8927f") {
+             auto flow = Flow::new_from_config_width(frExternalPerimeter, width, nozzle_diameter, layer_height);
+-            REQUIRE(flow.spacing() == Approx(width.value - layer_height * (1.0 - PI / 4.0)));
++            REQUIRE_THAT(flow.spacing(), WithinRel(width.value - layer_height * (1.0 - PI / 4.0), EPSILON));
+             flow = Flow::new_from_config_width(frPerimeter, width, nozzle_diameter, layer_height);
+-            REQUIRE(flow.spacing() == Approx(width.value - layer_height * (1.0 - PI / 4.0)));
++            REQUIRE_THAT(flow.spacing(), WithinRel(width.value - layer_height * (1.0 - PI / 4.0), EPSILON));
+         }
+     }
+     /// Check the min/max
+@@ -178,14 +179,14 @@ SCENARIO("Flow: Flow math for non-bridges", "[Flow]") {
+             layer_height = 0.15f;
+             THEN("Max width is set.") {
+                 auto flow = Flow::new_from_config_width(frPerimeter, ConfigOptionFloatOrPercent(0, false), nozzle_diameter, layer_height);
+-                REQUIRE(flow.width() == Approx(1.125 * nozzle_diameter));
++                REQUIRE_THAT(flow.width(), WithinRel(1.125 * nozzle_diameter));
+             }
+         }
+         WHEN("Layer height is set to 0.25") {
+             layer_height = 0.25f;
+             THEN("Min width is set.") {
+                 auto flow = Flow::new_from_config_width(frPerimeter, ConfigOptionFloatOrPercent(0, false), nozzle_diameter, layer_height);
+-                REQUIRE(flow.width() == Approx(1.125 * nozzle_diameter));
++                REQUIRE_THAT(flow.width(), WithinRel(1.125 * nozzle_diameter));
+             }
+         }
+     }
+@@ -216,10 +217,10 @@ SCENARIO("Flow: Flow math for bridges", "[Flow]") {
+         WHEN("Flow role is frExternalPerimeter") {
+             auto flow = Flow::bridging_flow(nozzle_diameter * sqrt(bridge_flow), nozzle_diameter);
+             THEN("Bridge width is same as nozzle diameter") {
+-                REQUIRE(flow.width() == Approx(nozzle_diameter));
++                REQUIRE_THAT(flow.width(), WithinRel(nozzle_diameter));
+             }
+             THEN("Bridge spacing is same as nozzle diameter + BRIDGE_EXTRA_SPACING") {
+-                REQUIRE(flow.spacing() == Approx(nozzle_diameter + BRIDGE_EXTRA_SPACING));
++                REQUIRE_THAT(flow.spacing(), WithinRel(nozzle_diameter + BRIDGE_EXTRA_SPACING, EPSILON));
+             }
+         }
+     }
+diff --git a/tests/fff_print/test_gaps.cpp b/tests/fff_print/test_gaps.cpp
+index a096087..7f385ac 100644
+--- a/tests/fff_print/test_gaps.cpp
++++ b/tests/fff_print/test_gaps.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/GCodeReader.hpp"
+ #include "libslic3r/Geometry/ConvexHull.hpp"
+diff --git a/tests/fff_print/test_gcode.cpp b/tests/fff_print/test_gcode.cpp
+index 34b40d1..2ae6a5b 100644
+--- a/tests/fff_print/test_gcode.cpp
++++ b/tests/fff_print/test_gcode.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <memory>
+ 
+diff --git a/tests/fff_print/test_gcodefindreplace.cpp b/tests/fff_print/test_gcodefindreplace.cpp
+index 1d714d1..dd5eb6b 100644
+--- a/tests/fff_print/test_gcodefindreplace.cpp
++++ b/tests/fff_print/test_gcodefindreplace.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <memory>
+ 
+diff --git a/tests/fff_print/test_gcodewriter.cpp b/tests/fff_print/test_gcodewriter.cpp
+index 15ffaeb..22b3699 100644
+--- a/tests/fff_print/test_gcodewriter.cpp
++++ b/tests/fff_print/test_gcodewriter.cpp
+@@ -1,10 +1,11 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <memory>
+ 
+ #include "libslic3r/GCodeWriter.hpp"
+ 
+ using namespace Slic3r;
++using Catch::Matchers::Equals;
+ 
+ SCENARIO("lift() is not ignored after unlift() at normal values of Z", "[GCodeWriter]") {
+     GIVEN("A config from a file and a single extruder.") {
+@@ -74,22 +75,22 @@ SCENARIO("set_speed emits values with fixed-point output.", "[GCodeWriter]") {
+         GCodeWriter writer;
+         WHEN("set_speed is called to set speed to 99999.123") {
+             THEN("Output string is G1 F99999.123") {
+-                REQUIRE_THAT(writer.set_speed(99999.123), Catch::Equals("G1 F99999.123\n"));
++                REQUIRE_THAT(writer.set_speed(99999.123), Equals("G1 F99999.123\n"));
+             }
+         }
+         WHEN("set_speed is called to set speed to 1") {
+             THEN("Output string is G1 F1") {
+-                REQUIRE_THAT(writer.set_speed(1.0), Catch::Equals("G1 F1\n"));
++                REQUIRE_THAT(writer.set_speed(1.0), Equals("G1 F1\n"));
+             }
+         }
+         WHEN("set_speed is called to set speed to 203.200022") {
+             THEN("Output string is G1 F203.2") {
+-                REQUIRE_THAT(writer.set_speed(203.200022), Catch::Equals("G1 F203.2\n"));
++                REQUIRE_THAT(writer.set_speed(203.200022), Equals("G1 F203.2\n"));
+             }
+         }
+         WHEN("set_speed is called to set speed to 203.200522") {
+             THEN("Output string is G1 F203.201") {
+-                REQUIRE_THAT(writer.set_speed(203.200522), Catch::Equals("G1 F203.201\n"));
++                REQUIRE_THAT(writer.set_speed(203.200522), Equals("G1 F203.201\n"));
+             }
+         }
+     }
+diff --git a/tests/fff_print/test_model.cpp b/tests/fff_print/test_model.cpp
+index 243cb10..e8c9e08 100644
+--- a/tests/fff_print/test_model.cpp
++++ b/tests/fff_print/test_model.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/libslic3r.h"
+ #include "libslic3r/Model.hpp"
+diff --git a/tests/fff_print/test_multi.cpp b/tests/fff_print/test_multi.cpp
+index 3e69c68..3e2ba72 100644
+--- a/tests/fff_print/test_multi.cpp
++++ b/tests/fff_print/test_multi.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <numeric>
+ #include <sstream>
+diff --git a/tests/fff_print/test_perimeters.cpp b/tests/fff_print/test_perimeters.cpp
+index 4fa344d..c134f3b 100644
+--- a/tests/fff_print/test_perimeters.cpp
++++ b/tests/fff_print/test_perimeters.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <numeric>
+ #include <sstream>
+diff --git a/tests/fff_print/test_print.cpp b/tests/fff_print/test_print.cpp
+index 204f3f8..327bdd4 100644
+--- a/tests/fff_print/test_print.cpp
++++ b/tests/fff_print/test_print.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/libslic3r.h"
+ #include "libslic3r/Print.hpp"
+diff --git a/tests/fff_print/test_printgcode.cpp b/tests/fff_print/test_printgcode.cpp
+index 2a45bd2..8a8f3d0 100644
+--- a/tests/fff_print/test_printgcode.cpp
++++ b/tests/fff_print/test_printgcode.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/libslic3r.h"
+ #include "libslic3r/GCodeReader.hpp"
+@@ -10,6 +10,7 @@
+ 
+ using namespace Slic3r;
+ using namespace Slic3r::Test;
++using Catch::Matchers::WithinRel;
+ 
+ boost::regex perimeters_regex("G1 X[-0-9.]* Y[-0-9.]* E[-0-9.]* ; perimeter");
+ boost::regex infill_regex("G1 X[-0-9.]* Y[-0-9.]* E[-0-9.]* ; infill");
+@@ -79,7 +80,7 @@ SCENARIO( "PrintGCode basic functionality", "[PrintGCode]") {
+                 reader.parse_buffer(gcode, [&final_z] (GCodeReader& self, const GCodeReader::GCodeLine& line) {
+                     final_z = std::max<double>(final_z, static_cast<double>(self.z())); // record the highest Z point we reach
+                 });
+-                REQUIRE(final_z == Approx(20.));
++                REQUIRE_THAT(final_z, WithinRel(20.));
+             }
+         }
+         WHEN("output is executed with complete objects and two differently-sized meshes") {
+@@ -121,7 +122,7 @@ SCENARIO( "PrintGCode basic functionality", "[PrintGCode]") {
+                 reader.parse_buffer(gcode, [&final_z] (GCodeReader& self, const GCodeReader::GCodeLine& line) {
+                     final_z = std::max(final_z, static_cast<double>(self.z())); // record the highest Z point we reach
+                 });
+-                REQUIRE(final_z == Approx(20.1));
++                REQUIRE_THAT(final_z, WithinRel(20.1, EPSILON));
+             }
+             THEN("Z height resets on object change") {
+                 double final_z = 0.0;
+@@ -257,14 +258,14 @@ SCENARIO( "PrintGCode basic functionality", "[PrintGCode]") {
+ 				REQUIRE(pos < gcode.size());
+ 				double z = 0;
+ 				REQUIRE((sscanf(gcode.data() + pos, "(%lf mm)", &z) == 1));
+-				REQUIRE(z == Approx(20.));
++				REQUIRE_THAT(z, WithinRel(20.));
+ 				// Second object
+ 				pos = gcode.find(";Layer:399 ", pos);
+ 				REQUIRE(pos != std::string::npos);
+ 				pos += token.size();
+ 				REQUIRE(pos < gcode.size());
+ 				REQUIRE((sscanf(gcode.data() + pos, "(%lf mm)", &z) == 1));
+-				REQUIRE(z == Approx(20.));
++				REQUIRE_THAT(z, WithinRel(20.));
+ 			}
+         }
+     }
+diff --git a/tests/fff_print/test_printobject.cpp b/tests/fff_print/test_printobject.cpp
+index cbc4734..b4e86c9 100644
+--- a/tests/fff_print/test_printobject.cpp
++++ b/tests/fff_print/test_printobject.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/libslic3r.h"
+ #include "libslic3r/Print.hpp"
+@@ -8,6 +8,7 @@
+ 
+ using namespace Slic3r;
+ using namespace Slic3r::Test;
++using Catch::Matchers::WithinRel;
+ 
+ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
+     GIVEN("20mm cube and default initial config, initial layer height of 2mm") {
+@@ -25,7 +26,7 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
+             AND_THEN("Each layer is approximately 2mm above the previous Z") {
+                 coordf_t last = 0.0;
+                 for (size_t i = 0; i < layers.size(); ++ i) {
+-                    REQUIRE((layers[i]->print_z - last) == Approx(2.0));
++                    REQUIRE_THAT((layers[i]->print_z - last), WithinRel(2.0));
+                     last = layers[i]->print_z;
+                 }
+             }
+@@ -42,10 +43,10 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
+                 REQUIRE(layers.size() == 3);
+             }
+             AND_THEN("Layer 0 is at 2mm") {
+-                REQUIRE(layers.front()->print_z == Approx(2.0));
++                REQUIRE_THAT(layers.front()->print_z, WithinRel(2.0));
+             }
+             AND_THEN("Layer 1 is at 12mm") {
+-                REQUIRE(layers[1]->print_z == Approx(12.0));
++                REQUIRE_THAT(layers[1]->print_z, WithinRel(12.0));
+             }
+         }
+         WHEN("generate_object_layers() is called for 15mm layer heights and nozzle diameter of 16mm") {
+@@ -60,10 +61,10 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
+                 REQUIRE(layers.size() == 2);
+             }
+             AND_THEN("Layer 0 is at 2mm") {
+-                REQUIRE(layers[0]->print_z == Approx(2.0));
++                REQUIRE_THAT(layers[0]->print_z, WithinRel(2.0));
+             }
+             AND_THEN("Layer 1 is at 17mm") {
+-                REQUIRE(layers[1]->print_z == Approx(17.0));
++                REQUIRE_THAT(layers[1]->print_z, WithinRel(17.0));
+             }
+         }
+ #if 0
+@@ -79,7 +80,7 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
+                 CHECK(layers.size() == 5);
+                 coordf_t last = 2.0;
+                 for (size_t i = 1; i < layers.size(); i++) {
+-                    REQUIRE((layers[i]->print_z - last) == Approx(5.0));
++                    REQUIRE_THAT((layers[i]->print_z - last), WithinRel(5.0));
+                     last = layers[i]->print_z;
+                 }
+             }
+diff --git a/tests/fff_print/test_shells.cpp b/tests/fff_print/test_shells.cpp
+index fcb3a49..6f47a39 100644
+--- a/tests/fff_print/test_shells.cpp
++++ b/tests/fff_print/test_shells.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/GCodeReader.hpp"
+ 
+diff --git a/tests/fff_print/test_skirt_brim.cpp b/tests/fff_print/test_skirt_brim.cpp
+index 6555172..1a46371 100644
+--- a/tests/fff_print/test_skirt_brim.cpp
++++ b/tests/fff_print/test_skirt_brim.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/GCodeReader.hpp"
+ #include "libslic3r/Config.hpp"
+@@ -10,6 +10,7 @@
+ 
+ using namespace Slic3r::Test;
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ /// Helper method to find the tool used for the brim (always the first extrusion)
+ static int get_brim_tool(const std::string &gcode)
+@@ -54,7 +55,7 @@ TEST_CASE("Skirt height is honored", "[Skirt]") {
+     double support_speed = config.opt<Slic3r::ConfigOptionFloat>("support_material_speed")->value * MM_PER_MIN;
+ 	GCodeReader parser;
+     parser.parse_buffer(gcode, [&layers_with_skirt, &support_speed] (Slic3r::GCodeReader &self, const Slic3r::GCodeReader::GCodeLine &line) {
+-        if (line.extruding(self) && self.f() == Approx(support_speed)) {
++        if (line.extruding(self) && WithinRel(support_speed).match(self.f())) {
+             layers_with_skirt[self.z()] = 1;
+         }
+     });
+@@ -90,8 +91,8 @@ SCENARIO("Original Slic3r Skirt/Brim tests", "[SkirtBrim]") {
+                 double support_speed = config.opt<Slic3r::ConfigOptionFloat>("support_material_speed")->value * MM_PER_MIN;
+ 			    Slic3r::GCodeReader parser;
+                 parser.parse_buffer(gcode, [&brim_generated, support_speed] (Slic3r::GCodeReader& self, const Slic3r::GCodeReader::GCodeLine& line) {
+-                    if (self.z() == Approx(0.3) || line.new_Z(self) == Approx(0.3)) {
+-                        if (line.extruding(self) && self.f() == Approx(support_speed)) {
++                    if (WithinRel(0.3, EPSILON).match(self.z()) || WithinRel(0.3, EPSILON).match(line.new_Z(self))) {
++                        if (line.extruding(self) && WithinRel(support_speed, EPSILON).match(self.f())) {
+                             brim_generated = true;
+                         }
+                     }
+@@ -234,20 +235,20 @@ SCENARIO("Original Slic3r Skirt/Brim tests", "[SkirtBrim]") {
+                     // std::cerr << line.cmd() << "\n";
+ 					if (boost::starts_with(line.cmd(), "T")) {
+ 						tool = atoi(line.cmd().data() + 1);
+-					} else if (self.z() == Approx(config.opt<ConfigOptionFloat>("first_layer_height")->value)) {
++					} else if (WithinRel(config.opt<ConfigOptionFloat>("first_layer_height")->value).match(self.z())) {
+                         // on first layer
+ 						if (line.extruding(self) && line.dist_XY(self) > 0) {
+                             float speed = ( self.f() > 0 ?  self.f() : line.new_F(self));
+                             // std::cerr << "Tool " << tool << "\n";
+-                            if (speed == Approx(support_speed) && tool == config.opt_int("perimeter_extruder") - 1) {
++                            if (WithinRel(support_speed).match(speed) && tool == config.opt_int("perimeter_extruder") - 1) {
+                                 // Skirt uses first material extruder, support material speed.
+                                 skirt_length += line.dist_XY(self);
+                             } else
+                                 extrusion_points.push_back(Slic3r::Point::new_scale(line.new_X(self), line.new_Y(self)));
+                         }
+                     }
+-                    if (self.z() == Approx(0.3) || line.new_Z(self) == Approx(0.3)) {
+-                        if (line.extruding(self) && self.f() == Approx(support_speed)) {
++                    if (WithinRel(0.3).match(self.z()) || WithinRel(0.3).match(line.new_Z(self))) {
++                        if (line.extruding(self) && WithinRel(support_speed).match(self.f())) {
+                         }
+                     }
+                 });
+diff --git a/tests/fff_print/test_support_material.cpp b/tests/fff_print/test_support_material.cpp
+index 0720b27..582f13e 100644
+--- a/tests/fff_print/test_support_material.cpp
++++ b/tests/fff_print/test_support_material.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/GCodeReader.hpp"
+ #include "libslic3r/Layer.hpp"
+diff --git a/tests/fff_print/test_thin_walls.cpp b/tests/fff_print/test_thin_walls.cpp
+index 59fb6b0..7be699a 100644
+--- a/tests/fff_print/test_thin_walls.cpp
++++ b/tests/fff_print/test_thin_walls.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <numeric>
+ #include <sstream>
+diff --git a/tests/fff_print/test_trianglemesh.cpp b/tests/fff_print/test_trianglemesh.cpp
+index eff39ed..71a1a1c 100644
+--- a/tests/fff_print/test_trianglemesh.cpp
++++ b/tests/fff_print/test_trianglemesh.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/TriangleMesh.hpp"
+ #include "libslic3r/TriangleMeshSlicer.hpp"
+diff --git a/tests/libslic3r/test_3mf.cpp b/tests/libslic3r/test_3mf.cpp
+index 3602d69..3409255 100644
+--- a/tests/libslic3r/test_3mf.cpp
++++ b/tests/libslic3r/test_3mf.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Model.hpp"
+ #include "libslic3r/Format/3mf.hpp"
+diff --git a/tests/libslic3r/test_aabbindirect.cpp b/tests/libslic3r/test_aabbindirect.cpp
+index 3a93eb9..97ac1de 100644
+--- a/tests/libslic3r/test_aabbindirect.cpp
++++ b/tests/libslic3r/test_aabbindirect.cpp
+@@ -1,5 +1,5 @@
+ #include <algorithm>
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/TriangleMesh.hpp>
+@@ -7,6 +7,7 @@
+ #include <libslic3r/AABBTreeLines.hpp>
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ TEST_CASE("Building a tree over a box, ray caster and closest query", "[AABBIndirect]")
+ {
+@@ -24,7 +25,7 @@ TEST_CASE("Building a tree over a box, ray caster and closest query", "[AABBIndi
+ 		hit);
+ 
+     REQUIRE(intersected);
+-    REQUIRE(hit.t == Approx(5.));
++    REQUIRE_THAT(hit.t, WithinRel(5.));
+ 
+     std::vector<igl::Hit> hits;
+ 	bool intersected2 = AABBTreeIndirect::intersect_ray_all_hits(
+@@ -35,8 +36,8 @@ TEST_CASE("Building a tree over a box, ray caster and closest query", "[AABBIndi
+ 		hits);
+     REQUIRE(intersected2);
+     REQUIRE(hits.size() == 2);
+-    REQUIRE(hits.front().t == Approx(5.));
+-    REQUIRE(hits.back().t == Approx(6.));
++    REQUIRE_THAT(hits.front().t, WithinRel(5.));
++    REQUIRE_THAT(hits.back().t, WithinRel(6.));
+ 
+     size_t hit_idx;
+     Vec3d  closest_point;
+@@ -45,20 +46,20 @@ TEST_CASE("Building a tree over a box, ray caster and closest query", "[AABBIndi
+ 		tree,
+         Vec3d(0.3, 0.5, -5.),
+ 		hit_idx, closest_point);
+-    REQUIRE(squared_distance == Approx(5. * 5.));
+-    REQUIRE(closest_point.x() == Approx(0.3));
+-    REQUIRE(closest_point.y() == Approx(0.5));
+-    REQUIRE(closest_point.z() == Approx(0.));
++    REQUIRE_THAT(squared_distance, WithinRel(5. * 5.));
++    REQUIRE_THAT(closest_point.x(), WithinRel(0.3));
++    REQUIRE_THAT(closest_point.y(), WithinRel(0.5));
++    REQUIRE_THAT(closest_point.z(), WithinRel(0.));
+ 
+     squared_distance = AABBTreeIndirect::squared_distance_to_indexed_triangle_set(
+ 		tmesh.its.vertices, tmesh.its.indices,
+ 		tree,
+         Vec3d(0.3, 0.5, 5.),
+ 		hit_idx, closest_point);
+-    REQUIRE(squared_distance == Approx(4. * 4.));
+-    REQUIRE(closest_point.x() == Approx(0.3));
+-    REQUIRE(closest_point.y() == Approx(0.5));
+-    REQUIRE(closest_point.z() == Approx(1.));
++    REQUIRE_THAT(squared_distance, WithinRel(4. * 4.));
++    REQUIRE_THAT(closest_point.x(), WithinRel(0.3));
++    REQUIRE_THAT(closest_point.y(), WithinRel(0.5));
++    REQUIRE_THAT(closest_point.z(), WithinRel(1.));
+ }
+ 
+ TEST_CASE("Creating a several 2d lines, testing closest point query", "[AABBIndirect]")
+@@ -75,17 +76,17 @@ TEST_CASE("Creating a several 2d lines, testing closest point query", "[AABBIndi
+     Vec2d hit_point_out;
+     auto sqr_dist = AABBTreeLines::squared_distance_to_indexed_lines(lines, tree, Vec2d(0.0, 0.0), hit_idx_out,
+             hit_point_out);
+-    REQUIRE(sqr_dist == Approx(0.0));
++    REQUIRE_THAT(sqr_dist, WithinRel(0.0));
+     REQUIRE((hit_idx_out == 0 || hit_idx_out == 3));
+-    REQUIRE(hit_point_out.x() == Approx(0.0));
+-    REQUIRE(hit_point_out.y() == Approx(0.0));
++    REQUIRE_THAT(hit_point_out.x(), WithinRel(0.0));
++    REQUIRE_THAT(hit_point_out.y(), WithinRel(0.0));
+ 
+     sqr_dist = AABBTreeLines::squared_distance_to_indexed_lines(lines, tree, Vec2d(1.5, 0.5), hit_idx_out,
+             hit_point_out);
+-    REQUIRE(sqr_dist == Approx(0.25));
++    REQUIRE_THAT(sqr_dist, WithinRel(0.25));
+     REQUIRE(hit_idx_out == 1);
+-    REQUIRE(hit_point_out.x() == Approx(1.0));
+-    REQUIRE(hit_point_out.y() == Approx(0.5));
++    REQUIRE_THAT(hit_point_out.x(), WithinRel(1.0));
++    REQUIRE_THAT(hit_point_out.y(), WithinRel(0.5));
+ }
+ 
+ TEST_CASE("Creating a several 2d lines, testing all lines in radius query", "[AABBIndirect]")
+diff --git a/tests/libslic3r/test_anyptr.cpp b/tests/libslic3r/test_anyptr.cpp
+index d7b00a0..888697b 100644
+--- a/tests/libslic3r/test_anyptr.cpp
++++ b/tests/libslic3r/test_anyptr.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <libslic3r/libslic3r.h>
+ #include <libslic3r/AnyPtr.hpp>
+diff --git a/tests/libslic3r/test_arachne.cpp b/tests/libslic3r/test_arachne.cpp
+index 61792c3..c72c33f 100644
+--- a/tests/libslic3r/test_arachne.cpp
++++ b/tests/libslic3r/test_arachne.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Arachne/WallToolPaths.hpp"
+ #include "libslic3r/ClipperUtils.hpp"
+diff --git a/tests/libslic3r/test_astar.cpp b/tests/libslic3r/test_astar.cpp
+index 4e540c3..7f8d413 100644
+--- a/tests/libslic3r/test_astar.cpp
++++ b/tests/libslic3r/test_astar.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/BoundingBox.hpp"
+ #include "libslic3r/AStar.hpp"
+@@ -6,6 +6,7 @@
+ #include "libslic3r/PointGrid.hpp"
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ TEST_CASE("Testing basic invariants of AStar", "[AStar]") {
+     struct DummyTracer {
+@@ -397,7 +398,7 @@ TEST_CASE("Zero heuristic function should result in dijsktra's algo", "[AStar]")
+     // arrive to the source within less hops than the full number of nodes.
+     for (size_t i = 0, k = 0; i < graph.nodes.size(); ++i, k = 0) {
+         GraphTracer::QNode *q = &graph.nodes[i];
+-        REQUIRE(q->g == Approx(ref_distances[i]));
++        REQUIRE_THAT(q->g, WithinRel(ref_distances[i]));
+         while (k++ < graph.nodes.size() && q->parent != astar::Unassigned)
+             q = &graph.nodes[q->parent];
+ 
+diff --git a/tests/libslic3r/test_clipper_offset.cpp b/tests/libslic3r/test_clipper_offset.cpp
+index 8209d99..e46c9b0 100644
+--- a/tests/libslic3r/test_clipper_offset.cpp
++++ b/tests/libslic3r/test_clipper_offset.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <iostream>
+ #include <boost/filesystem.hpp>
+@@ -8,6 +8,7 @@
+ #include "libslic3r/SVG.hpp"
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ // #define TESTS_EXPORT_SVGS
+ 
+@@ -32,7 +33,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 					THEN("Area is 22^2mm2") {
+ 						REQUIRE(output.size() == 1);
+-						REQUIRE(output.front().area() == Approx(22. * 22. * s * s));
++						REQUIRE_THAT(output.front().area(), WithinRel(22. * 22. * s * s));
+ 					}
+ 				}
+ 				DYNAMIC_SECTION("minus 1mm, miter " << miter << "x") {
+@@ -46,7 +47,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 					THEN("Area is 18^2mm2") {
+ 						REQUIRE(output.size() == 1);
+-						REQUIRE(output.front().area() == Approx(18. * 18. * s * s));
++						REQUIRE_THAT(output.front().area(), WithinRel(18. * 18. * s * s));
+ 					}
+ 				}
+ 			}
+@@ -64,7 +65,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 					THEN("Area is 22^2mm2") {
+ 						REQUIRE(output.size() == 1);
+-						REQUIRE(output.front().area() == Approx(22. * 22. * s * s));
++						REQUIRE_THAT(output.front().area(), WithinRel(22. * 22. * s * s));
+ 					}
+ 				}
+ 				DYNAMIC_SECTION("minus 1mm, miter " << miter << "x") {
+@@ -78,7 +79,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 					THEN("Area is 18^2mm2") {
+ 						REQUIRE(output.size() == 1);
+-						REQUIRE(output.front().area() == Approx(18. * 18. * s * s));
++						REQUIRE_THAT(output.front().area(), WithinRel(18. * 18. * s * s));
+ 					}
+ 				}
+ 			}
+@@ -106,7 +107,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 						THEN("Area is 22^2-8^2 mm2") {
+ 							REQUIRE(output.size() == 1);
+-							REQUIRE(output.front().area() == Approx((22. * 22. - 8. * 8.) * s * s));
++							REQUIRE_THAT(output.front().area(), WithinRel((22. * 22. - 8. * 8.) * s * s));
+ 						}
+ 					}
+ 					WHEN("minus 1mm") {
+@@ -120,7 +121,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 						THEN("Area is 18^2-12^2 mm2") {
+ 							REQUIRE(output.size() == 1);
+-							REQUIRE(output.front().area() == Approx((18. * 18. - 12. * 12.) * s * s));
++							REQUIRE_THAT(output.front().area(), WithinRel((18. * 18. - 12. * 12.) * s * s));
+ 						}
+ 					}
+ 				}
+@@ -140,7 +141,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 						THEN("Area is 22^2-8^2 mm2") {
+ 							REQUIRE(output.size() == 1);
+-							REQUIRE(output.front().area() == Approx((22. * 22. - 8. * 8.) * s * s));
++							REQUIRE_THAT(output.front().area(), WithinRel((22. * 22. - 8. * 8.) * s * s));
+ 						}
+ 					}
+ 					WHEN("minus 1mm") {
+@@ -154,7 +155,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 						THEN("Area is 18^2-12^2 mm2") {
+ 							REQUIRE(output.size() == 1);
+-							REQUIRE(output.front().area() == Approx((18. * 18. - 12. * 12.) * s * s));
++							REQUIRE_THAT(output.front().area(), WithinRel((18. * 18. - 12. * 12.) * s * s));
+ 						}
+ 					}
+ 				}
+@@ -186,7 +187,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 					THEN("Area matches") {
+ 						REQUIRE(output.size() == 1);
+-						REQUIRE(output.front().area() == Approx(area_offsetted));
++						REQUIRE_THAT(output.front().area(), WithinRel(area_offsetted, EPSILON));
+ 					}
+ 				}
+ 			}
+@@ -205,7 +206,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
+ #endif
+ 					THEN("Area matches") {
+ 						REQUIRE(output.size() == 1);
+-						REQUIRE(output.front().area() == Approx(area_offsetted));
++						REQUIRE_THAT(output.front().area(), WithinRel(area_offsetted, EPSILON));
+ 					}
+ 				}
+ 			}
+diff --git a/tests/libslic3r/test_clipper_utils.cpp b/tests/libslic3r/test_clipper_utils.cpp
+index 1f3bc0f..127d2bf 100644
+--- a/tests/libslic3r/test_clipper_utils.cpp
++++ b/tests/libslic3r/test_clipper_utils.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <numeric>
+ #include <iostream>
+@@ -9,6 +9,7 @@
+ #include "libslic3r/SVG.hpp"
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ SCENARIO("Various Clipper operations - xs/t/11_clipper.t", "[ClipperUtils]") {
+ 	// CCW oriented contour
+@@ -122,7 +123,7 @@ SCENARIO("Various Clipper operations - xs/t/11_clipper.t", "[ClipperUtils]") {
+ 			REQUIRE(result.size() == 1);
+ 		}
+ 		THEN("intersection_pl - result has same length as subject polyline") {
+-			REQUIRE(result.front().length() == Approx(subject.length()));
++			REQUIRE_THAT(result.front().length(), WithinRel(subject.length()));
+ 		}
+ 	}
+ 
+@@ -185,7 +186,7 @@ SCENARIO("Various Clipper operations - t/clipper.t", "[ClipperUtils]") {
+                 ExPolygon match({ { 20, 18 }, { 10, 18 }, { 10, 12 }, { 20, 12 } },
+                                 { { 14, 16 }, { 16, 16 }, { 16, 14 }, { 14, 14 } });
+                 REQUIRE(intersection.size() == 1);
+-                REQUIRE(intersection.front().area() == Approx(match.area()));
++                REQUIRE_THAT(intersection.front().area(), WithinRel(match.area()));
+             }
+         }
+ 
+@@ -193,39 +194,39 @@ SCENARIO("Various Clipper operations - t/clipper.t", "[ClipperUtils]") {
+         WHEN("Clipping line 1") {
+             Polylines intersection = intersection_pl({ Polyline { { 15, 18 }, { 15, 15 } } }, expolygons);
+             THEN("line is clipped to square with hole") {
+-                REQUIRE((Vec2f(15, 18) - Vec2f(15, 16)).norm() == Approx(intersection.front().length()));
++                REQUIRE_THAT((Vec2f(15, 18) - Vec2f(15, 16)).norm(), WithinRel(intersection.front().length()));
+             }
+         }
+         WHEN("Clipping line 2") {
+             Polylines intersection = intersection_pl({ Polyline { { 15, 15 }, { 15, 12 } } }, expolygons);
+             THEN("line is clipped to square with hole") {
+-                REQUIRE((Vec2f(15, 14) - Vec2f(15, 12)).norm() == Approx(intersection.front().length()));
++                REQUIRE_THAT((Vec2f(15, 14) - Vec2f(15, 12)).norm(), WithinRel(intersection.front().length()));
+             }
+         }
+         WHEN("Clipping line 3") {
+             Polylines intersection = intersection_pl({ Polyline { { 12, 18 }, { 18, 18 } } }, expolygons);
+             THEN("line is clipped to square with hole") {
+-                REQUIRE((Vec2f(18, 18) - Vec2f(12, 18)).norm() == Approx(intersection.front().length()));
++                REQUIRE_THAT((Vec2f(18, 18) - Vec2f(12, 18)).norm(), WithinRel(intersection.front().length()));
+             }
+         }
+         WHEN("Clipping line 4") {
+             Polylines intersection = intersection_pl({ Polyline { { 5, 15 }, { 30, 15 } } }, expolygons);
+             THEN("line is clipped to square with hole") {
+-                REQUIRE((Vec2f(14, 15) - Vec2f(10, 15)).norm() == Approx(intersection.front().length()));
+-                REQUIRE((Vec2f(20, 15) - Vec2f(16, 15)).norm() == Approx(intersection[1].length()));
++                REQUIRE_THAT((Vec2f(14, 15) - Vec2f(10, 15)).norm(), WithinRel(intersection.front().length()));
++                REQUIRE_THAT((Vec2f(20, 15) - Vec2f(16, 15)).norm(), WithinRel(intersection[1].length()));
+             }
+         }
+         WHEN("Clipping line 5") {
+             Polylines intersection = intersection_pl({ Polyline { { 30, 15 }, { 5, 15 } } }, expolygons);
+             THEN("reverse line is clipped to square with hole") {
+-                REQUIRE((Vec2f(20, 15) - Vec2f(16, 15)).norm() == Approx(intersection.front().length()));
+-                REQUIRE((Vec2f(14, 15) - Vec2f(10, 15)).norm() == Approx(intersection[1].length()));
++                REQUIRE_THAT((Vec2f(20, 15) - Vec2f(16, 15)).norm(), WithinRel(intersection.front().length()));
++                REQUIRE_THAT((Vec2f(14, 15) - Vec2f(10, 15)).norm(), WithinRel(intersection[1].length()));
+             }
+         }
+         WHEN("Clipping line 6") {
+             Polylines intersection = intersection_pl({ Polyline { { 10, 18 }, { 20, 18 } } }, expolygons);
+             THEN("tangent line is clipped to square with hole") {
+-                REQUIRE((Vec2f(20, 18) - Vec2f(10, 18)).norm() == Approx(intersection.front().length()));
++                REQUIRE_THAT((Vec2f(20, 18) - Vec2f(10, 18)).norm(), WithinRel(intersection.front().length()));
+             }
+         }
+     }
+@@ -246,7 +247,7 @@ SCENARIO("Various Clipper operations - t/clipper.t", "[ClipperUtils]") {
+ 			ExPolygons diff = Slic3r::diff_ex(Polygons{ square, square2 }, Polygons{ hole });
+             THEN("difference of a cw from two ccw is a contour with one hole") {
+                 REQUIRE(diff.size() == 1);
+-                REQUIRE(diff.front().area() == Approx(ExPolygon({ {40, 40}, {0, 40}, {0, 0}, {40, 0} }, { {15, 25}, {25, 25}, {25, 15}, {15, 15} }).area()));
++                REQUIRE_THAT(diff.front().area(), WithinRel(ExPolygon({ {40, 40}, {0, 40}, {0, 0}, {40, 0} }, { {15, 25}, {25, 25}, {25, 15}, {15, 15} }).area()));
+             }
+         }
+     }
+@@ -296,8 +297,8 @@ SCENARIO("Various Clipper operations - t/clipper.t", "[ClipperUtils]") {
+             auto line = Polyline::new_scale({ { 152.742,288.086671142818 }, { 152.742,34.166466971035 } });    
+             Polylines intersection = intersection_pl(line, to_polygons(circle_with_hole));
+             THEN("clipped to two pieces") {
+-                REQUIRE(intersection.front().length() == Approx((Vec2d(152742000, 215178843) - Vec2d(152742000, 288086661)).norm()));
+-                REQUIRE(intersection[1].length() == Approx((Vec2d(152742000, 35166477) - Vec2d(152742000, 108087507)).norm()));
++                REQUIRE_THAT(intersection.front().length(), WithinRel((Vec2d(152742000, 215178843) - Vec2d(152742000, 288086661)).norm()));
++                REQUIRE_THAT(intersection[1].length(), WithinRel((Vec2d(152742000, 35166477) - Vec2d(152742000, 108087507)).norm()));
+             }
+         }
+     }
+@@ -360,25 +361,25 @@ TEST_CASE("Traversing Clipper PolyTree", "[ClipperUtils]") {
+ 
+     SECTION("Traverse into Polygons WITHOUT spatial ordering") {
+         Polygons output;
+-        REQUIRE(area_sum == Approx(polytree_area(tree.GetFirst(), &output)));
++        REQUIRE_THAT(area_sum, WithinRel(polytree_area(tree.GetFirst(), &output)));
+         REQUIRE(output.size() == reference.size());
+     }
+     
+     SECTION("Traverse into ExPolygons WITHOUT spatial ordering") {
+         ExPolygons output;
+-        REQUIRE(area_sum == Approx(polytree_area(tree.GetFirst(), &output)));
++        REQUIRE_THAT(area_sum, WithinRel(polytree_area(tree.GetFirst(), &output)));
+         REQUIRE(count_polys(output) == reference.size());
+     }
+     
+     SECTION("Traverse into Polygons WITH spatial ordering") {
+         Polygons output;
+-        REQUIRE(area_sum == Approx(polytree_area<e_ordering::ON>(tree.GetFirst(), &output)));
++        REQUIRE_THAT(area_sum, WithinRel(polytree_area<e_ordering::ON>(tree.GetFirst(), &output)));
+         REQUIRE(output.size() == reference.size());
+     }
+     
+     SECTION("Traverse into ExPolygons WITH spatial ordering") {
+         ExPolygons output;
+-        REQUIRE(area_sum == Approx(polytree_area<e_ordering::ON>(tree.GetFirst(), &output)));
++        REQUIRE_THAT(area_sum, WithinRel(polytree_area<e_ordering::ON>(tree.GetFirst(), &output)));
+         REQUIRE(count_polys(output) == reference.size());
+     }
+ }
+diff --git a/tests/libslic3r/test_color.cpp b/tests/libslic3r/test_color.cpp
+index bb35f5e..ca04352 100644
+--- a/tests/libslic3r/test_color.cpp
++++ b/tests/libslic3r/test_color.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include "libslic3r/libslic3r.h"
+ 
+ #include "libslic3r/Color.hpp"
+diff --git a/tests/libslic3r/test_config.cpp b/tests/libslic3r/test_config.cpp
+index 50e61b3..218fada 100644
+--- a/tests/libslic3r/test_config.cpp
++++ b/tests/libslic3r/test_config.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Config.hpp"
+ #include "libslic3r/PrintConfig.hpp"
+diff --git a/tests/libslic3r/test_curve_fitting.cpp b/tests/libslic3r/test_curve_fitting.cpp
+index faf7839..43cf63e 100644
+--- a/tests/libslic3r/test_curve_fitting.cpp
++++ b/tests/libslic3r/test_curve_fitting.cpp
+@@ -1,10 +1,12 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/Geometry/Curves.hpp>
+ #include <libslic3r/Utils.hpp>
+ #include <libslic3r/SVG.hpp>
+ 
++using Catch::Matchers::WithinRel;
++
+ TEST_CASE("Curves: cubic b spline fit test", "[Curves]") {
+     using namespace Slic3r;
+     using namespace Slic3r::Geometry;
+@@ -31,14 +33,11 @@ TEST_CASE("Curves: cubic b spline fit test", "[Curves]") {
+ 
+     auto bspline = fit_cubic_bspline(observations, observation_points, weights, 1);
+ 
+-    Approx ap(1.0f);
+-    ap.epsilon(0.1f);
+-
+     for (int p = 0; p < 200; ++p) {
+         float fitted_val = bspline.get_fitted_value(fx(p))(0);
+         float expected = fy(p);
+ 
+-        REQUIRE(fitted_val == ap(expected));
++        REQUIRE_THAT(fitted_val, WithinRel(expected, 0.1f));
+ 
+     }
+ }
+@@ -106,13 +105,10 @@ TEST_CASE("Curves: polynomial fit test", "[Curves]") {
+     Vec2f fmin { fx(0), fy(0) };
+     Vec2f fmax { fx(200), fy(200) };
+ 
+-    Approx ap(1.0f);
+-    ap.epsilon(0.1f);
+-
+     auto poly = fit_polynomial(observations, observation_points, weights, 2);
+ 
+-    REQUIRE(poly.coefficients(0, 0) == ap(1));
+-    REQUIRE(poly.coefficients(0, 1) == ap(-2));
+-    REQUIRE(poly.coefficients(0, 2) == ap(1));
++    REQUIRE_THAT(poly.coefficients(0, 0), WithinRel(1, 0.1f));
++    REQUIRE_THAT(poly.coefficients(0, 1), WithinRel(-2, 0.1f));
++    REQUIRE_THAT(poly.coefficients(0, 2), WithinRel(1, 0.1f));
+ }
+ 
+diff --git a/tests/libslic3r/test_cut_surface.cpp b/tests/libslic3r/test_cut_surface.cpp
+index ffc762b..33d5c32 100644
+--- a/tests/libslic3r/test_cut_surface.cpp
++++ b/tests/libslic3r/test_cut_surface.cpp
+@@ -1,10 +1,10 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <libslic3r/CutSurface.hpp>
+ #include <libslic3r/TriangleMesh.hpp> // its_make_cube + its_merge
+ 
+ using namespace Slic3r;
+-TEST_CASE("Cut character from surface", "[]")
++TEST_CASE("Cut character from surface")
+ {
+     std::string font_path = std::string(TEST_DATA_DIR) +
+                             "/../../resources/fonts/NotoSans-Regular.ttf";
+diff --git a/tests/libslic3r/test_elephant_foot_compensation.cpp b/tests/libslic3r/test_elephant_foot_compensation.cpp
+index 09ad33f..f509c6c 100644
+--- a/tests/libslic3r/test_elephant_foot_compensation.cpp
++++ b/tests/libslic3r/test_elephant_foot_compensation.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <iostream>
+ #include <boost/filesystem.hpp>
+diff --git a/tests/libslic3r/test_emboss.cpp b/tests/libslic3r/test_emboss.cpp
+index fc548bb..dfd7fcd 100644
+--- a/tests/libslic3r/test_emboss.cpp
++++ b/tests/libslic3r/test_emboss.cpp
+@@ -1,4 +1,4 @@
+-﻿#include <catch2/catch.hpp>
++﻿#include <catch2/catch_all.hpp>
+ 
+ #include <libslic3r/Emboss.hpp>
+ #include <libslic3r/SVG.hpp> // only debug visualization
+@@ -379,7 +379,7 @@ TEST_CASE("ray segment intersection", "[MeshBoolean]")
+     CHECK(abs(*t1 - *t2) < std::numeric_limits<double>::epsilon());
+ }
+ 
+-TEST_CASE("triangle intersection", "[]")
++TEST_CASE("triangle intersection")
+ {
+     Vec2d                point(1, 1);
+     Vec2d                dir(-1, 0);
+@@ -448,7 +448,7 @@ TEST_CASE("Italic check", "[Emboss]")
+ #endif // FONT_DIR_PATH
+ 
+ #include "libslic3r/CutSurface.hpp"
+-TEST_CASE("Cut surface", "[]")
++TEST_CASE("Cut surface")
+ {
+     std::string  font_path  = get_font_filepath();
+     char         letter     = '%';
+diff --git a/tests/libslic3r/test_expolygon.cpp b/tests/libslic3r/test_expolygon.cpp
+index 63d763e..8370556 100644
+--- a/tests/libslic3r/test_expolygon.cpp
++++ b/tests/libslic3r/test_expolygon.cpp
+@@ -1,10 +1,11 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Point.hpp"
+ #include "libslic3r/Polygon.hpp"
+ #include "libslic3r/ExPolygon.hpp"
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ static inline bool points_close(const Point &p1, const Point &p2)
+ {
+@@ -30,7 +31,7 @@ SCENARIO("Basics", "[ExPolygon]") {
+             REQUIRE(expolygon.is_valid());
+         }
+         THEN("expolygon area") {
+-            REQUIRE(expolygon.area() == Approx(100*100-20*20));
++            REQUIRE_THAT(expolygon.area(), WithinRel(100.0*100-20*20));
+         }
+         WHEN("Expolygon scaled") {
+             ExPolygon expolygon2 = expolygon;
+diff --git a/tests/libslic3r/test_geometry.cpp b/tests/libslic3r/test_geometry.cpp
+index d96a2b3..735643e 100644
+--- a/tests/libslic3r/test_geometry.cpp
++++ b/tests/libslic3r/test_geometry.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Point.hpp"
+ #include "libslic3r/BoundingBox.hpp"
+diff --git a/tests/libslic3r/test_hollowing.cpp b/tests/libslic3r/test_hollowing.cpp
+index ad4f8f2..bea399a 100644
+--- a/tests/libslic3r/test_hollowing.cpp
++++ b/tests/libslic3r/test_hollowing.cpp
+@@ -1,6 +1,6 @@
+ #include <iostream>
+ #include <fstream>
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/SLA/Hollowing.hpp"
+ 
+diff --git a/tests/libslic3r/test_indexed_triangle_set.cpp b/tests/libslic3r/test_indexed_triangle_set.cpp
+index b6aad9d..8f2af4c 100644
+--- a/tests/libslic3r/test_indexed_triangle_set.cpp
++++ b/tests/libslic3r/test_indexed_triangle_set.cpp
+@@ -1,6 +1,6 @@
+ #include <iostream>
+ #include <fstream>
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/TriangleMesh.hpp"
+ 
+diff --git a/tests/libslic3r/test_jump_point_search.cpp b/tests/libslic3r/test_jump_point_search.cpp
+index 76d2aac..951306f 100644
+--- a/tests/libslic3r/test_jump_point_search.cpp
++++ b/tests/libslic3r/test_jump_point_search.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include "libslic3r/BoundingBox.hpp"
+ #include "libslic3r/JumpPointSearch.hpp"
+ 
+diff --git a/tests/libslic3r/test_kdtreeindirect.cpp b/tests/libslic3r/test_kdtreeindirect.cpp
+index bc6ace7..b533df2 100644
+--- a/tests/libslic3r/test_kdtreeindirect.cpp
++++ b/tests/libslic3r/test_kdtreeindirect.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/KDTreeIndirect.hpp"
+ #include "libslic3r/Execution/ExecutionSeq.hpp"
+diff --git a/tests/libslic3r/test_marchingsquares.cpp b/tests/libslic3r/test_marchingsquares.cpp
+index 89a86f1..9a2d16f 100644
+--- a/tests/libslic3r/test_marchingsquares.cpp
++++ b/tests/libslic3r/test_marchingsquares.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <fstream>
+diff --git a/tests/libslic3r/test_meshboolean.cpp b/tests/libslic3r/test_meshboolean.cpp
+index 7587677..03ca4ab 100644
+--- a/tests/libslic3r/test_meshboolean.cpp
++++ b/tests/libslic3r/test_meshboolean.cpp
+@@ -1,10 +1,11 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/TriangleMesh.hpp>
+ #include <libslic3r/MeshBoolean.hpp>
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ TEST_CASE("CGAL and TriangleMesh conversions", "[MeshBoolean]") {
+     TriangleMesh sphere = make_sphere(1.);
+@@ -19,7 +20,7 @@ TEST_CASE("CGAL and TriangleMesh conversions", "[MeshBoolean]") {
+     REQUIRE(M.its.vertices.size() == sphere.its.vertices.size());
+     REQUIRE(M.its.indices.size() == sphere.its.indices.size());
+     
+-    REQUIRE(M.volume() == Approx(sphere.volume()));
++    REQUIRE_THAT(M.volume(), WithinRel(sphere.volume()));
+     
+     REQUIRE(! MeshBoolean::cgal::does_self_intersect(M));
+ }
+diff --git a/tests/libslic3r/test_mutable_polygon.cpp b/tests/libslic3r/test_mutable_polygon.cpp
+index 5a3c144..906dffe 100644
+--- a/tests/libslic3r/test_mutable_polygon.cpp
++++ b/tests/libslic3r/test_mutable_polygon.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Point.hpp"
+ #include "libslic3r/MutablePolygon.hpp"
+diff --git a/tests/libslic3r/test_mutable_priority_queue.cpp b/tests/libslic3r/test_mutable_priority_queue.cpp
+index 7e31b57..04031f2 100644
+--- a/tests/libslic3r/test_mutable_priority_queue.cpp
++++ b/tests/libslic3r/test_mutable_priority_queue.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <queue>
+ 
+diff --git a/tests/libslic3r/test_optimizers.cpp b/tests/libslic3r/test_optimizers.cpp
+index 6e84f6a..9d8d807 100644
+--- a/tests/libslic3r/test_optimizers.cpp
++++ b/tests/libslic3r/test_optimizers.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/Optimize/BruteforceOptimizer.hpp>
+diff --git a/tests/libslic3r/test_placeholder_parser.cpp b/tests/libslic3r/test_placeholder_parser.cpp
+index 9a1405f..934eabd 100644
+--- a/tests/libslic3r/test_placeholder_parser.cpp
++++ b/tests/libslic3r/test_placeholder_parser.cpp
+@@ -1,9 +1,10 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/PlaceholderParser.hpp"
+ #include "libslic3r/PrintConfig.hpp"
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ SCENARIO("Placeholder parser scripting", "[PlaceholderParser]") {
+ 	PlaceholderParser 	parser;
+@@ -69,17 +70,17 @@ SCENARIO("Placeholder parser scripting", "[PlaceholderParser]") {
+     SECTION("math: 2*3") { REQUIRE(parser.process("{2*3}") == "6"); }
+     SECTION("math: 2*3/6") { REQUIRE(parser.process("{2*3/6}") == "1"); }
+     SECTION("math: 2*3/12") { REQUIRE(parser.process("{2*3/12}") == "0"); }
+-    SECTION("math: 2.*3/12") { REQUIRE(std::stod(parser.process("{2.*3/12}")) == Approx(0.5)); }
+-    SECTION("math: 10 % 2.5") { REQUIRE(std::stod(parser.process("{10%2.5}")) == Approx(0.)); }
+-    SECTION("math: 11 % 2.5") { REQUIRE(std::stod(parser.process("{11%2.5}")) == Approx(1.)); }
++    SECTION("math: 2.*3/12") { REQUIRE_THAT(std::stod(parser.process("{2.*3/12}")), WithinRel(0.5)); }
++    SECTION("math: 10 % 2.5") { REQUIRE_THAT(std::stod(parser.process("{10%2.5}")), WithinRel(0.)); }
++    SECTION("math: 11 % 2.5") { REQUIRE_THAT(std::stod(parser.process("{11%2.5}")), WithinRel(1.)); }
+     SECTION("math: 2*(3-12)") { REQUIRE(parser.process("{2*(3-12)}") == "-18"); }
+     SECTION("math: 2*foo*(3-12)") { REQUIRE(parser.process("{2*foo*(3-12)}") == "0"); }
+     SECTION("math: 2*bar*(3-12)") { REQUIRE(parser.process("{2*bar*(3-12)}") == "-36"); }
+-    SECTION("math: 2.5*bar*(3-12)") { REQUIRE(std::stod(parser.process("{2.5*bar*(3-12)}")) == Approx(-45)); }
++    SECTION("math: 2.5*bar*(3-12)") { REQUIRE_THAT(std::stod(parser.process("{2.5*bar*(3-12)}")), WithinRel(-45.0)); }
+     SECTION("math: min(12, 14)") { REQUIRE(parser.process("{min(12, 14)}") == "12"); }
+     SECTION("math: max(12, 14)") { REQUIRE(parser.process("{max(12, 14)}") == "14"); }
+-    SECTION("math: min(13.4, -1238.1)") { REQUIRE(std::stod(parser.process("{min(13.4, -1238.1)}")) == Approx(-1238.1)); }
+-    SECTION("math: max(13.4, -1238.1)") { REQUIRE(std::stod(parser.process("{max(13.4, -1238.1)}")) == Approx(13.4)); }
++    SECTION("math: min(13.4, -1238.1)") { REQUIRE_THAT(std::stod(parser.process("{min(13.4, -1238.1)}")), WithinRel(-1238.1)); }
++    SECTION("math: max(13.4, -1238.1)") { REQUIRE_THAT(std::stod(parser.process("{max(13.4, -1238.1)}")), WithinRel(13.4)); }
+     SECTION("math: int(13.4)") { REQUIRE(parser.process("{int(13.4)}") == "13"); }
+     SECTION("math: int(-13.4)") { REQUIRE(parser.process("{int(-13.4)}") == "-13"); }
+     SECTION("math: round(13.4)") { REQUIRE(parser.process("{round(13.4)}") == "13"); }
+@@ -101,19 +102,19 @@ SCENARIO("Placeholder parser scripting", "[PlaceholderParser]") {
+     SECTION("math: ternary3") { REQUIRE(parser.process("{12 == 13 ? 1 - 1 * unknown_symbol : 2 * 2}") == "4"); }
+     SECTION("math: ternary4") { REQUIRE(parser.process("{12 == 2 * 6 ? 1 - 1 : 2 * unknown_symbol}") == "0"); }
+     SECTION("math: ternary nested") { REQUIRE(parser.process("{12 == 2 * 6 ? 3 - 1 != 2 ? does_not_exist : 0 * 0 - 0 / 1 + 12345 : bull ? 3 - cokoo : 2 * unknown_symbol}") == "12345"); }
+-    SECTION("math: interpolate_table(13.84375892476, (0, 0), (20, 20))") { REQUIRE(std::stod(parser.process("{interpolate_table(13.84375892476, (0, 0), (20, 20))}")) == Approx(13.84375892476)); }
+-    SECTION("math: interpolate_table(13, (0, 0), (20, 20), (30, 20))") { REQUIRE(std::stod(parser.process("{interpolate_table(13, (0, 0), (20, 20), (30, 20))}")) == Approx(13.)); }
+-    SECTION("math: interpolate_table(25, (0, 0), (20, 20), (30, 20))") { REQUIRE(std::stod(parser.process("{interpolate_table(25, (0, 0), (20, 20), (30, 20))}")) == Approx(20.)); }
++    SECTION("math: interpolate_table(13.84375892476, (0, 0), (20, 20))") { REQUIRE_THAT(std::stod(parser.process("{interpolate_table(13.84375892476, (0, 0), (20, 20))}")), WithinRel(13.84375892476, EPSILON)); }
++    SECTION("math: interpolate_table(13, (0, 0), (20, 20), (30, 20))") { REQUIRE_THAT(std::stod(parser.process("{interpolate_table(13, (0, 0), (20, 20), (30, 20))}")), WithinRel(13.)); }
++    SECTION("math: interpolate_table(25, (0, 0), (20, 20), (30, 20))") { REQUIRE_THAT(std::stod(parser.process("{interpolate_table(25, (0, 0), (20, 20), (30, 20))}")), WithinRel(20.)); }
+ 
+     // Test the "coFloatOrPercent" and "xxx_extrusion_width" substitutions.
+     // first_layer_extrusion_width ratio_over first_layer_heigth.
+-    SECTION("perimeter_extrusion_width") { REQUIRE(std::stod(parser.process("{perimeter_extrusion_width}")) == Approx(0.67500001192092896)); }
+-    SECTION("first_layer_extrusion_width") { REQUIRE(std::stod(parser.process("{first_layer_extrusion_width}")) == Approx(0.9)); }
+-    SECTION("support_material_xy_spacing") { REQUIRE(std::stod(parser.process("{support_material_xy_spacing}")) == Approx(0.3375)); }
++    SECTION("perimeter_extrusion_width") { REQUIRE_THAT(std::stod(parser.process("{perimeter_extrusion_width}")), WithinRel(0.67500001192092896, EPSILON)); }
++    SECTION("first_layer_extrusion_width") { REQUIRE_THAT(std::stod(parser.process("{first_layer_extrusion_width}")), WithinRel(0.9)); }
++    SECTION("support_material_xy_spacing") { REQUIRE_THAT(std::stod(parser.process("{support_material_xy_spacing}")), WithinRel(0.3375)); }
+     // external_perimeter_speed over perimeter_speed
+-    SECTION("external_perimeter_speed") { REQUIRE(std::stod(parser.process("{external_perimeter_speed}")) == Approx(30.)); }
++    SECTION("external_perimeter_speed") { REQUIRE_THAT(std::stod(parser.process("{external_perimeter_speed}")), WithinRel(30.)); }
+     // infill_overlap over perimeter_extrusion_width
+-    SECTION("infill_overlap") { REQUIRE(std::stod(parser.process("{infill_overlap}")) == Approx(0.16875)); }
++    SECTION("infill_overlap") { REQUIRE_THAT(std::stod(parser.process("{infill_overlap}")), WithinRel(0.16875)); }
+     // If first_layer_speed is set to percent, then it is applied over respective extrusion types by overriding their respective speeds.
+     // The PlaceholderParser has no way to know which extrusion type the caller has in mind, therefore it throws.
+     SECTION("first_layer_speed") { REQUIRE_THROWS(parser.process("{first_layer_speed}")); }
+@@ -173,7 +174,7 @@ SCENARIO("Placeholder parser scripting", "[PlaceholderParser]") {
+         DynamicConfig config_outputs;
+         config_outputs.set_key_value("writable_floats", new ConfigOptionFloats({ 0., 0., 0. }));
+         parser.process("{writable_floats[1] = 33}", 0, nullptr, &config_outputs, nullptr);
+-        REQUIRE(config_outputs.opt_float("writable_floats", 1) == Approx(33.));
++        REQUIRE_THAT(config_outputs.opt_float("writable_floats", 1), WithinRel(33.));
+     }
+ }
+ 
+diff --git a/tests/libslic3r/test_png_io.cpp b/tests/libslic3r/test_png_io.cpp
+index 97fa064..3c8c64c 100644
+--- a/tests/libslic3r/test_png_io.cpp
++++ b/tests/libslic3r/test_png_io.cpp
+@@ -2,7 +2,7 @@
+ #define NOMINMAX
+ #endif
+ 
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <numeric>
+ 
+diff --git a/tests/libslic3r/test_polygon.cpp b/tests/libslic3r/test_polygon.cpp
+index b260888..f71b0e1 100644
+--- a/tests/libslic3r/test_polygon.cpp
++++ b/tests/libslic3r/test_polygon.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Point.hpp"
+ #include "libslic3r/Polygon.hpp"
+diff --git a/tests/libslic3r/test_polyline.cpp b/tests/libslic3r/test_polyline.cpp
+index 8271554..43b66b5 100644
+--- a/tests/libslic3r/test_polyline.cpp
++++ b/tests/libslic3r/test_polyline.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Point.hpp"
+ #include "libslic3r/Polyline.hpp"
+diff --git a/tests/libslic3r/test_quadric_edge_collapse.cpp b/tests/libslic3r/test_quadric_edge_collapse.cpp
+index 3a20f80..0700fc1 100644
+--- a/tests/libslic3r/test_quadric_edge_collapse.cpp
++++ b/tests/libslic3r/test_quadric_edge_collapse.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/QuadricEdgeCollapse.hpp>
+@@ -240,7 +240,7 @@ TEST_CASE("Simplify frog_legs.obj to 5% by Quadric edge collapse", "[its][quadri
+ }
+ 
+ #include <libigl/igl/qslim.h>
+-TEST_CASE("Simplify frog_legs.obj to 5% by IGL/qslim", "[]")
++TEST_CASE("Simplify frog_legs.obj to 5% by IGL/qslim")
+ {
+     std::string  obj_filename    = "frog_legs.obj";
+     TriangleMesh mesh            = load_model(obj_filename);
+diff --git a/tests/libslic3r/test_region_expansion.cpp b/tests/libslic3r/test_region_expansion.cpp
+index 9f8a6fd..e144778 100644
+--- a/tests/libslic3r/test_region_expansion.cpp
++++ b/tests/libslic3r/test_region_expansion.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <libslic3r/libslic3r.h>
+ #include <libslic3r/Algorithm/RegionExpansion.hpp>
+@@ -8,6 +8,7 @@
+ #include <libslic3r/SVG.cpp>
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ //#define DEBUG_TEMP_DIR "d:\\temp\\"
+ 
+@@ -27,7 +28,7 @@ SCENARIO("Region expansion basics", "[RegionExpansion]") {
+                 REQUIRE(expanded.size() == 1);
+             }
+             THEN("The area of the anchor is 10mm2") {
+-                REQUIRE(area(expanded.front()) == Approx(expansion * ten));
++                REQUIRE_THAT(area(expanded.front()), WithinRel(expansion * ten));
+             }
+         };
+ 
+@@ -61,8 +62,8 @@ SCENARIO("Region expansion basics", "[RegionExpansion]") {
+                 REQUIRE(expanded.front().size() == 2);
+             }
+             THEN("The area of each anchor is 10mm2") {
+-                REQUIRE(area(expanded.front().front()) == Approx(expansion * ten));
+-                REQUIRE(area(expanded.front().back()) == Approx(expansion * ten));
++                REQUIRE_THAT(area(expanded.front().front()), WithinRel(expansion * ten));
++                REQUIRE_THAT(area(expanded.front().back()), WithinRel(expansion * ten));
+             }
+         }
+ 
+@@ -77,8 +78,8 @@ SCENARIO("Region expansion basics", "[RegionExpansion]") {
+                 REQUIRE(expanded.front().size() == 2);
+             }
+             THEN("The area of each anchor is 100mm2") {
+-                REQUIRE(area(expanded.front().front()) == Approx(sqr<double>(ten)));
+-                REQUIRE(area(expanded.front().back()) == Approx(sqr<double>(ten)));
++                REQUIRE_THAT(area(expanded.front().front()), WithinRel(sqr<double>(ten)));
++                REQUIRE_THAT(area(expanded.front().back()), WithinRel(sqr<double>(ten)));
+             }
+         }
+     }
+@@ -247,7 +248,7 @@ SCENARIO("Region expansion basics", "[RegionExpansion]") {
+             THEN("The anchor expands into a single region with two holes, fully covering the boundary") {
+                 REQUIRE(expanded.size() == 1);
+                 REQUIRE(expanded.front().size() == 3);
+-                REQUIRE(area(expanded.front()) == Approx(area(boundary)));
++                REQUIRE_THAT(area(expanded.front()), WithinRel(area(boundary)));
+             }
+         }
+     }
+diff --git a/tests/libslic3r/test_stl.cpp b/tests/libslic3r/test_stl.cpp
+index 4c9c1bc..a8addec 100644
+--- a/tests/libslic3r/test_stl.cpp
++++ b/tests/libslic3r/test_stl.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Model.hpp"
+ #include "libslic3r/Format/STL.hpp"
+diff --git a/tests/libslic3r/test_surface_mesh.cpp b/tests/libslic3r/test_surface_mesh.cpp
+index 34ff356..bdb12d8 100644
+--- a/tests/libslic3r/test_surface_mesh.cpp
++++ b/tests/libslic3r/test_surface_mesh.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ 
+diff --git a/tests/libslic3r/test_timeutils.cpp b/tests/libslic3r/test_timeutils.cpp
+index 6630d70..221dd07 100644
+--- a/tests/libslic3r/test_timeutils.cpp
++++ b/tests/libslic3r/test_timeutils.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Time.hpp"
+ 
+diff --git a/tests/libslic3r/test_triangulation.cpp b/tests/libslic3r/test_triangulation.cpp
+index 5a1f99f..4f98b24 100644
+--- a/tests/libslic3r/test_triangulation.cpp
++++ b/tests/libslic3r/test_triangulation.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include <libslic3r/Triangulation.hpp>
+ #include <libslic3r/SVG.hpp> // only debug visualization
+diff --git a/tests/libslic3r/test_utils.cpp b/tests/libslic3r/test_utils.cpp
+index 74d4094..a4f1836 100644
+--- a/tests/libslic3r/test_utils.cpp
++++ b/tests/libslic3r/test_utils.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/libslic3r.h"
+ 
+diff --git a/tests/libslic3r/test_voronoi.cpp b/tests/libslic3r/test_voronoi.cpp
+index 967cb0e..459862e 100644
+--- a/tests/libslic3r/test_voronoi.cpp
++++ b/tests/libslic3r/test_voronoi.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/Polygon.hpp>
+@@ -25,6 +25,8 @@ using namespace Slic3r;
+ 
+ using VD = Geometry::VoronoiDiagram;
+ 
++using Catch::Matchers::WithinRel;
++
+ // https://svn.boost.org/trac10/ticket/12067
+ // This bug seems to be confirmed.
+ // Vojtech supposes that there may be no Voronoi edges produced for
+@@ -69,7 +71,7 @@ TEST_CASE("Voronoi missing edges - points 12067", "[Voronoi]")
+         vd, pts, Lines());
+ #endif
+ 
+-//    REQUIRE(closest_point.z() == Approx(1.));
++//    REQUIRE_THAT(closest_point.z(), WithinRel(1.));
+ }
+ 
+ // https://svn.boost.org/trac10/ticket/12707
+diff --git a/tests/sla_print/sla_archive_readwrite_tests.cpp b/tests/sla_print/sla_archive_readwrite_tests.cpp
+index fb1af3d..a66c5e0 100644
+--- a/tests/sla_print/sla_archive_readwrite_tests.cpp
++++ b/tests/sla_print/sla_archive_readwrite_tests.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include "libslic3r/SLAPrint.hpp"
+diff --git a/tests/sla_print/sla_print_tests.cpp b/tests/sla_print/sla_print_tests.cpp
+index a733e77..c4b916f 100644
+--- a/tests/sla_print/sla_print_tests.cpp
++++ b/tests/sla_print/sla_print_tests.cpp
+@@ -9,6 +9,8 @@
+ #include <libslic3r/SLA/SupportTreeMesher.hpp>
+ #include <libslic3r/BranchingTree/PointCloud.hpp>
+ 
++using Catch::Matchers::WithinRel;
++
+ namespace {
+ 
+ const char *const BELOW_PAD_TEST_OBJECTS[] = {
+@@ -194,8 +196,8 @@ TEST_CASE("InitializedRasterShouldBeNONEmpty", "[SLARasterOutput]") {
+     sla::RasterGrayscaleAAGammaPower raster(res, pixdim, {}, 1.);
+     REQUIRE(raster.resolution().width_px == res.width_px);
+     REQUIRE(raster.resolution().height_px == res.height_px);
+-    REQUIRE(raster.pixel_dimensions().w_mm == Approx(pixdim.w_mm));
+-    REQUIRE(raster.pixel_dimensions().h_mm == Approx(pixdim.h_mm));
++    REQUIRE_THAT(raster.pixel_dimensions().w_mm, WithinRel(pixdim.w_mm));
++    REQUIRE_THAT(raster.pixel_dimensions().h_mm, WithinRel(pixdim.h_mm));
+ }
+ 
+ TEST_CASE("MirroringShouldBeCorrect", "[SLARasterOutput]") {
+@@ -269,5 +271,5 @@ TEST_CASE("Test concurrency")
+ 
+     double s = execution::accumulate(ex_tbb, vals.begin(), vals.end(), 0.);
+ 
+-    REQUIRE(s == Approx(ref));
++    REQUIRE_THAT(s, WithinRel(ref));
+ }
+diff --git a/tests/sla_print/sla_raycast_tests.cpp b/tests/sla_print/sla_raycast_tests.cpp
+index 1f2962b..18c62a0 100644
+--- a/tests/sla_print/sla_raycast_tests.cpp
++++ b/tests/sla_print/sla_raycast_tests.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/AABBMesh.hpp>
+@@ -6,6 +6,8 @@
+ 
+ #include "sla_test_utils.hpp"
+ 
++using Catch::Matchers::WithinRel;
++
+ using namespace Slic3r;
+ 
+ // First do a simple test of the hole raycaster.
+@@ -20,8 +22,8 @@ TEST_CASE("Raycaster - find intersections of a line and cylinder")
+     s = {-1.f, 0, 5.f};
+     dir = {1.f, 0, 0};
+     hole.get_intersections(s, dir, out);
+-    REQUIRE(out[0].first == Approx(-4.f));
+-    REQUIRE(out[1].first == Approx(6.f));
++    REQUIRE_THAT(out[0].first, WithinRel(-4.f));
++    REQUIRE_THAT(out[1].first, WithinRel(6.f));
+ 
+     // Start outside and cast parallel to axis.
+     s = {0, 0, -1.f};
+@@ -70,25 +72,25 @@ TEST_CASE("Raycaster with loaded drillholes", "[sla_raycast]")
+     Vec3d s = center.cast<double>();
+     // Fire from center, should hit the interior wall
+     auto hit = emesh.query_ray_hit(s, {0, 1., 0.});
+-    REQUIRE(hit.distance() == Approx(boxbb.size().x() / 2 - hcfg.min_thickness));
++    REQUIRE_THAT(hit.distance(), WithinRel(boxbb.size().x() / 2 - hcfg.min_thickness));
+     
+     // Fire upward from hole center, hit distance equals the radius (hits the
+     // side of the hole cut.
+     s.y() = hcfg.min_thickness / 2;
+     hit = emesh.query_ray_hit(s, {0, 0., 1.});
+-    REQUIRE(hit.distance() == Approx(radius));
++    REQUIRE_THAT(hit.distance(), WithinRel(radius));
+ 
+     // Fire from outside, hit the back side of the cube interior
+     s.y() = -1.;
+     hit = emesh.query_ray_hit(s, {0, 1., 0.});
+-    REQUIRE(hit.distance() == Approx(boxbb.max.y() - hcfg.min_thickness - s.y()));
++    REQUIRE_THAT(hit.distance(), WithinRel(boxbb.max.y() - hcfg.min_thickness - s.y()));
+     
+     // Fire downwards from above the hole cylinder. Has to go through the cyl.
+     // as it was not there.
+     s = center.cast<double>();
+     s.z() = boxbb.max.z() - hcfg.min_thickness - 1.;
+     hit = emesh.query_ray_hit(s, {0, 0., -1.});
+-    REQUIRE(hit.distance() == Approx(s.z() - boxbb.min.z() - hcfg.min_thickness));
++    REQUIRE_THAT(hit.distance(), WithinRel(s.z() - boxbb.min.z() - hcfg.min_thickness));
+ 
+     // Check for support tree correctness
+     test_support_model_collision("20mm_cube.obj", {}, hcfg, holes);
+diff --git a/tests/sla_print/sla_supptgen_tests.cpp b/tests/sla_print/sla_supptgen_tests.cpp
+index e5e6024..afc6606 100644
+--- a/tests/sla_print/sla_supptgen_tests.cpp
++++ b/tests/sla_print/sla_supptgen_tests.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/ExPolygon.hpp>
+diff --git a/tests/sla_print/sla_supptreeutils_tests.cpp b/tests/sla_print/sla_supptreeutils_tests.cpp
+index c8abbb8..c388a4a 100644
+--- a/tests/sla_print/sla_supptreeutils_tests.cpp
++++ b/tests/sla_print/sla_supptreeutils_tests.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <unordered_set>
+@@ -7,6 +7,8 @@
+ #include "libslic3r/SLA/SupportTreeUtils.hpp"
+ #include "libslic3r/SLA/SupportTreeUtilsLegacy.hpp"
+ 
++using Catch::Matchers::WithinRel;
++
+ // Test pair hash for 'nums' random number pairs.
+ template <class I, class II> void test_pairhash()
+ {
+@@ -99,7 +101,7 @@ static void eval_ground_conn(const Slic3r::sla::GroundConnection &conn,
+     REQUIRE(conn.path.back().r < conn.pillar_base->r_top);
+ 
+     // The end radius and the pillar base's upper radius should match
+-    REQUIRE(conn.pillar_base->r_top == Approx(end_r));
++    REQUIRE_THAT(conn.pillar_base->r_top, WithinRel(end_r));
+ }
+ 
+ TEST_CASE("Pillar search dumb case", "[suptreeutils]") {
+@@ -119,7 +121,7 @@ TEST_CASE("Pillar search dumb case", "[suptreeutils]") {
+ 
+         REQUIRE(conn);
+ //        REQUIRE(conn.path.size() == 1);
+-        REQUIRE(conn.pillar_base->pos.z() == Approx(ground_level(sm)));
++        REQUIRE_THAT(conn.pillar_base->pos.z(), WithinRel(ground_level(sm)));
+     }
+ 
+     SECTION("with zero R source and destination") {
+@@ -134,8 +136,8 @@ TEST_CASE("Pillar search dumb case", "[suptreeutils]") {
+ 
+         REQUIRE(conn);
+ //        REQUIRE(conn.path.size() == 1);
+-        REQUIRE(conn.pillar_base->pos.z() == Approx(ground_level(sm)));
+-        REQUIRE(conn.pillar_base->r_top == Approx(0.));
++        REQUIRE_THAT(conn.pillar_base->pos.z(), WithinRel(ground_level(sm)));
++        REQUIRE_THAT(conn.pillar_base->r_top, WithinRel(0.));
+     }
+ 
+     SECTION("with zero init direction") {
+@@ -150,7 +152,7 @@ TEST_CASE("Pillar search dumb case", "[suptreeutils]") {
+ 
+         REQUIRE(conn);
+ //        REQUIRE(conn.path.size() == 1);
+-        REQUIRE(conn.pillar_base->pos.z() == Approx(ground_level(sm)));
++        REQUIRE_THAT(conn.pillar_base->pos.z(), WithinRel(ground_level(sm)));
+     }
+ }
+ 
+@@ -278,7 +280,7 @@ TEST_CASE("Find ground route just above ground", "[suptreeutils]") {
+ 
+     REQUIRE(conn);
+ 
+-    REQUIRE(conn.pillar_base->pos.z() >= Approx(ground_level(sm)));
++    REQUIRE(conn.pillar_base->pos.z() >= ground_level(sm));
+ }
+ 
+ TEST_CASE("BranchingSupports::MergePointFinder", "[suptreeutils]") {
+diff --git a/tests/sla_print/sla_test_utils.cpp b/tests/sla_print/sla_test_utils.cpp
+index f294abc..f124d8c 100644
+--- a/tests/sla_print/sla_test_utils.cpp
++++ b/tests/sla_print/sla_test_utils.cpp
+@@ -6,6 +6,8 @@
+ 
+ #include <iomanip>
+ 
++using Catch::Matchers::WithinRel;
++
+ void test_support_model_collision(
+     const std::string            &obj_filename,
+     const sla::SupportTreeConfig &input_supportcfg,
+@@ -182,7 +184,7 @@ void test_supports(const std::string          &obj_filename,
+         allowed_zmin = zmin - 2 * supportcfg.head_back_radius_mm;
+ 
+ #ifndef NDEBUG
+-    if (!(obb.min.z() >= Approx(allowed_zmin)) || !(obb.max.z() <= Approx(zmax)))
++    if (!(obb.min.z() >= allowed_zmin) || !(obb.max.z() <= zmax))
+     {
+         indexed_triangle_set its;
+         treebuilder.retrieve_full_mesh(its);
+@@ -193,8 +195,8 @@ void test_supports(const std::string          &obj_filename,
+     }
+ #endif
+ 
+-    REQUIRE(obb.min.z() >= Approx(allowed_zmin));
+-    REQUIRE(obb.max.z() <= Approx(zmax));
++    REQUIRE(obb.min.z() >= allowed_zmin);
++    REQUIRE(obb.max.z() <= zmax);
+ 
+     // Move out the support tree into the byproducts, we can examine it further
+     // in various tests.
+@@ -240,7 +242,7 @@ void check_support_tree_integrity(const sla::SupportTreeBuilder &stree,
+     };
+     
+     for (auto &bridge : stree.bridges()) chck_bridge(bridge, max_bridgelen);
+-    REQUIRE(max_bridgelen <= Approx(cfg.max_bridge_length_mm));
++    REQUIRE(max_bridgelen <= cfg.max_bridge_length_mm);
+     
+     max_bridgelen = 0;
+     for (auto &bridge : stree.crossbridges()) chck_bridge(bridge, max_bridgelen);
+@@ -272,7 +274,7 @@ void test_pad(const std::string &obj_filename, const sla::PadConfig &padcfg, Pad
+     check_validity(out.mesh);
+     
+     auto bb = out.mesh.bounding_box();
+-    REQUIRE(bb.max.z() - bb.min.z() == Approx(padcfg.full_height()));
++    REQUIRE_THAT(bb.max.z() - bb.min.z(), WithinRel(padcfg.full_height()));
+ }
+ 
+ static void _test_concave_hull(const Polygons &hull, const ExPolygons &polys)
+@@ -285,7 +287,7 @@ static void _test_concave_hull(const Polygons &hull, const ExPolygons &polys)
+     double cchull_area = 0;
+     for (const Slic3r::Polygon &p : hull) cchull_area += p.area();
+     
+-    REQUIRE(cchull_area >= Approx(polys_area));
++    REQUIRE(cchull_area >= polys_area);
+     
+     size_t cchull_holes = 0;
+     for (const Slic3r::Polygon &p : hull)
+diff --git a/tests/sla_print/sla_test_utils.hpp b/tests/sla_print/sla_test_utils.hpp
+index 103b2f6..109c852 100644
+--- a/tests/sla_print/sla_test_utils.hpp
++++ b/tests/sla_print/sla_test_utils.hpp
+@@ -1,7 +1,7 @@
+ #ifndef SLA_TEST_UTILS_HPP
+ #define SLA_TEST_UTILS_HPP
+ 
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ // Debug
+diff --git a/tests/slic3rutils/slic3r_arrangejob_tests.cpp b/tests/slic3rutils/slic3r_arrangejob_tests.cpp
+index b76861a..1f0d593 100644
+--- a/tests/slic3rutils/slic3r_arrangejob_tests.cpp
++++ b/tests/slic3rutils/slic3r_arrangejob_tests.cpp
+@@ -1,4 +1,4 @@
+-#include "catch2/catch.hpp"
++#include <catch2/catch_all.hpp>
+ #include "test_utils.hpp"
+ 
+ #include <random>
+@@ -13,6 +13,8 @@
+ 
+ #include "libslic3r/Format/3mf.hpp"
+ 
++using Catch::Matchers::WithinRel;
++
+ class RandomArrangeSettings: public Slic3r::arr2::ArrangeSettingsView {
+     Slic3r::arr2::ArrangeSettingsDb::Values m_v;
+ 
+@@ -143,7 +145,7 @@ TEST_CASE("Basic arrange with cube", "[arrangejob]") {
+             std::swap(sz.x(), sz.y());
+ 
+         double d_obj = settings.get_distance_from_objects();
+-        REQUIRE(sz.y() == Approx(2. * bb1.size().y() + d_obj));
++        REQUIRE_THAT(sz.y(), WithinRel(2. * bb1.size().y() + d_obj, EPSILON));
+     }
+ 
+     SECTION("Selected cube (different object), needs to go beside existing") {
+@@ -177,7 +179,7 @@ TEST_CASE("Basic arrange with cube", "[arrangejob]") {
+             std::swap(sz.x(), sz.y());
+ 
+         double d_obj = settings.get_distance_from_objects();
+-        REQUIRE(sz.y() == Approx(2. * bb1.size().y() + d_obj));
++        REQUIRE_THAT(sz.y(), WithinRel(2. * bb1.size().y() + d_obj, EPSILON));
+     }
+ 
+     SECTION("Four cubes needs to touch each other after arrange") {
+@@ -229,8 +231,8 @@ TEST_CASE("Basic arrange with cube", "[arrangejob]") {
+         REQUIRE(c == bounding_box(bed).center());
+ 
+         float d_obj = settings.get_distance_from_objects();
+-        REQUIRE(pilebb.size().x() == Approx(2. * 20. + d_obj));
+-        REQUIRE(pilebb.size().y() == Approx(2. * 20. + d_obj));
++        REQUIRE_THAT(pilebb.size().x(), WithinRel(2. * 20. + d_obj));
++        REQUIRE_THAT(pilebb.size().y(), WithinRel(2. * 20. + d_obj));
+     }
+ }
+ 
+diff --git a/tests/slic3rutils/slic3r_jobs_tests.cpp b/tests/slic3rutils/slic3r_jobs_tests.cpp
+index b0d01d2..7095197 100644
+--- a/tests/slic3rutils/slic3r_jobs_tests.cpp
++++ b/tests/slic3rutils/slic3r_jobs_tests.cpp
+@@ -1,4 +1,4 @@
+-#include "catch2/catch.hpp"
++#include <catch2/catch_all.hpp>
+ 
+ #include <chrono>
+ #include <thread>
+diff --git a/tests/slic3rutils/slic3r_version_tests.cpp b/tests/slic3rutils/slic3r_version_tests.cpp
+index 14f4f5d..c9529b4 100644
+--- a/tests/slic3rutils/slic3r_version_tests.cpp
++++ b/tests/slic3rutils/slic3r_version_tests.cpp
+@@ -1,4 +1,4 @@
+-#include "catch2/catch.hpp"
++#include <catch2/catch_all.hpp>
+ 
+ #include "slic3r/Config/Version.hpp"
+ 

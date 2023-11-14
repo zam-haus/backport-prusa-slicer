@@ -1,6 +1,5 @@
 Install-XS-files-into-usr-lib-slic3r-prusa3d.patch
 Stop-building-test_voronoi.cpp.patch
-Use-packaged-catch2-library.patch
 Drop-lcereal.patch
 Drop-OpenCASCADE-version-from-find_package.patch
 Move-OCCTWrapper.so-into-package-specific-libdir.patch
@@ -10,3 +9,5 @@ Remove-redundant-add_library-libexpat-INTERFACE.patch
 wxWidgets-CheckResizerFlags-assert-fix.patch
 format-AnycubicSLA-use-float-instead-of-float_t.patch
 Disable-preset-update-and-version-check-by-default.patch
+Use-system-catch2.patch
+Patch-tests-for-Catch2-v3-compatibility.patch
