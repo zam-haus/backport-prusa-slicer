@@ -44,6 +44,7 @@
 #include "libslic3r.h"
 #include "Utils.hpp"
 #include "PlaceholderParser.hpp"
+#include "GCode/Thumbnails.hpp"
 
 using boost::property_tree::ptree;
 
@@ -459,12 +460,13 @@ static std::vector<std::string> s_Preset_print_options {
     "support_tree_angle", "support_tree_angle_slow", "support_tree_branch_diameter", "support_tree_branch_diameter_angle", "support_tree_branch_diameter_double_wall", 
     "support_tree_top_rate", "support_tree_branch_distance", "support_tree_tip_diameter",
     "dont_support_bridges", "thick_bridges", "notes", "complete_objects", "extruder_clearance_radius",
-    "extruder_clearance_height", "gcode_comments", "gcode_label_objects", "output_filename_format", "post_process", "gcode_substitutions", "perimeter_extruder",
+    "extruder_clearance_height", "gcode_comments", "gcode_label_objects", "output_filename_format", "post_process", "gcode_substitutions", "gcode_binary", "perimeter_extruder",
     "infill_extruder", "solid_infill_extruder", "support_material_extruder", "support_material_interface_extruder",
     "ooze_prevention", "standby_temperature_delta", "interface_shells", "extrusion_width", "first_layer_extrusion_width",
     "perimeter_extrusion_width", "external_perimeter_extrusion_width", "infill_extrusion_width", "solid_infill_extrusion_width",
     "top_infill_extrusion_width", "support_material_extrusion_width", "infill_overlap", "infill_anchor", "infill_anchor_max", "bridge_flow_ratio",
-    "elefant_foot_compensation", "xy_size_compensation", "threads", "resolution", "gcode_resolution", "wipe_tower", "wipe_tower_x", "wipe_tower_y",
+    "elefant_foot_compensation", "xy_size_compensation", "resolution", "gcode_resolution", "arc_fitting",
+    "wipe_tower", "wipe_tower_x", "wipe_tower_y",
     "wipe_tower_width", "wipe_tower_cone_angle", "wipe_tower_rotation_angle", "wipe_tower_brim_width", "wipe_tower_bridging", "single_extruder_multi_material_priming", "mmu_segmented_region_max_width",
     "mmu_segmented_region_interlocking_depth", "wipe_tower_extruder", "wipe_tower_no_sparse_layers", "wipe_tower_extra_spacing", "compatible_printers", "compatible_printers_condition", "inherits",
     "perimeter_generator", "wall_transition_length", "wall_transition_filter_deviation", "wall_transition_angle",
@@ -483,7 +485,8 @@ static std::vector<std::string> s_Preset_filament_options {
     "overhang_fan_speed_0", "overhang_fan_speed_1", "overhang_fan_speed_2", "overhang_fan_speed_3",
     // Retract overrides
     "filament_retract_length", "filament_retract_lift", "filament_retract_lift_above", "filament_retract_lift_below", "filament_retract_speed", "filament_deretract_speed", "filament_retract_restart_extra", "filament_retract_before_travel",
-    "filament_retract_layer_change", "filament_wipe", "filament_retract_before_wipe", "filament_retract_length_toolchange", "filament_retract_restart_extra_toolchange",
+    "filament_retract_layer_change", "filament_wipe", "filament_retract_before_wipe", "filament_retract_length_toolchange", "filament_retract_restart_extra_toolchange", "filament_travel_ramping_lift",
+    "filament_travel_slope", "filament_travel_max_lift", "filament_travel_lift_before_obstacle",
     // Profile compatibility
     "filament_vendor", "compatible_prints", "compatible_prints_condition", "compatible_printers", "compatible_printers_condition", "inherits"
 };
@@ -765,7 +768,7 @@ static bool profile_print_params_same(const DynamicPrintConfig &cfg_old, const D
     // when comparing profiles for equality. Ignore them.
     for (const char *key : { "compatible_prints", "compatible_prints_condition",
                              "compatible_printers", "compatible_printers_condition", "inherits",
-                             "print_settings_id", "filament_settings_id", "sla_print_settings_id", "sla_material_settings_id", "printer_settings_id",
+                             "print_settings_id", "filament_settings_id", "sla_print_settings_id", "sla_material_settings_id", "printer_settings_id", "filament_vendor",
                              "printer_model", "printer_variant", "default_print_profile", "default_filament_profile", "default_sla_print_profile", "default_sla_material_profile",
                              //FIXME remove the print host keys?
                              "print_host", "printhost_apikey", "printhost_cafile" })
@@ -778,7 +781,7 @@ static bool profile_print_params_same(const DynamicPrintConfig &cfg_old, const D
 // and select it, losing previous modifications.
 // Only a single profile could be edited at at the same time, which introduces complexity when loading
 // filament profiles for multi-extruder printers.
-std::pair<Preset*, bool> PresetCollection::load_external_preset(
+ExternalPreset PresetCollection::load_external_preset(
     // Path to the profile source file (a G-code, an AMF or 3MF file, a config file)
     const std::string           &path,
     // Name of the profile, derived from the source file name.
@@ -801,7 +804,7 @@ std::pair<Preset*, bool> PresetCollection::load_external_preset(
         const Preset &edited = this->get_edited_preset();
         if ((edited.name == original_name || edited.name == inherits) && profile_print_params_same(edited.config, cfg))
             // Just point to that already selected and edited profile.
-            return std::make_pair(&(*this->find_preset_internal(edited.name)), false);
+            return ExternalPreset(&(*this->find_preset_internal(edited.name)), false);
     }
     // Is there a preset already loaded with the name stored inside the config?
     std::deque<Preset>::iterator it       = this->find_preset_internal(original_name);
@@ -811,11 +814,11 @@ std::pair<Preset*, bool> PresetCollection::load_external_preset(
 		it = this->find_preset_renamed(original_name);
 		found = it != m_presets.end();
     }
-    if (found && profile_print_params_same(it->config, cfg)) {
-        // The preset exists and it matches the values stored inside config.
+    if (found && profile_print_params_same(it->config, cfg) && it->is_visible) {
+        // The preset exists and is visible and it matches the values stored inside config.
         if (select == LoadAndSelect::Always)
             this->select_preset(it - m_presets.begin());
-        return std::make_pair(&(*it), false);
+        return ExternalPreset(&(*it), false);
     }
     if (! found && select != LoadAndSelect::Never && ! inherits.empty()) {
         // Try to use a system profile as a base to select the system profile
@@ -827,28 +830,36 @@ std::pair<Preset*, bool> PresetCollection::load_external_preset(
             // The system preset exists and it matches the values stored inside config.
             if (select == LoadAndSelect::Always)
                 this->select_preset(it - m_presets.begin());
-            return std::make_pair(&(*it), false);
+            return ExternalPreset(&(*it), false);
         }
     }
     if (found) {
         if (select != LoadAndSelect::Never) {
+            const size_t idx = it - m_presets.begin();
+            // The newly selected preset can be activated AND have to be make as visible.
+            bool is_installed = !m_presets[idx].is_visible;
+
             // Select the existing preset and override it with new values, so that
             // the differences will be shown in the preset editor against the referenced profile.
-            this->select_preset(it - m_presets.begin());
-            // The source config may contain keys from many possible preset types. Just copy those that relate to this preset.
+            this->select_preset(idx);
 
-            // Following keys are not used neither by the UI nor by the slicing core, therefore they are not important 
-            // Erase them from config appl to avoid redundant "dirty" parameter in loaded preset.
-            for (const char* key : { "print_settings_id", "filament_settings_id", "sla_print_settings_id", "sla_material_settings_id", "printer_settings_id",
-                                     "printer_model", "printer_variant", "default_print_profile", "default_filament_profile", "default_sla_print_profile", "default_sla_material_profile" })
-                keys.erase(std::remove(keys.begin(), keys.end(), key), keys.end());
+            // update dirty state only if it's needed
+            if (!profile_print_params_same(it->config, cfg)) {
+                // The source config may contain keys from many possible preset types. Just copy those that relate to this preset.
 
-            this->get_edited_preset().config.apply_only(combined_config, keys, true);
-            this->update_dirty();
-            // Don't save the newly loaded project as a "saved into project" state.
-            //update_saved_preset_from_current_preset();
-            assert(this->get_edited_preset().is_dirty);
-            return std::make_pair(&(*it), this->get_edited_preset().is_dirty);
+                // Following keys are not used neither by the UI nor by the slicing core, therefore they are not important 
+                // Erase them from config apply to avoid redundant "dirty" parameter in loaded preset.
+                for (const char* key : { "print_settings_id", "filament_settings_id", "sla_print_settings_id", "sla_material_settings_id", "printer_settings_id", "filament_vendor", 
+                                         "printer_model", "printer_variant", "default_print_profile", "default_filament_profile", "default_sla_print_profile", "default_sla_material_profile" })
+                    keys.erase(std::remove(keys.begin(), keys.end(), key), keys.end());
+
+                this->get_edited_preset().config.apply_only(combined_config, keys, true);
+                this->update_dirty();
+                // Don't save the newly loaded project as a "saved into project" state.
+                //update_saved_preset_from_current_preset();
+                assert(this->get_edited_preset().is_dirty);
+            }
+            return ExternalPreset(&(*it), this->get_edited_preset().is_dirty, is_installed);
         }
         if (inherits.empty()) {
             // Update the "inherits" field.
@@ -879,7 +890,7 @@ std::pair<Preset*, bool> PresetCollection::load_external_preset(
             // The preset exists and it matches the values stored inside config.
             if (select == LoadAndSelect::Always)
                 this->select_preset(it - m_presets.begin());
-            return std::make_pair(&(*it), false);
+            return ExternalPreset(&(*it), false);
         }
         // Form another profile name.
     }
@@ -889,7 +900,7 @@ std::pair<Preset*, bool> PresetCollection::load_external_preset(
     if (this->m_idx_selected != size_t(-1) && &this->get_selected_preset() == &preset)
         this->get_edited_preset().is_external = true;
 
-    return std::make_pair(&preset, false);
+    return ExternalPreset(&preset, false);
 }
 
 Preset& PresetCollection::load_preset(const std::string &path, const std::string &name, DynamicPrintConfig &&config, bool select)
@@ -1298,7 +1309,6 @@ static const std::set<std::string> independent_from_extruder_number_options = {
     "filament_ramming_parameters",
     "gcode_substitutions",
     "post_process",
-    "thumbnails",
 };
 
 bool PresetCollection::is_independent_from_extruder_number_option(const std::string& opt_key)
@@ -1322,6 +1332,15 @@ inline t_config_option_keys deep_diff(const ConfigBase &config_this, const Confi
             } else if (opt_key == "default_filament_profile") {
                 // Ignore this field, it is not presented to the user, therefore showing a "modified" flag for this parameter does not help.
                 // Also the length of this field may differ, which may lead to a crash if the block below is used.
+            } else if (opt_key == "thumbnails") {
+                // "thumbnails" can not contain extensions in old config but they are valid and use PNG extension by default
+                // So, check if "thumbnails" is really changed
+                // We will compare full thumbnails instead of exactly config values
+                auto [thumbnails, er]         = GCodeThumbnails::make_and_check_thumbnail_list(config_this);
+                auto [thumbnails_new, er_new] = GCodeThumbnails::make_and_check_thumbnail_list(config_other);
+                if (thumbnails != thumbnails_new || er != er_new)
+                    // if those strings are actually the same, erase them from the list of dirty oprions
+                    diff.emplace_back(opt_key);
             } else {
                 switch (other_opt->type()) {
                 case coInts:    add_correct_opts_to_diff<ConfigOptionInts       >(opt_key, diff, config_other, config_this);  break;
@@ -1333,6 +1352,12 @@ inline t_config_option_keys deep_diff(const ConfigBase &config_this, const Confi
                 case coFloatsOrPercents:    add_correct_opts_to_diff<ConfigOptionFloatsOrPercents   >(opt_key, diff, config_other, config_this);  break;
                 default:        diff.emplace_back(opt_key);     break;
                 }
+                // "nozzle_diameter" is a vector option which contain info about diameter for each nozzle
+                // But in the same time size of this vector indicates about count of extruders,
+                // So, we need to add it to the diff if its size is changed.
+                if (opt_key == "nozzle_diameter" && 
+                    static_cast<const ConfigOptionFloats*>(this_opt)->size() != static_cast<const ConfigOptionFloats*>(other_opt)->size())
+                    diff.emplace_back(opt_key);
             }
         }
     }
@@ -1345,7 +1370,14 @@ bool PresetCollection::is_dirty(const Preset *edited, const Preset *reference)
 {
     if (edited != nullptr && reference != nullptr) {
         // Only compares options existing in both configs.
-        if (! reference->config.equals(edited->config))
+        bool is_dirty = !reference->config.equals(edited->config);
+        if (is_dirty && edited->type != Preset::TYPE_FILAMENT) {
+            // for non-filaments preset check deep difference for compared configs
+            // there can be cases (as for thumbnails), when configs can logically equal
+            // even when their values are not equal.
+            is_dirty = !deep_diff(edited->config, reference->config).empty();
+        }
+        if (is_dirty)
             return true;
         // The "compatible_printers" option key is handled differently from the others:
         // It is not mandatory. If the key is missing, it means it is compatible with any printer.
@@ -2306,6 +2338,15 @@ namespace PresetUtils {
             }
         }
         return true;
+    }
+    bool compare_vendor_profile_printers(const VendorProfile& vp_old, const VendorProfile& vp_new, std::vector<std::string>& new_printers)
+    {
+        for (const VendorProfile::PrinterModel& model : vp_new.models)
+        {
+            if (std::find_if(vp_old.models.begin(), vp_old.models.end(), [model](const VendorProfile::PrinterModel& pm) { return pm.id == model.id; }) == vp_old.models.end())
+                new_printers.push_back(model.name);
+        }
+        return new_printers.empty();
     }
 } // namespace PresetUtils
 
