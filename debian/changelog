@@ -1,3 +1,10 @@
+slic3r-prusa (2.7.0~rc1+dfsg-1) unstable; urgency=medium
+
+  * [2f0ba5b] New upstream version 2.7.0~rc1+dfsg
+  * [b1aa36c] Refresh patches
+
+ -- Chow Loong Jin <hyperair@debian.org>  Sat, 18 Nov 2023 17:40:37 +0800
+
 slic3r-prusa (2.6.1+dfsg-5) UNRELEASED; urgency=medium
 
   [ Gregor Riepl ]
