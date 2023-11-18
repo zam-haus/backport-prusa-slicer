@@ -14,7 +14,7 @@ Origin: vendor
  2 files changed, 1 insertion(+), 3 deletions(-)
 
 diff --git a/src/libslic3r/AppConfig.cpp b/src/libslic3r/AppConfig.cpp
-index f79f48c..921910a 100644
+index 12796b4..e9139e0 100644
 --- a/src/libslic3r/AppConfig.cpp
 +++ b/src/libslic3r/AppConfig.cpp
 @@ -91,7 +91,7 @@ void AppConfig::set_defaults()
@@ -27,10 +27,10 @@ index f79f48c..921910a 100644
          if (get("export_sources_full_pathnames").empty())
              set("export_sources_full_pathnames", "0");
 diff --git a/src/slic3r/GUI/GUI_App.cpp b/src/slic3r/GUI/GUI_App.cpp
-index a916f53..3cedb57 100644
+index 0c441bf..afa4298 100644
 --- a/src/slic3r/GUI/GUI_App.cpp
 +++ b/src/slic3r/GUI/GUI_App.cpp
-@@ -843,8 +843,6 @@ void GUI_App::post_init()
+@@ -841,8 +841,6 @@ void GUI_App::post_init()
                  // sees something else than "we want something" on the first start.
                  show_send_system_info_dialog_if_needed();   
              }  

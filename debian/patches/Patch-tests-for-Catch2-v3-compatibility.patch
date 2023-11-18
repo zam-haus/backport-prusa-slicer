@@ -6,8 +6,8 @@ Bug-Debian: https://bugs.debian.org/1054697
 Bug: https://github.com/prusa3d/PrusaSlicer/pull/11576
 Forwarded: yes
 ---
- tests/CMakeLists.txt                               |  3 +-
- tests/arrange/test_arrange.cpp                     |  8 ++--
+ tests/CMakeLists.txt                               |  2 +-
+ tests/arrange/test_arrange.cpp                     |  9 ++--
  tests/arrange/test_arrange_integration.cpp         | 12 +++---
  tests/catch_main.hpp                               | 48 +---------------------
  tests/fff_print/test_avoid_crossing_perimeters.cpp |  2 +-
@@ -35,7 +35,7 @@ Forwarded: yes
  tests/fff_print/test_thin_walls.cpp                |  2 +-
  tests/fff_print/test_trianglemesh.cpp              |  2 +-
  tests/libslic3r/test_3mf.cpp                       |  2 +-
- tests/libslic3r/test_aabbindirect.cpp              | 37 +++++++++--------
+ tests/libslic3r/test_aabbindirect.cpp              | 38 +++++++++--------
  tests/libslic3r/test_anyptr.cpp                    |  2 +-
  tests/libslic3r/test_arachne.cpp                   |  2 +-
  tests/libslic3r/test_astar.cpp                     |  5 ++-
@@ -58,7 +58,7 @@ Forwarded: yes
  tests/libslic3r/test_mutable_polygon.cpp           |  2 +-
  tests/libslic3r/test_mutable_priority_queue.cpp    |  2 +-
  tests/libslic3r/test_optimizers.cpp                |  2 +-
- tests/libslic3r/test_placeholder_parser.cpp        | 33 +++++++--------
+ tests/libslic3r/test_placeholder_parser.cpp        | 34 +++++++--------
  tests/libslic3r/test_png_io.cpp                    |  2 +-
  tests/libslic3r/test_polygon.cpp                   |  2 +-
  tests/libslic3r/test_polyline.cpp                  |  2 +-
@@ -74,27 +74,29 @@ Forwarded: yes
  tests/sla_print/sla_print_tests.cpp                |  8 ++--
  tests/sla_print/sla_raycast_tests.cpp              | 16 ++++----
  tests/sla_print/sla_supptgen_tests.cpp             |  2 +-
- tests/sla_print/sla_supptreeutils_tests.cpp        | 16 ++++----
+ tests/sla_print/sla_supptreeutils_tests.cpp        | 17 ++++----
  tests/sla_print/sla_test_utils.cpp                 | 14 ++++---
  tests/sla_print/sla_test_utils.hpp                 |  2 +-
  tests/slic3rutils/slic3r_arrangejob_tests.cpp      | 12 +++---
  tests/slic3rutils/slic3r_jobs_tests.cpp            |  2 +-
  tests/slic3rutils/slic3r_version_tests.cpp         |  2 +-
- 74 files changed, 255 insertions(+), 273 deletions(-)
+ 74 files changed, 258 insertions(+), 273 deletions(-)
 
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index f00a2eb..1ab45b7 100644
 --- a/tests/CMakeLists.txt
 +++ b/tests/CMakeLists.txt
-@@ -10,8 +10,9 @@
- set(CATCH_EXTRA_ARGS "" CACHE STRING "Extra arguments for catch2 test suites.")
- 
+@@ -13,7 +13,7 @@ set(CATCH_EXTRA_ARGS "" CACHE STRING "Extra arguments for catch2 test suites.")
  add_library(test_common INTERFACE)
-+target_include_directories(test_common INTERFACE ${CMAKE_CURRENT_LIST_DIR})
+ target_include_directories(test_common INTERFACE ${CMAKE_CURRENT_LIST_DIR})
  target_compile_definitions(test_common INTERFACE TEST_DATA_DIR=R"\(${TEST_DATA_DIR}\)" CATCH_CONFIG_FAST_COMPILE)
 -target_link_libraries(test_common INTERFACE Catch2::Catch2)
 +target_link_libraries(test_common INTERFACE Catch2::Catch2WithMain)
  
  if (APPLE)
      target_link_libraries(test_common INTERFACE "-liconv -framework IOKit" "-framework CoreFoundation" -lc++)
+diff --git a/tests/arrange/test_arrange.cpp b/tests/arrange/test_arrange.cpp
+index a2eda8c..d0d54bc 100644
 --- a/tests/arrange/test_arrange.cpp
 +++ b/tests/arrange/test_arrange.cpp
 @@ -1,4 +1,4 @@
@@ -113,7 +115,7 @@ Forwarded: yes
  template<class ArrItem = Slic3r::arr2::ArrangeItem>
  static std::vector<ArrItem> prusa_parts(double infl = 0.) {
      using namespace Slic3r;
-@@ -930,7 +933,7 @@
+@@ -930,7 +933,7 @@ TEST_CASE("Optimal nfp position search with GravityKernel using RectangleItem an
  
                  Slic3r::Vec2crd D = bed.center - item.shape.center();
                  REQUIRE(item.translation == D);
@@ -122,7 +124,7 @@ Forwarded: yes
              }
          }
      }
-@@ -1063,7 +1066,7 @@
+@@ -1063,7 +1066,7 @@ TEMPLATE_TEST_CASE("Test if allowed item rotations are considered", "[arrange2]"
      bool packed = pack(strategy, bed, itm);
  
      REQUIRE(packed);
@@ -131,6 +133,8 @@ Forwarded: yes
  }
  
  //TEST_CASE("NFP optimizing test", "[arrange2]") {
+diff --git a/tests/arrange/test_arrange_integration.cpp b/tests/arrange/test_arrange_integration.cpp
+index 34b77ab..808d7f2 100644
 --- a/tests/arrange/test_arrange_integration.cpp
 +++ b/tests/arrange/test_arrange_integration.cpp
 @@ -1,4 +1,4 @@
@@ -148,7 +152,7 @@ Forwarded: yes
  static Slic3r::Model get_example_model_with_20mm_cube()
  {
      using namespace Slic3r;
-@@ -560,10 +562,10 @@
+@@ -560,10 +562,10 @@ TEST_CASE("Virtual bed handlers - StriderVBedHandler", "[arrange2][integration][
                  auto ref_pos = tr * Vec3d::Zero();
  
                  auto displace = bed_index * (unscaled(vbh.stride_scaled()));
@@ -161,7 +165,7 @@ Forwarded: yes
              }
          }
      }
-@@ -868,8 +870,8 @@
+@@ -868,8 +870,8 @@ bool settings_eq(const Slic3r::arr2::ArrangeSettingsView &v1,
  {
      return v1.is_rotation_enabled() == v2.is_rotation_enabled() &&
             v1.get_arrange_strategy() == v2.get_arrange_strategy() &&
@@ -172,6 +176,8 @@ Forwarded: yes
             v1.get_geometry_handling() == v2.get_geometry_handling() &&
             v1.get_xl_alignment() == v2.get_xl_alignment();
          ;
+diff --git a/tests/catch_main.hpp b/tests/catch_main.hpp
+index ca5b47d..f7df13b 100644
 --- a/tests/catch_main.hpp
 +++ b/tests/catch_main.hpp
 @@ -3,52 +3,6 @@
@@ -228,6 +234,8 @@ Forwarded: yes
 +#include <catch2/catch_all.hpp>
  
  #endif // CATCH_MAIN
+diff --git a/tests/fff_print/test_avoid_crossing_perimeters.cpp b/tests/fff_print/test_avoid_crossing_perimeters.cpp
+index a76ac12..450bf03 100644
 --- a/tests/fff_print/test_avoid_crossing_perimeters.cpp
 +++ b/tests/fff_print/test_avoid_crossing_perimeters.cpp
 @@ -1,4 +1,4 @@
@@ -236,6 +244,8 @@ Forwarded: yes
  
  #include "test_data.hpp"
  
+diff --git a/tests/fff_print/test_bridges.cpp b/tests/fff_print/test_bridges.cpp
+index 91ab9b6..d71aaf4 100644
 --- a/tests/fff_print/test_bridges.cpp
 +++ b/tests/fff_print/test_bridges.cpp
 @@ -1,4 +1,4 @@
@@ -244,6 +254,8 @@ Forwarded: yes
  
  #include <libslic3r/BridgeDetector.hpp>
  #include <libslic3r/Geometry.hpp>
+diff --git a/tests/fff_print/test_clipper.cpp b/tests/fff_print/test_clipper.cpp
+index 5968769..de4ab71 100644
 --- a/tests/fff_print/test_clipper.cpp
 +++ b/tests/fff_print/test_clipper.cpp
 @@ -1,4 +1,4 @@
@@ -252,6 +264,8 @@ Forwarded: yes
  
  #include "test_data.hpp"
  #include "libslic3r/ClipperZUtils.hpp"
+diff --git a/tests/fff_print/test_cooling.cpp b/tests/fff_print/test_cooling.cpp
+index 1f560d5..2fcf718 100644
 --- a/tests/fff_print/test_cooling.cpp
 +++ b/tests/fff_print/test_cooling.cpp
 @@ -1,4 +1,4 @@
@@ -260,6 +274,8 @@ Forwarded: yes
  
  #include <numeric>
  #include <sstream>
+diff --git a/tests/fff_print/test_custom_gcode.cpp b/tests/fff_print/test_custom_gcode.cpp
+index 0d10907..7fe74f6 100644
 --- a/tests/fff_print/test_custom_gcode.cpp
 +++ b/tests/fff_print/test_custom_gcode.cpp
 @@ -1,4 +1,4 @@
@@ -268,9 +284,11 @@ Forwarded: yes
  
  #include <exception>
  #include <numeric>
+diff --git a/tests/fff_print/test_data.cpp b/tests/fff_print/test_data.cpp
+index 79064e2..84c0908 100644
 --- a/tests/fff_print/test_data.cpp
 +++ b/tests/fff_print/test_data.cpp
-@@ -367,7 +367,7 @@
+@@ -389,7 +389,7 @@ bool contains_regex(const std::string &data, const std::string &pattern)
  
  } } // namespace Slic3r::Test
  
@@ -279,6 +297,8 @@ Forwarded: yes
  
  SCENARIO("init_print functionality", "[test_data]") {
  	GIVEN("A default config") {
+diff --git a/tests/fff_print/test_extrusion_entity.cpp b/tests/fff_print/test_extrusion_entity.cpp
+index 0698f5e..00edc49 100644
 --- a/tests/fff_print/test_extrusion_entity.cpp
 +++ b/tests/fff_print/test_extrusion_entity.cpp
 @@ -1,4 +1,4 @@
@@ -295,12 +315,12 @@ Forwarded: yes
  
  static inline Slic3r::Point random_point(float LO=-50, float HI=50) 
  {
-@@ -66,10 +67,10 @@
-         ExtrusionLoop loop;
+@@ -63,10 +64,10 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
          loop.paths.emplace_back(new_extrusion_path(square.split_at_first_point(), ExtrusionRole::ExternalPerimeter, 1.));
          THEN("polygon area") {
--            REQUIRE(loop.polygon().area() == Approx(square.area()));
-+            REQUIRE_THAT(loop.polygon().area(), WithinRel(square.area()));
+             REQUIRE(loop.polygon().area() == Approx(square.area()));
+-            REQUIRE(loop.area() == Approx(square.area()));
++            REQUIRE_THAT(loop.area(), WithinRel(square.area()));
          }
          THEN("loop length") {
 -            REQUIRE(loop.length() == Approx(square.length()));
@@ -308,8 +328,8 @@ Forwarded: yes
          }
  
          WHEN("cloned") {
-@@ -112,14 +113,14 @@
- 
+@@ -112,14 +113,14 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+         }
          double tot_len = polyline1.length() + polyline2.length();
          THEN("length") {
 -            REQUIRE(loop.length() == Approx(tot_len));
@@ -325,7 +345,7 @@ Forwarded: yes
              }
              THEN("loop contains three paths after splitting") {
                  REQUIRE(loop2->paths.size() == 3);
-@@ -151,7 +152,7 @@
+@@ -151,7 +152,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
                  double l2 = 0;
                  for (const ExtrusionPath &p : paths)
                      l2 += p.length();
@@ -334,7 +354,7 @@ Forwarded: yes
              }
          }
          
-@@ -159,7 +160,7 @@
+@@ -159,7 +160,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
              auto loop2 = std::unique_ptr<ExtrusionLoop>(dynamic_cast<ExtrusionLoop*>(loop.clone()));
              loop2->split_at_vertex(polyline2.points.front());
              THEN("length after splitting is unchanged") {
@@ -343,7 +363,7 @@ Forwarded: yes
              }
              THEN("loop contains two paths after splitting") {
                  REQUIRE(loop2->paths.size() == 2);
-@@ -189,7 +190,7 @@
+@@ -189,7 +190,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
              auto loop2 = std::unique_ptr<ExtrusionLoop>(dynamic_cast<ExtrusionLoop*>(loop.clone()));
              loop2->split_at(point, false, 0);
              THEN("length after splitting is unchanged") {
@@ -352,7 +372,7 @@ Forwarded: yes
              }
              Point expected_start_point(200, 150);
              THEN("expected starting point") {
-@@ -217,7 +218,7 @@
+@@ -220,7 +221,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
              if (! loop.split_at_vertex(point))
                  loop.split_at(point, false, 0);
              THEN("total length is preserved after splitting") {
@@ -361,7 +381,7 @@ Forwarded: yes
              }
              THEN("order is correctly preserved after splitting") {
                  REQUIRE(loop.paths.front().role() == ExtrusionRole::ExternalPerimeter);
-@@ -237,7 +238,7 @@
+@@ -243,7 +244,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
          double len = loop.length();
          THEN("split_at() preserves total length") {
              loop.split_at({ 15896783, 15868739 }, false, 0);
@@ -370,6 +390,8 @@ Forwarded: yes
          }
      }
  }
+diff --git a/tests/fff_print/test_fill.cpp b/tests/fff_print/test_fill.cpp
+index 6d8422c..f389e08 100644
 --- a/tests/fff_print/test_fill.cpp
 +++ b/tests/fff_print/test_fill.cpp
 @@ -1,4 +1,4 @@
@@ -386,7 +408,7 @@ Forwarded: yes
  
  bool test_if_solid_surface_filled(const ExPolygon& expolygon, double flow_spacing, double angle = 0, double density = 1.0);
  
-@@ -26,7 +27,7 @@
+@@ -26,7 +27,7 @@ bool test_if_solid_surface_filled(const ExPolygon& expolygon, double flow_spacin
  TEST_CASE("Fill: adjusted solid distance") {
      int surface_width = 250;
      int distance = Slic3r::Flow::solid_spacing(surface_width, 47);
@@ -395,6 +417,8 @@ Forwarded: yes
      REQUIRE(surface_width % distance == 0);
  }
  #endif
+diff --git a/tests/fff_print/test_flow.cpp b/tests/fff_print/test_flow.cpp
+index b24b59c..c78b7c6 100644
 --- a/tests/fff_print/test_flow.cpp
 +++ b/tests/fff_print/test_flow.cpp
 @@ -1,4 +1,4 @@
@@ -411,7 +435,7 @@ Forwarded: yes
  
  SCENARIO("Extrusion width specifics", "[Flow]") {
  
-@@ -22,7 +23,7 @@
+@@ -22,7 +23,7 @@ SCENARIO("Extrusion width specifics", "[Flow]") {
          parser.parse_buffer(Slic3r::Test::slice({ Slic3r::Test::TestMesh::cube_20x20x20 }, config),
              [&E_per_mm_bottom, layer_height] (Slic3r::GCodeReader& self, const Slic3r::GCodeReader::GCodeLine& line)
          { 
@@ -420,7 +444,7 @@ Forwarded: yes
                  if (line.extruding(self) && line.dist_XY(self) > 0)
                      E_per_mm_bottom.emplace_back(line.dist_E(self) / line.dist_XY(self));
              }
-@@ -30,7 +31,7 @@
+@@ -30,7 +31,7 @@ SCENARIO("Extrusion width specifics", "[Flow]") {
          THEN("First layer width applies to everything on first layer.") {
              REQUIRE(E_per_mm_bottom.size() > 0);
              const double E_per_mm_avg = std::accumulate(E_per_mm_bottom.cbegin(), E_per_mm_bottom.cend(), 0.0) / static_cast<double>(E_per_mm_bottom.size());
@@ -429,7 +453,7 @@ Forwarded: yes
              REQUIRE(pass);
          }
          THEN("First layer width does not apply to upper layer.") {
-@@ -156,18 +157,18 @@
+@@ -156,18 +157,18 @@ SCENARIO("Flow: Flow math for non-bridges", "[Flow]") {
          // Spacing for non-bridges is has some overlap
          THEN("External perimeter flow has spacing fixed to 1.125 * nozzle_diameter") {
              auto flow = Flow::new_from_config_width(frExternalPerimeter, ConfigOptionFloatOrPercent(0, false), nozzle_diameter, layer_height);
@@ -452,7 +476,7 @@ Forwarded: yes
          }
      }
      /// Check the min/max
-@@ -178,14 +179,14 @@
+@@ -178,14 +179,14 @@ SCENARIO("Flow: Flow math for non-bridges", "[Flow]") {
              layer_height = 0.15f;
              THEN("Max width is set.") {
                  auto flow = Flow::new_from_config_width(frPerimeter, ConfigOptionFloatOrPercent(0, false), nozzle_diameter, layer_height);
@@ -469,7 +493,7 @@ Forwarded: yes
              }
          }
      }
-@@ -216,10 +217,10 @@
+@@ -216,10 +217,10 @@ SCENARIO("Flow: Flow math for bridges", "[Flow]") {
          WHEN("Flow role is frExternalPerimeter") {
              auto flow = Flow::bridging_flow(nozzle_diameter * sqrt(bridge_flow), nozzle_diameter);
              THEN("Bridge width is same as nozzle diameter") {
@@ -482,6 +506,8 @@ Forwarded: yes
              }
          }
      }
+diff --git a/tests/fff_print/test_gaps.cpp b/tests/fff_print/test_gaps.cpp
+index a096087..7f385ac 100644
 --- a/tests/fff_print/test_gaps.cpp
 +++ b/tests/fff_print/test_gaps.cpp
 @@ -1,4 +1,4 @@
@@ -490,6 +516,8 @@ Forwarded: yes
  
  #include "libslic3r/GCodeReader.hpp"
  #include "libslic3r/Geometry/ConvexHull.hpp"
+diff --git a/tests/fff_print/test_gcode.cpp b/tests/fff_print/test_gcode.cpp
+index 7cccfe5..e17eb47 100644
 --- a/tests/fff_print/test_gcode.cpp
 +++ b/tests/fff_print/test_gcode.cpp
 @@ -1,4 +1,4 @@
@@ -498,6 +526,8 @@ Forwarded: yes
  
  #include <memory>
  
+diff --git a/tests/fff_print/test_gcodefindreplace.cpp b/tests/fff_print/test_gcodefindreplace.cpp
+index 1d714d1..dd5eb6b 100644
 --- a/tests/fff_print/test_gcodefindreplace.cpp
 +++ b/tests/fff_print/test_gcodefindreplace.cpp
 @@ -1,4 +1,4 @@
@@ -506,6 +536,8 @@ Forwarded: yes
  
  #include <memory>
  
+diff --git a/tests/fff_print/test_gcodewriter.cpp b/tests/fff_print/test_gcodewriter.cpp
+index 93888a9..b22061c 100644
 --- a/tests/fff_print/test_gcodewriter.cpp
 +++ b/tests/fff_print/test_gcodewriter.cpp
 @@ -1,10 +1,11 @@
@@ -514,14 +546,14 @@ Forwarded: yes
  
  #include <memory>
  
- #include "libslic3r/GCodeWriter.hpp"
+ #include "libslic3r/GCode/GCodeWriter.hpp"
  
  using namespace Slic3r;
 +using Catch::Matchers::Equals;
  
- SCENARIO("lift() is not ignored after unlift() at normal values of Z", "[GCodeWriter]") {
-     GIVEN("A config from a file and a single extruder.") {
-@@ -74,22 +75,22 @@
+ SCENARIO("set_speed emits values with fixed-point output.", "[GCodeWriter]") {
+ 
+@@ -12,22 +13,22 @@ SCENARIO("set_speed emits values with fixed-point output.", "[GCodeWriter]") {
          GCodeWriter writer;
          WHEN("set_speed is called to set speed to 99999.123") {
              THEN("Output string is G1 F99999.123") {
@@ -548,6 +580,8 @@ Forwarded: yes
              }
          }
      }
+diff --git a/tests/fff_print/test_model.cpp b/tests/fff_print/test_model.cpp
+index 243cb10..e8c9e08 100644
 --- a/tests/fff_print/test_model.cpp
 +++ b/tests/fff_print/test_model.cpp
 @@ -1,4 +1,4 @@
@@ -556,6 +590,8 @@ Forwarded: yes
  
  #include "libslic3r/libslic3r.h"
  #include "libslic3r/Model.hpp"
+diff --git a/tests/fff_print/test_multi.cpp b/tests/fff_print/test_multi.cpp
+index 3e69c68..3e2ba72 100644
 --- a/tests/fff_print/test_multi.cpp
 +++ b/tests/fff_print/test_multi.cpp
 @@ -1,4 +1,4 @@
@@ -564,6 +600,8 @@ Forwarded: yes
  
  #include <numeric>
  #include <sstream>
+diff --git a/tests/fff_print/test_perimeters.cpp b/tests/fff_print/test_perimeters.cpp
+index 4fa344d..c134f3b 100644
 --- a/tests/fff_print/test_perimeters.cpp
 +++ b/tests/fff_print/test_perimeters.cpp
 @@ -1,4 +1,4 @@
@@ -572,6 +610,8 @@ Forwarded: yes
  
  #include <numeric>
  #include <sstream>
+diff --git a/tests/fff_print/test_print.cpp b/tests/fff_print/test_print.cpp
+index 204f3f8..327bdd4 100644
 --- a/tests/fff_print/test_print.cpp
 +++ b/tests/fff_print/test_print.cpp
 @@ -1,4 +1,4 @@
@@ -580,6 +620,8 @@ Forwarded: yes
  
  #include "libslic3r/libslic3r.h"
  #include "libslic3r/Print.hpp"
+diff --git a/tests/fff_print/test_printgcode.cpp b/tests/fff_print/test_printgcode.cpp
+index 2a45bd2..8a8f3d0 100644
 --- a/tests/fff_print/test_printgcode.cpp
 +++ b/tests/fff_print/test_printgcode.cpp
 @@ -1,4 +1,4 @@
@@ -596,7 +638,7 @@ Forwarded: yes
  
  boost::regex perimeters_regex("G1 X[-0-9.]* Y[-0-9.]* E[-0-9.]* ; perimeter");
  boost::regex infill_regex("G1 X[-0-9.]* Y[-0-9.]* E[-0-9.]* ; infill");
-@@ -79,7 +80,7 @@
+@@ -79,7 +80,7 @@ SCENARIO( "PrintGCode basic functionality", "[PrintGCode]") {
                  reader.parse_buffer(gcode, [&final_z] (GCodeReader& self, const GCodeReader::GCodeLine& line) {
                      final_z = std::max<double>(final_z, static_cast<double>(self.z())); // record the highest Z point we reach
                  });
@@ -605,7 +647,7 @@ Forwarded: yes
              }
          }
          WHEN("output is executed with complete objects and two differently-sized meshes") {
-@@ -121,7 +122,7 @@
+@@ -121,7 +122,7 @@ SCENARIO( "PrintGCode basic functionality", "[PrintGCode]") {
                  reader.parse_buffer(gcode, [&final_z] (GCodeReader& self, const GCodeReader::GCodeLine& line) {
                      final_z = std::max(final_z, static_cast<double>(self.z())); // record the highest Z point we reach
                  });
@@ -614,7 +656,7 @@ Forwarded: yes
              }
              THEN("Z height resets on object change") {
                  double final_z = 0.0;
-@@ -257,14 +258,14 @@
+@@ -257,14 +258,14 @@ SCENARIO( "PrintGCode basic functionality", "[PrintGCode]") {
  				REQUIRE(pos < gcode.size());
  				double z = 0;
  				REQUIRE((sscanf(gcode.data() + pos, "(%lf mm)", &z) == 1));
@@ -631,6 +673,8 @@ Forwarded: yes
  			}
          }
      }
+diff --git a/tests/fff_print/test_printobject.cpp b/tests/fff_print/test_printobject.cpp
+index cbc4734..b4e86c9 100644
 --- a/tests/fff_print/test_printobject.cpp
 +++ b/tests/fff_print/test_printobject.cpp
 @@ -1,4 +1,4 @@
@@ -647,7 +691,7 @@ Forwarded: yes
  
  SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
      GIVEN("20mm cube and default initial config, initial layer height of 2mm") {
-@@ -25,7 +26,7 @@
+@@ -25,7 +26,7 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
              AND_THEN("Each layer is approximately 2mm above the previous Z") {
                  coordf_t last = 0.0;
                  for (size_t i = 0; i < layers.size(); ++ i) {
@@ -656,7 +700,7 @@ Forwarded: yes
                      last = layers[i]->print_z;
                  }
              }
-@@ -42,10 +43,10 @@
+@@ -42,10 +43,10 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
                  REQUIRE(layers.size() == 3);
              }
              AND_THEN("Layer 0 is at 2mm") {
@@ -669,7 +713,7 @@ Forwarded: yes
              }
          }
          WHEN("generate_object_layers() is called for 15mm layer heights and nozzle diameter of 16mm") {
-@@ -60,10 +61,10 @@
+@@ -60,10 +61,10 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
                  REQUIRE(layers.size() == 2);
              }
              AND_THEN("Layer 0 is at 2mm") {
@@ -682,7 +726,7 @@ Forwarded: yes
              }
          }
  #if 0
-@@ -79,7 +80,7 @@
+@@ -79,7 +80,7 @@ SCENARIO("PrintObject: object layer heights", "[PrintObject]") {
                  CHECK(layers.size() == 5);
                  coordf_t last = 2.0;
                  for (size_t i = 1; i < layers.size(); i++) {
@@ -691,6 +735,8 @@ Forwarded: yes
                      last = layers[i]->print_z;
                  }
              }
+diff --git a/tests/fff_print/test_shells.cpp b/tests/fff_print/test_shells.cpp
+index fcb3a49..6f47a39 100644
 --- a/tests/fff_print/test_shells.cpp
 +++ b/tests/fff_print/test_shells.cpp
 @@ -1,4 +1,4 @@
@@ -699,6 +745,8 @@ Forwarded: yes
  
  #include "libslic3r/GCodeReader.hpp"
  
+diff --git a/tests/fff_print/test_skirt_brim.cpp b/tests/fff_print/test_skirt_brim.cpp
+index 6555172..1a46371 100644
 --- a/tests/fff_print/test_skirt_brim.cpp
 +++ b/tests/fff_print/test_skirt_brim.cpp
 @@ -1,4 +1,4 @@
@@ -715,7 +763,7 @@ Forwarded: yes
  
  /// Helper method to find the tool used for the brim (always the first extrusion)
  static int get_brim_tool(const std::string &gcode)
-@@ -54,7 +55,7 @@
+@@ -54,7 +55,7 @@ TEST_CASE("Skirt height is honored", "[Skirt]") {
      double support_speed = config.opt<Slic3r::ConfigOptionFloat>("support_material_speed")->value * MM_PER_MIN;
  	GCodeReader parser;
      parser.parse_buffer(gcode, [&layers_with_skirt, &support_speed] (Slic3r::GCodeReader &self, const Slic3r::GCodeReader::GCodeLine &line) {
@@ -724,7 +772,7 @@ Forwarded: yes
              layers_with_skirt[self.z()] = 1;
          }
      });
-@@ -90,8 +91,8 @@
+@@ -90,8 +91,8 @@ SCENARIO("Original Slic3r Skirt/Brim tests", "[SkirtBrim]") {
                  double support_speed = config.opt<Slic3r::ConfigOptionFloat>("support_material_speed")->value * MM_PER_MIN;
  			    Slic3r::GCodeReader parser;
                  parser.parse_buffer(gcode, [&brim_generated, support_speed] (Slic3r::GCodeReader& self, const Slic3r::GCodeReader::GCodeLine& line) {
@@ -735,7 +783,7 @@ Forwarded: yes
                              brim_generated = true;
                          }
                      }
-@@ -234,20 +235,20 @@
+@@ -234,20 +235,20 @@ SCENARIO("Original Slic3r Skirt/Brim tests", "[SkirtBrim]") {
                      // std::cerr << line.cmd() << "\n";
  					if (boost::starts_with(line.cmd(), "T")) {
  						tool = atoi(line.cmd().data() + 1);
@@ -760,6 +808,8 @@ Forwarded: yes
                          }
                      }
                  });
+diff --git a/tests/fff_print/test_support_material.cpp b/tests/fff_print/test_support_material.cpp
+index 0720b27..582f13e 100644
 --- a/tests/fff_print/test_support_material.cpp
 +++ b/tests/fff_print/test_support_material.cpp
 @@ -1,4 +1,4 @@
@@ -768,6 +818,8 @@ Forwarded: yes
  
  #include "libslic3r/GCodeReader.hpp"
  #include "libslic3r/Layer.hpp"
+diff --git a/tests/fff_print/test_thin_walls.cpp b/tests/fff_print/test_thin_walls.cpp
+index 59fb6b0..7be699a 100644
 --- a/tests/fff_print/test_thin_walls.cpp
 +++ b/tests/fff_print/test_thin_walls.cpp
 @@ -1,4 +1,4 @@
@@ -776,6 +828,8 @@ Forwarded: yes
  
  #include <numeric>
  #include <sstream>
+diff --git a/tests/fff_print/test_trianglemesh.cpp b/tests/fff_print/test_trianglemesh.cpp
+index eff39ed..71a1a1c 100644
 --- a/tests/fff_print/test_trianglemesh.cpp
 +++ b/tests/fff_print/test_trianglemesh.cpp
 @@ -1,4 +1,4 @@
@@ -784,6 +838,8 @@ Forwarded: yes
  
  #include "libslic3r/TriangleMesh.hpp"
  #include "libslic3r/TriangleMeshSlicer.hpp"
+diff --git a/tests/libslic3r/test_3mf.cpp b/tests/libslic3r/test_3mf.cpp
+index 3602d69..3409255 100644
 --- a/tests/libslic3r/test_3mf.cpp
 +++ b/tests/libslic3r/test_3mf.cpp
 @@ -1,4 +1,4 @@
@@ -792,6 +848,8 @@ Forwarded: yes
  
  #include "libslic3r/Model.hpp"
  #include "libslic3r/Format/3mf.hpp"
+diff --git a/tests/libslic3r/test_aabbindirect.cpp b/tests/libslic3r/test_aabbindirect.cpp
+index 3a93eb9..eff8e79 100644
 --- a/tests/libslic3r/test_aabbindirect.cpp
 +++ b/tests/libslic3r/test_aabbindirect.cpp
 @@ -1,5 +1,5 @@
@@ -810,7 +868,7 @@ Forwarded: yes
  
  TEST_CASE("Building a tree over a box, ray caster and closest query", "[AABBIndirect]")
  {
-@@ -24,7 +26,7 @@
+@@ -24,7 +26,7 @@ TEST_CASE("Building a tree over a box, ray caster and closest query", "[AABBIndi
  		hit);
  
      REQUIRE(intersected);
@@ -819,7 +877,7 @@ Forwarded: yes
  
      std::vector<igl::Hit> hits;
  	bool intersected2 = AABBTreeIndirect::intersect_ray_all_hits(
-@@ -35,8 +37,8 @@
+@@ -35,8 +37,8 @@ TEST_CASE("Building a tree over a box, ray caster and closest query", "[AABBIndi
  		hits);
      REQUIRE(intersected2);
      REQUIRE(hits.size() == 2);
@@ -830,7 +888,7 @@ Forwarded: yes
  
      size_t hit_idx;
      Vec3d  closest_point;
-@@ -45,20 +47,20 @@
+@@ -45,20 +47,20 @@ TEST_CASE("Building a tree over a box, ray caster and closest query", "[AABBIndi
  		tree,
          Vec3d(0.3, 0.5, -5.),
  		hit_idx, closest_point);
@@ -859,7 +917,7 @@ Forwarded: yes
  }
  
  TEST_CASE("Creating a several 2d lines, testing closest point query", "[AABBIndirect]")
-@@ -75,17 +77,17 @@
+@@ -75,17 +77,17 @@ TEST_CASE("Creating a several 2d lines, testing closest point query", "[AABBIndi
      Vec2d hit_point_out;
      auto sqr_dist = AABBTreeLines::squared_distance_to_indexed_lines(lines, tree, Vec2d(0.0, 0.0), hit_idx_out,
              hit_point_out);
@@ -883,6 +941,8 @@ Forwarded: yes
  }
  
  TEST_CASE("Creating a several 2d lines, testing all lines in radius query", "[AABBIndirect]")
+diff --git a/tests/libslic3r/test_anyptr.cpp b/tests/libslic3r/test_anyptr.cpp
+index d7b00a0..888697b 100644
 --- a/tests/libslic3r/test_anyptr.cpp
 +++ b/tests/libslic3r/test_anyptr.cpp
 @@ -1,4 +1,4 @@
@@ -891,6 +951,8 @@ Forwarded: yes
  
  #include <libslic3r/libslic3r.h>
  #include <libslic3r/AnyPtr.hpp>
+diff --git a/tests/libslic3r/test_arachne.cpp b/tests/libslic3r/test_arachne.cpp
+index c5b2f35..56b8df9 100644
 --- a/tests/libslic3r/test_arachne.cpp
 +++ b/tests/libslic3r/test_arachne.cpp
 @@ -1,4 +1,4 @@
@@ -899,6 +961,8 @@ Forwarded: yes
  
  #include "libslic3r/Arachne/WallToolPaths.hpp"
  #include "libslic3r/ClipperUtils.hpp"
+diff --git a/tests/libslic3r/test_astar.cpp b/tests/libslic3r/test_astar.cpp
+index 4e540c3..7f8d413 100644
 --- a/tests/libslic3r/test_astar.cpp
 +++ b/tests/libslic3r/test_astar.cpp
 @@ -1,4 +1,4 @@
@@ -915,7 +979,7 @@ Forwarded: yes
  
  TEST_CASE("Testing basic invariants of AStar", "[AStar]") {
      struct DummyTracer {
-@@ -397,7 +398,7 @@
+@@ -397,7 +398,7 @@ TEST_CASE("Zero heuristic function should result in dijsktra's algo", "[AStar]")
      // arrive to the source within less hops than the full number of nodes.
      for (size_t i = 0, k = 0; i < graph.nodes.size(); ++i, k = 0) {
          GraphTracer::QNode *q = &graph.nodes[i];
@@ -924,6 +988,8 @@ Forwarded: yes
          while (k++ < graph.nodes.size() && q->parent != astar::Unassigned)
              q = &graph.nodes[q->parent];
  
+diff --git a/tests/libslic3r/test_clipper_offset.cpp b/tests/libslic3r/test_clipper_offset.cpp
+index 8209d99..e46c9b0 100644
 --- a/tests/libslic3r/test_clipper_offset.cpp
 +++ b/tests/libslic3r/test_clipper_offset.cpp
 @@ -1,4 +1,4 @@
@@ -940,7 +1006,7 @@ Forwarded: yes
  
  // #define TESTS_EXPORT_SVGS
  
-@@ -32,7 +33,7 @@
+@@ -32,7 +33,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  					THEN("Area is 22^2mm2") {
  						REQUIRE(output.size() == 1);
@@ -949,7 +1015,7 @@ Forwarded: yes
  					}
  				}
  				DYNAMIC_SECTION("minus 1mm, miter " << miter << "x") {
-@@ -46,7 +47,7 @@
+@@ -46,7 +47,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  					THEN("Area is 18^2mm2") {
  						REQUIRE(output.size() == 1);
@@ -958,7 +1024,7 @@ Forwarded: yes
  					}
  				}
  			}
-@@ -64,7 +65,7 @@
+@@ -64,7 +65,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  					THEN("Area is 22^2mm2") {
  						REQUIRE(output.size() == 1);
@@ -967,7 +1033,7 @@ Forwarded: yes
  					}
  				}
  				DYNAMIC_SECTION("minus 1mm, miter " << miter << "x") {
-@@ -78,7 +79,7 @@
+@@ -78,7 +79,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  					THEN("Area is 18^2mm2") {
  						REQUIRE(output.size() == 1);
@@ -976,7 +1042,7 @@ Forwarded: yes
  					}
  				}
  			}
-@@ -106,7 +107,7 @@
+@@ -106,7 +107,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  						THEN("Area is 22^2-8^2 mm2") {
  							REQUIRE(output.size() == 1);
@@ -985,7 +1051,7 @@ Forwarded: yes
  						}
  					}
  					WHEN("minus 1mm") {
-@@ -120,7 +121,7 @@
+@@ -120,7 +121,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  						THEN("Area is 18^2-12^2 mm2") {
  							REQUIRE(output.size() == 1);
@@ -994,7 +1060,7 @@ Forwarded: yes
  						}
  					}
  				}
-@@ -140,7 +141,7 @@
+@@ -140,7 +141,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  						THEN("Area is 22^2-8^2 mm2") {
  							REQUIRE(output.size() == 1);
@@ -1003,7 +1069,7 @@ Forwarded: yes
  						}
  					}
  					WHEN("minus 1mm") {
-@@ -154,7 +155,7 @@
+@@ -154,7 +155,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  						THEN("Area is 18^2-12^2 mm2") {
  							REQUIRE(output.size() == 1);
@@ -1012,7 +1078,7 @@ Forwarded: yes
  						}
  					}
  				}
-@@ -186,7 +187,7 @@
+@@ -186,7 +187,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  					THEN("Area matches") {
  						REQUIRE(output.size() == 1);
@@ -1021,7 +1087,7 @@ Forwarded: yes
  					}
  				}
  			}
-@@ -205,7 +206,7 @@
+@@ -205,7 +206,7 @@ SCENARIO("Constant offset", "[ClipperUtils]") {
  #endif
  					THEN("Area matches") {
  						REQUIRE(output.size() == 1);
@@ -1030,6 +1096,8 @@ Forwarded: yes
  					}
  				}
  			}
+diff --git a/tests/libslic3r/test_clipper_utils.cpp b/tests/libslic3r/test_clipper_utils.cpp
+index 1f3bc0f..127d2bf 100644
 --- a/tests/libslic3r/test_clipper_utils.cpp
 +++ b/tests/libslic3r/test_clipper_utils.cpp
 @@ -1,4 +1,4 @@
@@ -1046,7 +1114,7 @@ Forwarded: yes
  
  SCENARIO("Various Clipper operations - xs/t/11_clipper.t", "[ClipperUtils]") {
  	// CCW oriented contour
-@@ -122,7 +123,7 @@
+@@ -122,7 +123,7 @@ SCENARIO("Various Clipper operations - xs/t/11_clipper.t", "[ClipperUtils]") {
  			REQUIRE(result.size() == 1);
  		}
  		THEN("intersection_pl - result has same length as subject polyline") {
@@ -1055,7 +1123,7 @@ Forwarded: yes
  		}
  	}
  
-@@ -185,7 +186,7 @@
+@@ -185,7 +186,7 @@ SCENARIO("Various Clipper operations - t/clipper.t", "[ClipperUtils]") {
                  ExPolygon match({ { 20, 18 }, { 10, 18 }, { 10, 12 }, { 20, 12 } },
                                  { { 14, 16 }, { 16, 16 }, { 16, 14 }, { 14, 14 } });
                  REQUIRE(intersection.size() == 1);
@@ -1064,7 +1132,7 @@ Forwarded: yes
              }
          }
  
-@@ -193,39 +194,39 @@
+@@ -193,39 +194,39 @@ SCENARIO("Various Clipper operations - t/clipper.t", "[ClipperUtils]") {
          WHEN("Clipping line 1") {
              Polylines intersection = intersection_pl({ Polyline { { 15, 18 }, { 15, 15 } } }, expolygons);
              THEN("line is clipped to square with hole") {
@@ -1112,7 +1180,7 @@ Forwarded: yes
              }
          }
      }
-@@ -246,7 +247,7 @@
+@@ -246,7 +247,7 @@ SCENARIO("Various Clipper operations - t/clipper.t", "[ClipperUtils]") {
  			ExPolygons diff = Slic3r::diff_ex(Polygons{ square, square2 }, Polygons{ hole });
              THEN("difference of a cw from two ccw is a contour with one hole") {
                  REQUIRE(diff.size() == 1);
@@ -1121,7 +1189,7 @@ Forwarded: yes
              }
          }
      }
-@@ -296,8 +297,8 @@
+@@ -296,8 +297,8 @@ SCENARIO("Various Clipper operations - t/clipper.t", "[ClipperUtils]") {
              auto line = Polyline::new_scale({ { 152.742,288.086671142818 }, { 152.742,34.166466971035 } });    
              Polylines intersection = intersection_pl(line, to_polygons(circle_with_hole));
              THEN("clipped to two pieces") {
@@ -1132,7 +1200,7 @@ Forwarded: yes
              }
          }
      }
-@@ -360,25 +361,25 @@
+@@ -360,25 +361,25 @@ TEST_CASE("Traversing Clipper PolyTree", "[ClipperUtils]") {
  
      SECTION("Traverse into Polygons WITHOUT spatial ordering") {
          Polygons output;
@@ -1162,6 +1230,8 @@ Forwarded: yes
          REQUIRE(count_polys(output) == reference.size());
      }
  }
+diff --git a/tests/libslic3r/test_color.cpp b/tests/libslic3r/test_color.cpp
+index bb35f5e..ca04352 100644
 --- a/tests/libslic3r/test_color.cpp
 +++ b/tests/libslic3r/test_color.cpp
 @@ -1,4 +1,4 @@
@@ -1170,6 +1240,8 @@ Forwarded: yes
  #include "libslic3r/libslic3r.h"
  
  #include "libslic3r/Color.hpp"
+diff --git a/tests/libslic3r/test_config.cpp b/tests/libslic3r/test_config.cpp
+index 50e61b3..218fada 100644
 --- a/tests/libslic3r/test_config.cpp
 +++ b/tests/libslic3r/test_config.cpp
 @@ -1,4 +1,4 @@
@@ -1178,6 +1250,8 @@ Forwarded: yes
  
  #include "libslic3r/Config.hpp"
  #include "libslic3r/PrintConfig.hpp"
+diff --git a/tests/libslic3r/test_curve_fitting.cpp b/tests/libslic3r/test_curve_fitting.cpp
+index faf7839..43cf63e 100644
 --- a/tests/libslic3r/test_curve_fitting.cpp
 +++ b/tests/libslic3r/test_curve_fitting.cpp
 @@ -1,10 +1,12 @@
@@ -1194,7 +1268,7 @@ Forwarded: yes
  TEST_CASE("Curves: cubic b spline fit test", "[Curves]") {
      using namespace Slic3r;
      using namespace Slic3r::Geometry;
-@@ -31,14 +33,11 @@
+@@ -31,14 +33,11 @@ TEST_CASE("Curves: cubic b spline fit test", "[Curves]") {
  
      auto bspline = fit_cubic_bspline(observations, observation_points, weights, 1);
  
@@ -1210,7 +1284,7 @@ Forwarded: yes
  
      }
  }
-@@ -106,13 +105,10 @@
+@@ -106,13 +105,10 @@ TEST_CASE("Curves: polynomial fit test", "[Curves]") {
      Vec2f fmin { fx(0), fy(0) };
      Vec2f fmax { fx(200), fy(200) };
  
@@ -1227,6 +1301,8 @@ Forwarded: yes
 +    REQUIRE_THAT(poly.coefficients(0, 2), WithinRel(1, 0.1f));
  }
  
+diff --git a/tests/libslic3r/test_cut_surface.cpp b/tests/libslic3r/test_cut_surface.cpp
+index d937619..fd6fbdb 100644
 --- a/tests/libslic3r/test_cut_surface.cpp
 +++ b/tests/libslic3r/test_cut_surface.cpp
 @@ -1,10 +1,10 @@
@@ -1242,6 +1318,8 @@ Forwarded: yes
  {
      std::string font_path = std::string(TEST_DATA_DIR) +
                              "/../../resources/fonts/NotoSans-Regular.ttf";
+diff --git a/tests/libslic3r/test_elephant_foot_compensation.cpp b/tests/libslic3r/test_elephant_foot_compensation.cpp
+index 09ad33f..f509c6c 100644
 --- a/tests/libslic3r/test_elephant_foot_compensation.cpp
 +++ b/tests/libslic3r/test_elephant_foot_compensation.cpp
 @@ -1,4 +1,4 @@
@@ -1250,6 +1328,8 @@ Forwarded: yes
  
  #include <iostream>
  #include <boost/filesystem.hpp>
+diff --git a/tests/libslic3r/test_emboss.cpp b/tests/libslic3r/test_emboss.cpp
+index 9cddb99..3132eb5 100644
 --- a/tests/libslic3r/test_emboss.cpp
 +++ b/tests/libslic3r/test_emboss.cpp
 @@ -1,4 +1,4 @@
@@ -1258,7 +1338,7 @@ Forwarded: yes
  
  #include <libslic3r/Emboss.hpp>
  #include <libslic3r/SVG.hpp> // only debug visualization
-@@ -379,7 +379,7 @@
+@@ -412,7 +412,7 @@ TEST_CASE("ray segment intersection", "[MeshBoolean]")
      CHECK(abs(*t1 - *t2) < std::numeric_limits<double>::epsilon());
  }
  
@@ -1267,7 +1347,7 @@ Forwarded: yes
  {
      Vec2d                point(1, 1);
      Vec2d                dir(-1, 0);
-@@ -448,7 +448,7 @@
+@@ -481,7 +481,7 @@ TEST_CASE("Italic check", "[Emboss]")
  #endif // FONT_DIR_PATH
  
  #include "libslic3r/CutSurface.hpp"
@@ -1276,6 +1356,8 @@ Forwarded: yes
  {
      std::string  font_path  = get_font_filepath();
      char         letter     = '%';
+diff --git a/tests/libslic3r/test_expolygon.cpp b/tests/libslic3r/test_expolygon.cpp
+index ca914d3..018d507 100644
 --- a/tests/libslic3r/test_expolygon.cpp
 +++ b/tests/libslic3r/test_expolygon.cpp
 @@ -1,10 +1,11 @@
@@ -1291,7 +1373,7 @@ Forwarded: yes
  
  static inline bool points_close(const Point &p1, const Point &p2)
  {
-@@ -30,7 +31,7 @@
+@@ -30,7 +31,7 @@ SCENARIO("Basics", "[ExPolygon]") {
              REQUIRE(expolygon.is_valid());
          }
          THEN("expolygon area") {
@@ -1300,6 +1382,8 @@ Forwarded: yes
          }
          WHEN("Expolygon scaled") {
              ExPolygon expolygon2 = expolygon;
+diff --git a/tests/libslic3r/test_geometry.cpp b/tests/libslic3r/test_geometry.cpp
+index ba61e1b..4c2a241 100644
 --- a/tests/libslic3r/test_geometry.cpp
 +++ b/tests/libslic3r/test_geometry.cpp
 @@ -1,4 +1,4 @@
@@ -1308,6 +1392,8 @@ Forwarded: yes
  
  #include "libslic3r/Point.hpp"
  #include "libslic3r/BoundingBox.hpp"
+diff --git a/tests/libslic3r/test_hollowing.cpp b/tests/libslic3r/test_hollowing.cpp
+index ad4f8f2..bea399a 100644
 --- a/tests/libslic3r/test_hollowing.cpp
 +++ b/tests/libslic3r/test_hollowing.cpp
 @@ -1,6 +1,6 @@
@@ -1318,6 +1404,8 @@ Forwarded: yes
  
  #include "libslic3r/SLA/Hollowing.hpp"
  
+diff --git a/tests/libslic3r/test_indexed_triangle_set.cpp b/tests/libslic3r/test_indexed_triangle_set.cpp
+index b6aad9d..8f2af4c 100644
 --- a/tests/libslic3r/test_indexed_triangle_set.cpp
 +++ b/tests/libslic3r/test_indexed_triangle_set.cpp
 @@ -1,6 +1,6 @@
@@ -1328,6 +1416,8 @@ Forwarded: yes
  
  #include "libslic3r/TriangleMesh.hpp"
  
+diff --git a/tests/libslic3r/test_jump_point_search.cpp b/tests/libslic3r/test_jump_point_search.cpp
+index 76d2aac..951306f 100644
 --- a/tests/libslic3r/test_jump_point_search.cpp
 +++ b/tests/libslic3r/test_jump_point_search.cpp
 @@ -1,4 +1,4 @@
@@ -1336,6 +1426,8 @@ Forwarded: yes
  #include "libslic3r/BoundingBox.hpp"
  #include "libslic3r/JumpPointSearch.hpp"
  
+diff --git a/tests/libslic3r/test_kdtreeindirect.cpp b/tests/libslic3r/test_kdtreeindirect.cpp
+index bc6ace7..b533df2 100644
 --- a/tests/libslic3r/test_kdtreeindirect.cpp
 +++ b/tests/libslic3r/test_kdtreeindirect.cpp
 @@ -1,4 +1,4 @@
@@ -1344,6 +1436,8 @@ Forwarded: yes
  
  #include "libslic3r/KDTreeIndirect.hpp"
  #include "libslic3r/Execution/ExecutionSeq.hpp"
+diff --git a/tests/libslic3r/test_marchingsquares.cpp b/tests/libslic3r/test_marchingsquares.cpp
+index 89a86f1..9a2d16f 100644
 --- a/tests/libslic3r/test_marchingsquares.cpp
 +++ b/tests/libslic3r/test_marchingsquares.cpp
 @@ -1,4 +1,4 @@
@@ -1352,6 +1446,8 @@ Forwarded: yes
  #include <test_utils.hpp>
  
  #include <fstream>
+diff --git a/tests/libslic3r/test_meshboolean.cpp b/tests/libslic3r/test_meshboolean.cpp
+index 7587677..03ca4ab 100644
 --- a/tests/libslic3r/test_meshboolean.cpp
 +++ b/tests/libslic3r/test_meshboolean.cpp
 @@ -1,10 +1,11 @@
@@ -1367,7 +1463,7 @@ Forwarded: yes
  
  TEST_CASE("CGAL and TriangleMesh conversions", "[MeshBoolean]") {
      TriangleMesh sphere = make_sphere(1.);
-@@ -19,7 +20,7 @@
+@@ -19,7 +20,7 @@ TEST_CASE("CGAL and TriangleMesh conversions", "[MeshBoolean]") {
      REQUIRE(M.its.vertices.size() == sphere.its.vertices.size());
      REQUIRE(M.its.indices.size() == sphere.its.indices.size());
      
@@ -1376,6 +1472,8 @@ Forwarded: yes
      
      REQUIRE(! MeshBoolean::cgal::does_self_intersect(M));
  }
+diff --git a/tests/libslic3r/test_mutable_polygon.cpp b/tests/libslic3r/test_mutable_polygon.cpp
+index 5a3c144..906dffe 100644
 --- a/tests/libslic3r/test_mutable_polygon.cpp
 +++ b/tests/libslic3r/test_mutable_polygon.cpp
 @@ -1,4 +1,4 @@
@@ -1384,6 +1482,8 @@ Forwarded: yes
  
  #include "libslic3r/Point.hpp"
  #include "libslic3r/MutablePolygon.hpp"
+diff --git a/tests/libslic3r/test_mutable_priority_queue.cpp b/tests/libslic3r/test_mutable_priority_queue.cpp
+index 7e31b57..04031f2 100644
 --- a/tests/libslic3r/test_mutable_priority_queue.cpp
 +++ b/tests/libslic3r/test_mutable_priority_queue.cpp
 @@ -1,4 +1,4 @@
@@ -1392,6 +1492,8 @@ Forwarded: yes
  
  #include <queue>
  
+diff --git a/tests/libslic3r/test_optimizers.cpp b/tests/libslic3r/test_optimizers.cpp
+index 6e84f6a..9d8d807 100644
 --- a/tests/libslic3r/test_optimizers.cpp
 +++ b/tests/libslic3r/test_optimizers.cpp
 @@ -1,4 +1,4 @@
@@ -1400,6 +1502,8 @@ Forwarded: yes
  #include <test_utils.hpp>
  
  #include <libslic3r/Optimize/BruteforceOptimizer.hpp>
+diff --git a/tests/libslic3r/test_placeholder_parser.cpp b/tests/libslic3r/test_placeholder_parser.cpp
+index 9a1405f..54b1145 100644
 --- a/tests/libslic3r/test_placeholder_parser.cpp
 +++ b/tests/libslic3r/test_placeholder_parser.cpp
 @@ -1,9 +1,11 @@
@@ -1415,7 +1519,7 @@ Forwarded: yes
  
  SCENARIO("Placeholder parser scripting", "[PlaceholderParser]") {
  	PlaceholderParser 	parser;
-@@ -69,17 +71,17 @@
+@@ -69,17 +71,17 @@ SCENARIO("Placeholder parser scripting", "[PlaceholderParser]") {
      SECTION("math: 2*3") { REQUIRE(parser.process("{2*3}") == "6"); }
      SECTION("math: 2*3/6") { REQUIRE(parser.process("{2*3/6}") == "1"); }
      SECTION("math: 2*3/12") { REQUIRE(parser.process("{2*3/12}") == "0"); }
@@ -1439,7 +1543,7 @@ Forwarded: yes
      SECTION("math: int(13.4)") { REQUIRE(parser.process("{int(13.4)}") == "13"); }
      SECTION("math: int(-13.4)") { REQUIRE(parser.process("{int(-13.4)}") == "-13"); }
      SECTION("math: round(13.4)") { REQUIRE(parser.process("{round(13.4)}") == "13"); }
-@@ -101,19 +103,19 @@
+@@ -101,19 +103,19 @@ SCENARIO("Placeholder parser scripting", "[PlaceholderParser]") {
      SECTION("math: ternary3") { REQUIRE(parser.process("{12 == 13 ? 1 - 1 * unknown_symbol : 2 * 2}") == "4"); }
      SECTION("math: ternary4") { REQUIRE(parser.process("{12 == 2 * 6 ? 1 - 1 : 2 * unknown_symbol}") == "0"); }
      SECTION("math: ternary nested") { REQUIRE(parser.process("{12 == 2 * 6 ? 3 - 1 != 2 ? does_not_exist : 0 * 0 - 0 / 1 + 12345 : bull ? 3 - cokoo : 2 * unknown_symbol}") == "12345"); }
@@ -1467,7 +1571,7 @@ Forwarded: yes
      // If first_layer_speed is set to percent, then it is applied over respective extrusion types by overriding their respective speeds.
      // The PlaceholderParser has no way to know which extrusion type the caller has in mind, therefore it throws.
      SECTION("first_layer_speed") { REQUIRE_THROWS(parser.process("{first_layer_speed}")); }
-@@ -173,7 +175,7 @@
+@@ -173,7 +175,7 @@ SCENARIO("Placeholder parser scripting", "[PlaceholderParser]") {
          DynamicConfig config_outputs;
          config_outputs.set_key_value("writable_floats", new ConfigOptionFloats({ 0., 0., 0. }));
          parser.process("{writable_floats[1] = 33}", 0, nullptr, &config_outputs, nullptr);
@@ -1476,6 +1580,8 @@ Forwarded: yes
      }
  }
  
+diff --git a/tests/libslic3r/test_png_io.cpp b/tests/libslic3r/test_png_io.cpp
+index 97fa064..3c8c64c 100644
 --- a/tests/libslic3r/test_png_io.cpp
 +++ b/tests/libslic3r/test_png_io.cpp
 @@ -2,7 +2,7 @@
@@ -1487,6 +1593,8 @@ Forwarded: yes
  
  #include <numeric>
  
+diff --git a/tests/libslic3r/test_polygon.cpp b/tests/libslic3r/test_polygon.cpp
+index b260888..f71b0e1 100644
 --- a/tests/libslic3r/test_polygon.cpp
 +++ b/tests/libslic3r/test_polygon.cpp
 @@ -1,4 +1,4 @@
@@ -1495,6 +1603,8 @@ Forwarded: yes
  
  #include "libslic3r/Point.hpp"
  #include "libslic3r/Polygon.hpp"
+diff --git a/tests/libslic3r/test_polyline.cpp b/tests/libslic3r/test_polyline.cpp
+index 89a84d4..73ea25a 100644
 --- a/tests/libslic3r/test_polyline.cpp
 +++ b/tests/libslic3r/test_polyline.cpp
 @@ -1,4 +1,4 @@
@@ -1503,6 +1613,8 @@ Forwarded: yes
  
  #include "libslic3r/Point.hpp"
  #include "libslic3r/Polyline.hpp"
+diff --git a/tests/libslic3r/test_quadric_edge_collapse.cpp b/tests/libslic3r/test_quadric_edge_collapse.cpp
+index 3a20f80..0700fc1 100644
 --- a/tests/libslic3r/test_quadric_edge_collapse.cpp
 +++ b/tests/libslic3r/test_quadric_edge_collapse.cpp
 @@ -1,4 +1,4 @@
@@ -1511,7 +1623,7 @@ Forwarded: yes
  #include <test_utils.hpp>
  
  #include <libslic3r/QuadricEdgeCollapse.hpp>
-@@ -240,7 +240,7 @@
+@@ -240,7 +240,7 @@ TEST_CASE("Simplify frog_legs.obj to 5% by Quadric edge collapse", "[its][quadri
  }
  
  #include <libigl/igl/qslim.h>
@@ -1520,6 +1632,8 @@ Forwarded: yes
  {
      std::string  obj_filename    = "frog_legs.obj";
      TriangleMesh mesh            = load_model(obj_filename);
+diff --git a/tests/libslic3r/test_region_expansion.cpp b/tests/libslic3r/test_region_expansion.cpp
+index 9f8a6fd..e144778 100644
 --- a/tests/libslic3r/test_region_expansion.cpp
 +++ b/tests/libslic3r/test_region_expansion.cpp
 @@ -1,4 +1,4 @@
@@ -1536,7 +1650,7 @@ Forwarded: yes
  
  //#define DEBUG_TEMP_DIR "d:\\temp\\"
  
-@@ -27,7 +28,7 @@
+@@ -27,7 +28,7 @@ SCENARIO("Region expansion basics", "[RegionExpansion]") {
                  REQUIRE(expanded.size() == 1);
              }
              THEN("The area of the anchor is 10mm2") {
@@ -1545,7 +1659,7 @@ Forwarded: yes
              }
          };
  
-@@ -61,8 +62,8 @@
+@@ -61,8 +62,8 @@ SCENARIO("Region expansion basics", "[RegionExpansion]") {
                  REQUIRE(expanded.front().size() == 2);
              }
              THEN("The area of each anchor is 10mm2") {
@@ -1556,7 +1670,7 @@ Forwarded: yes
              }
          }
  
-@@ -77,8 +78,8 @@
+@@ -77,8 +78,8 @@ SCENARIO("Region expansion basics", "[RegionExpansion]") {
                  REQUIRE(expanded.front().size() == 2);
              }
              THEN("The area of each anchor is 100mm2") {
@@ -1567,7 +1681,7 @@ Forwarded: yes
              }
          }
      }
-@@ -247,7 +248,7 @@
+@@ -247,7 +248,7 @@ SCENARIO("Region expansion basics", "[RegionExpansion]") {
              THEN("The anchor expands into a single region with two holes, fully covering the boundary") {
                  REQUIRE(expanded.size() == 1);
                  REQUIRE(expanded.front().size() == 3);
@@ -1576,6 +1690,8 @@ Forwarded: yes
              }
          }
      }
+diff --git a/tests/libslic3r/test_stl.cpp b/tests/libslic3r/test_stl.cpp
+index 4c9c1bc..a8addec 100644
 --- a/tests/libslic3r/test_stl.cpp
 +++ b/tests/libslic3r/test_stl.cpp
 @@ -1,4 +1,4 @@
@@ -1584,6 +1700,8 @@ Forwarded: yes
  
  #include "libslic3r/Model.hpp"
  #include "libslic3r/Format/STL.hpp"
+diff --git a/tests/libslic3r/test_surface_mesh.cpp b/tests/libslic3r/test_surface_mesh.cpp
+index 34ff356..bdb12d8 100644
 --- a/tests/libslic3r/test_surface_mesh.cpp
 +++ b/tests/libslic3r/test_surface_mesh.cpp
 @@ -1,4 +1,4 @@
@@ -1592,6 +1710,8 @@ Forwarded: yes
  #include <test_utils.hpp>
  
  
+diff --git a/tests/libslic3r/test_timeutils.cpp b/tests/libslic3r/test_timeutils.cpp
+index 6630d70..221dd07 100644
 --- a/tests/libslic3r/test_timeutils.cpp
 +++ b/tests/libslic3r/test_timeutils.cpp
 @@ -1,4 +1,4 @@
@@ -1600,6 +1720,8 @@ Forwarded: yes
  
  #include "libslic3r/Time.hpp"
  
+diff --git a/tests/libslic3r/test_triangulation.cpp b/tests/libslic3r/test_triangulation.cpp
+index 5a1f99f..4f98b24 100644
 --- a/tests/libslic3r/test_triangulation.cpp
 +++ b/tests/libslic3r/test_triangulation.cpp
 @@ -1,4 +1,4 @@
@@ -1608,6 +1730,8 @@ Forwarded: yes
  
  #include <libslic3r/Triangulation.hpp>
  #include <libslic3r/SVG.hpp> // only debug visualization
+diff --git a/tests/libslic3r/test_utils.cpp b/tests/libslic3r/test_utils.cpp
+index 74d4094..a4f1836 100644
 --- a/tests/libslic3r/test_utils.cpp
 +++ b/tests/libslic3r/test_utils.cpp
 @@ -1,4 +1,4 @@
@@ -1616,6 +1740,8 @@ Forwarded: yes
  
  #include "libslic3r/libslic3r.h"
  
+diff --git a/tests/libslic3r/test_voronoi.cpp b/tests/libslic3r/test_voronoi.cpp
+index 967cb0e..459862e 100644
 --- a/tests/libslic3r/test_voronoi.cpp
 +++ b/tests/libslic3r/test_voronoi.cpp
 @@ -1,4 +1,4 @@
@@ -1624,7 +1750,7 @@ Forwarded: yes
  #include <test_utils.hpp>
  
  #include <libslic3r/Polygon.hpp>
-@@ -25,6 +25,8 @@
+@@ -25,6 +25,8 @@ using namespace Slic3r;
  
  using VD = Geometry::VoronoiDiagram;
  
@@ -1633,7 +1759,7 @@ Forwarded: yes
  // https://svn.boost.org/trac10/ticket/12067
  // This bug seems to be confirmed.
  // Vojtech supposes that there may be no Voronoi edges produced for
-@@ -69,7 +71,7 @@
+@@ -69,7 +71,7 @@ TEST_CASE("Voronoi missing edges - points 12067", "[Voronoi]")
          vd, pts, Lines());
  #endif
  
@@ -1642,6 +1768,8 @@ Forwarded: yes
  }
  
  // https://svn.boost.org/trac10/ticket/12707
+diff --git a/tests/sla_print/sla_archive_readwrite_tests.cpp b/tests/sla_print/sla_archive_readwrite_tests.cpp
+index fb1af3d..a66c5e0 100644
 --- a/tests/sla_print/sla_archive_readwrite_tests.cpp
 +++ b/tests/sla_print/sla_archive_readwrite_tests.cpp
 @@ -1,4 +1,4 @@
@@ -1650,6 +1778,8 @@ Forwarded: yes
  #include <test_utils.hpp>
  
  #include "libslic3r/SLAPrint.hpp"
+diff --git a/tests/sla_print/sla_print_tests.cpp b/tests/sla_print/sla_print_tests.cpp
+index a733e77..c4b916f 100644
 --- a/tests/sla_print/sla_print_tests.cpp
 +++ b/tests/sla_print/sla_print_tests.cpp
 @@ -9,6 +9,8 @@
@@ -1661,7 +1791,7 @@ Forwarded: yes
  namespace {
  
  const char *const BELOW_PAD_TEST_OBJECTS[] = {
-@@ -194,8 +196,8 @@
+@@ -194,8 +196,8 @@ TEST_CASE("InitializedRasterShouldBeNONEmpty", "[SLARasterOutput]") {
      sla::RasterGrayscaleAAGammaPower raster(res, pixdim, {}, 1.);
      REQUIRE(raster.resolution().width_px == res.width_px);
      REQUIRE(raster.resolution().height_px == res.height_px);
@@ -1672,13 +1802,15 @@ Forwarded: yes
  }
  
  TEST_CASE("MirroringShouldBeCorrect", "[SLARasterOutput]") {
-@@ -269,5 +271,5 @@
+@@ -269,5 +271,5 @@ TEST_CASE("Test concurrency")
  
      double s = execution::accumulate(ex_tbb, vals.begin(), vals.end(), 0.);
  
 -    REQUIRE(s == Approx(ref));
 +    REQUIRE_THAT(s, WithinRel(ref));
  }
+diff --git a/tests/sla_print/sla_raycast_tests.cpp b/tests/sla_print/sla_raycast_tests.cpp
+index 1f2962b..18c62a0 100644
 --- a/tests/sla_print/sla_raycast_tests.cpp
 +++ b/tests/sla_print/sla_raycast_tests.cpp
 @@ -1,4 +1,4 @@
@@ -1696,7 +1828,7 @@ Forwarded: yes
  using namespace Slic3r;
  
  // First do a simple test of the hole raycaster.
-@@ -20,8 +22,8 @@
+@@ -20,8 +22,8 @@ TEST_CASE("Raycaster - find intersections of a line and cylinder")
      s = {-1.f, 0, 5.f};
      dir = {1.f, 0, 0};
      hole.get_intersections(s, dir, out);
@@ -1707,7 +1839,7 @@ Forwarded: yes
  
      // Start outside and cast parallel to axis.
      s = {0, 0, -1.f};
-@@ -70,25 +72,25 @@
+@@ -70,25 +72,25 @@ TEST_CASE("Raycaster with loaded drillholes", "[sla_raycast]")
      Vec3d s = center.cast<double>();
      // Fire from center, should hit the interior wall
      auto hit = emesh.query_ray_hit(s, {0, 1., 0.});
@@ -1737,6 +1869,8 @@ Forwarded: yes
  
      // Check for support tree correctness
      test_support_model_collision("20mm_cube.obj", {}, hcfg, holes);
+diff --git a/tests/sla_print/sla_supptgen_tests.cpp b/tests/sla_print/sla_supptgen_tests.cpp
+index e5e6024..afc6606 100644
 --- a/tests/sla_print/sla_supptgen_tests.cpp
 +++ b/tests/sla_print/sla_supptgen_tests.cpp
 @@ -1,4 +1,4 @@
@@ -1745,6 +1879,8 @@ Forwarded: yes
  #include <test_utils.hpp>
  
  #include <libslic3r/ExPolygon.hpp>
+diff --git a/tests/sla_print/sla_supptreeutils_tests.cpp b/tests/sla_print/sla_supptreeutils_tests.cpp
+index c8abbb8..d2c8b50 100644
 --- a/tests/sla_print/sla_supptreeutils_tests.cpp
 +++ b/tests/sla_print/sla_supptreeutils_tests.cpp
 @@ -1,4 +1,4 @@
@@ -1763,7 +1899,7 @@ Forwarded: yes
  // Test pair hash for 'nums' random number pairs.
  template <class I, class II> void test_pairhash()
  {
-@@ -99,7 +102,7 @@
+@@ -99,7 +102,7 @@ static void eval_ground_conn(const Slic3r::sla::GroundConnection &conn,
      REQUIRE(conn.path.back().r < conn.pillar_base->r_top);
  
      // The end radius and the pillar base's upper radius should match
@@ -1772,7 +1908,7 @@ Forwarded: yes
  }
  
  TEST_CASE("Pillar search dumb case", "[suptreeutils]") {
-@@ -119,7 +122,7 @@
+@@ -119,7 +122,7 @@ TEST_CASE("Pillar search dumb case", "[suptreeutils]") {
  
          REQUIRE(conn);
  //        REQUIRE(conn.path.size() == 1);
@@ -1781,7 +1917,7 @@ Forwarded: yes
      }
  
      SECTION("with zero R source and destination") {
-@@ -134,8 +137,8 @@
+@@ -134,8 +137,8 @@ TEST_CASE("Pillar search dumb case", "[suptreeutils]") {
  
          REQUIRE(conn);
  //        REQUIRE(conn.path.size() == 1);
@@ -1792,7 +1928,7 @@ Forwarded: yes
      }
  
      SECTION("with zero init direction") {
-@@ -150,7 +153,7 @@
+@@ -150,7 +153,7 @@ TEST_CASE("Pillar search dumb case", "[suptreeutils]") {
  
          REQUIRE(conn);
  //        REQUIRE(conn.path.size() == 1);
@@ -1801,7 +1937,7 @@ Forwarded: yes
      }
  }
  
-@@ -278,7 +281,7 @@
+@@ -278,7 +281,7 @@ TEST_CASE("Find ground route just above ground", "[suptreeutils]") {
  
      REQUIRE(conn);
  
@@ -1810,6 +1946,8 @@ Forwarded: yes
  }
  
  TEST_CASE("BranchingSupports::MergePointFinder", "[suptreeutils]") {
+diff --git a/tests/sla_print/sla_test_utils.cpp b/tests/sla_print/sla_test_utils.cpp
+index f294abc..f124d8c 100644
 --- a/tests/sla_print/sla_test_utils.cpp
 +++ b/tests/sla_print/sla_test_utils.cpp
 @@ -6,6 +6,8 @@
@@ -1821,7 +1959,7 @@ Forwarded: yes
  void test_support_model_collision(
      const std::string            &obj_filename,
      const sla::SupportTreeConfig &input_supportcfg,
-@@ -182,7 +184,7 @@
+@@ -182,7 +184,7 @@ void test_supports(const std::string          &obj_filename,
          allowed_zmin = zmin - 2 * supportcfg.head_back_radius_mm;
  
  #ifndef NDEBUG
@@ -1830,7 +1968,7 @@ Forwarded: yes
      {
          indexed_triangle_set its;
          treebuilder.retrieve_full_mesh(its);
-@@ -193,8 +195,8 @@
+@@ -193,8 +195,8 @@ void test_supports(const std::string          &obj_filename,
      }
  #endif
  
@@ -1841,7 +1979,7 @@ Forwarded: yes
  
      // Move out the support tree into the byproducts, we can examine it further
      // in various tests.
-@@ -240,7 +242,7 @@
+@@ -240,7 +242,7 @@ void check_support_tree_integrity(const sla::SupportTreeBuilder &stree,
      };
      
      for (auto &bridge : stree.bridges()) chck_bridge(bridge, max_bridgelen);
@@ -1850,7 +1988,7 @@ Forwarded: yes
      
      max_bridgelen = 0;
      for (auto &bridge : stree.crossbridges()) chck_bridge(bridge, max_bridgelen);
-@@ -272,7 +274,7 @@
+@@ -272,7 +274,7 @@ void test_pad(const std::string &obj_filename, const sla::PadConfig &padcfg, Pad
      check_validity(out.mesh);
      
      auto bb = out.mesh.bounding_box();
@@ -1859,7 +1997,7 @@ Forwarded: yes
  }
  
  static void _test_concave_hull(const Polygons &hull, const ExPolygons &polys)
-@@ -285,7 +287,7 @@
+@@ -285,7 +287,7 @@ static void _test_concave_hull(const Polygons &hull, const ExPolygons &polys)
      double cchull_area = 0;
      for (const Slic3r::Polygon &p : hull) cchull_area += p.area();
      
@@ -1868,6 +2006,8 @@ Forwarded: yes
      
      size_t cchull_holes = 0;
      for (const Slic3r::Polygon &p : hull)
+diff --git a/tests/sla_print/sla_test_utils.hpp b/tests/sla_print/sla_test_utils.hpp
+index 103b2f6..109c852 100644
 --- a/tests/sla_print/sla_test_utils.hpp
 +++ b/tests/sla_print/sla_test_utils.hpp
 @@ -1,7 +1,7 @@
@@ -1879,6 +2019,8 @@ Forwarded: yes
  #include <test_utils.hpp>
  
  // Debug
+diff --git a/tests/slic3rutils/slic3r_arrangejob_tests.cpp b/tests/slic3rutils/slic3r_arrangejob_tests.cpp
+index b76861a..1f0d593 100644
 --- a/tests/slic3rutils/slic3r_arrangejob_tests.cpp
 +++ b/tests/slic3rutils/slic3r_arrangejob_tests.cpp
 @@ -1,4 +1,4 @@
@@ -1896,7 +2038,7 @@ Forwarded: yes
  class RandomArrangeSettings: public Slic3r::arr2::ArrangeSettingsView {
      Slic3r::arr2::ArrangeSettingsDb::Values m_v;
  
-@@ -143,7 +145,7 @@
+@@ -143,7 +145,7 @@ TEST_CASE("Basic arrange with cube", "[arrangejob]") {
              std::swap(sz.x(), sz.y());
  
          double d_obj = settings.get_distance_from_objects();
@@ -1905,7 +2047,7 @@ Forwarded: yes
      }
  
      SECTION("Selected cube (different object), needs to go beside existing") {
-@@ -177,7 +179,7 @@
+@@ -177,7 +179,7 @@ TEST_CASE("Basic arrange with cube", "[arrangejob]") {
              std::swap(sz.x(), sz.y());
  
          double d_obj = settings.get_distance_from_objects();
@@ -1914,7 +2056,7 @@ Forwarded: yes
      }
  
      SECTION("Four cubes needs to touch each other after arrange") {
-@@ -229,8 +231,8 @@
+@@ -229,8 +231,8 @@ TEST_CASE("Basic arrange with cube", "[arrangejob]") {
          REQUIRE(c == bounding_box(bed).center());
  
          float d_obj = settings.get_distance_from_objects();
@@ -1925,6 +2067,8 @@ Forwarded: yes
      }
  }
  
+diff --git a/tests/slic3rutils/slic3r_jobs_tests.cpp b/tests/slic3rutils/slic3r_jobs_tests.cpp
+index abb8b15..f9b41fd 100644
 --- a/tests/slic3rutils/slic3r_jobs_tests.cpp
 +++ b/tests/slic3rutils/slic3r_jobs_tests.cpp
 @@ -1,4 +1,4 @@
@@ -1933,6 +2077,8 @@ Forwarded: yes
  
  #include <chrono>
  #include <thread>
+diff --git a/tests/slic3rutils/slic3r_version_tests.cpp b/tests/slic3rutils/slic3r_version_tests.cpp
+index 14f4f5d..c9529b4 100644
 --- a/tests/slic3rutils/slic3r_version_tests.cpp
 +++ b/tests/slic3rutils/slic3r_version_tests.cpp
 @@ -1,4 +1,4 @@

@@ -10,7 +10,7 @@ libcereal in Debian has become a header-only library, so drop the link
  3 files changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index dc23da2..c9e3c67 100644
+index 2ea3c31..24534e7 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -131,7 +131,7 @@ if (NOT WIN32 AND NOT APPLE)
@@ -23,10 +23,10 @@ index dc23da2..c9e3c67 100644
  if (APPLE)
  #    add_compile_options(-stdlib=libc++)
 diff --git a/src/libslic3r/CMakeLists.txt b/src/libslic3r/CMakeLists.txt
-index 81fefdd..e0563db 100644
+index 87849b6..2f6cf77 100644
 --- a/src/libslic3r/CMakeLists.txt
 +++ b/src/libslic3r/CMakeLists.txt
-@@ -550,7 +550,6 @@ find_package(JPEG REQUIRED)
+@@ -572,7 +572,6 @@ find_package(JPEG REQUIRED)
  target_link_libraries(libslic3r
      libnest2d
      admesh
@@ -35,10 +35,10 @@ index 81fefdd..e0563db 100644
      miniz
      boost_libs
 diff --git a/src/slic3r/CMakeLists.txt b/src/slic3r/CMakeLists.txt
-index 0cf6638..31f3c06 100644
+index be7c492..f299fe1 100644
 --- a/src/slic3r/CMakeLists.txt
 +++ b/src/slic3r/CMakeLists.txt
-@@ -330,7 +330,7 @@ endforeach()
+@@ -362,7 +362,7 @@ endforeach()
  
  encoding_check(libslic3r_gui)
  

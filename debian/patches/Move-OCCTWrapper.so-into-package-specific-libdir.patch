@@ -13,10 +13,10 @@ Applied-Upstream: no
  4 files changed, 36 insertions(+), 26 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 0ad8993..e6ce2fe 100644
+index dcfe0ca..43d7378 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -603,35 +603,13 @@ function(prusaslicer_copy_dlls target)
+@@ -612,35 +612,13 @@ function(prusaslicer_copy_dlls target)
  
  endfunction()
  
@@ -53,7 +53,7 @@ index 0ad8993..e6ce2fe 100644
      install(DIRECTORY ${SLIC3R_RESOURCES_DIR}/ DESTINATION ${SLIC3R_FHS_RESOURCES}
          PATTERN "*/udev" EXCLUDE
      )
-@@ -653,3 +631,24 @@ else ()
+@@ -662,3 +640,24 @@ else ()
  endif ()
  
  configure_file(${LIBDIR}/platform/unix/fhs.hpp.in ${LIBDIR_BIN}/platform/unix/fhs.hpp)
