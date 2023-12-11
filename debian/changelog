@@ -1,3 +1,12 @@
+slic3r-prusa (2.7.0+dfsg-1) unstable; urgency=medium
+
+  * [57bf402] Update year in debian/copyright
+  * [f132051] New upstream version 2.7.0+dfsg
+  * [bb9fce3] Refresh patches
+  * [9541f7e] Add libbgcode-dev as build-dep
+
+ -- Chow Loong Jin <hyperair@debian.org>  Mon, 11 Dec 2023 11:55:04 +0800
+
 slic3r-prusa (2.7.0~rc1+dfsg-1) unstable; urgency=medium
 
   * [2f0ba5b] New upstream version 2.7.0~rc1+dfsg
