@@ -16,11 +16,11 @@ Forwarded: yes
  tests/fff_print/test_cooling.cpp                   |  2 +-
  tests/fff_print/test_custom_gcode.cpp              |  2 +-
  tests/fff_print/test_data.cpp                      |  2 +-
- tests/fff_print/test_extrusion_entity.cpp          | 21 +++++-----
+ tests/fff_print/test_extrusion_entity.cpp          | 27 ++++++------
  tests/fff_print/test_fill.cpp                      |  5 ++-
  tests/fff_print/test_flow.cpp                      | 23 ++++++-----
  tests/fff_print/test_gaps.cpp                      |  2 +-
- tests/fff_print/test_gcode.cpp                     |  2 +-
+ tests/fff_print/test_gcode.cpp                     | 23 ++++++-----
  tests/fff_print/test_gcodefindreplace.cpp          |  2 +-
  tests/fff_print/test_gcodewriter.cpp               | 11 ++---
  tests/fff_print/test_model.cpp                     |  2 +-
@@ -38,6 +38,7 @@ Forwarded: yes
  tests/libslic3r/test_aabbindirect.cpp              | 38 +++++++++--------
  tests/libslic3r/test_anyptr.cpp                    |  2 +-
  tests/libslic3r/test_arachne.cpp                   |  2 +-
+ tests/libslic3r/test_arc_welder.cpp                | 27 ++++++------
  tests/libslic3r/test_astar.cpp                     |  5 ++-
  tests/libslic3r/test_clipper_offset.cpp            | 23 ++++++-----
  tests/libslic3r/test_clipper_utils.cpp             | 37 +++++++++--------
@@ -64,7 +65,9 @@ Forwarded: yes
  tests/libslic3r/test_polyline.cpp                  |  2 +-
  tests/libslic3r/test_quadric_edge_collapse.cpp     |  4 +-
  tests/libslic3r/test_region_expansion.cpp          | 15 +++----
+ tests/libslic3r/test_static_map.cpp                |  2 +-
  tests/libslic3r/test_stl.cpp                       |  2 +-
+ tests/libslic3r/test_support_spots_generator.cpp   | 42 ++++++++++---------
  tests/libslic3r/test_surface_mesh.cpp              |  2 +-
  tests/libslic3r/test_timeutils.cpp                 |  2 +-
  tests/libslic3r/test_triangulation.cpp             |  2 +-
@@ -80,7 +83,9 @@ Forwarded: yes
  tests/slic3rutils/slic3r_arrangejob_tests.cpp      | 12 +++---
  tests/slic3rutils/slic3r_jobs_tests.cpp            |  2 +-
  tests/slic3rutils/slic3r_version_tests.cpp         |  2 +-
- 74 files changed, 259 insertions(+), 274 deletions(-)
+ tests/thumbnails/test_thumbnails_ini_string.cpp    |  2 +-
+ tests/thumbnails/test_thumbnails_input_string.cpp  |  4 +-
+ 79 files changed, 314 insertions(+), 323 deletions(-)
 
 diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
 index f00a2eb..ccb1e03 100644
@@ -307,7 +312,7 @@ index 79064e2..84c0908 100644
  SCENARIO("init_print functionality", "[test_data]") {
  	GIVEN("A default config") {
 diff --git a/tests/fff_print/test_extrusion_entity.cpp b/tests/fff_print/test_extrusion_entity.cpp
-index 0698f5e..00edc49 100644
+index 0698f5e..045f33f 100644
 --- a/tests/fff_print/test_extrusion_entity.cpp
 +++ b/tests/fff_print/test_extrusion_entity.cpp
 @@ -1,4 +1,4 @@
@@ -337,7 +342,12 @@ index 0698f5e..00edc49 100644
          }
  
          WHEN("cloned") {
-@@ -112,14 +113,14 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+@@ -108,18 +109,18 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+         loop.paths.emplace_back(new_extrusion_path(polyline2, ExtrusionRole::OverhangPerimeter, 1.));
+ 
+         THEN("area") {
+-            REQUIRE(loop.area() == Approx(loop.polygon().area()));
++            REQUIRE_THAT(loop.area(), WithinRel(loop.polygon().area()));
          }
          double tot_len = polyline1.length() + polyline2.length();
          THEN("length") {
@@ -381,7 +391,15 @@ index 0698f5e..00edc49 100644
              }
              Point expected_start_point(200, 150);
              THEN("expected starting point") {
-@@ -220,7 +221,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+@@ -213,14 +214,14 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+         loop.paths.emplace_back(new_extrusion_path(polyline4, ExtrusionRole::OverhangPerimeter, 1.));
+         double len = loop.length();
+         THEN("area") {
+-            REQUIRE(loop.area() == Approx(loop.polygon().area()));
++            REQUIRE_THAT(loop.area(), WithinRel(loop.polygon().area()));
+         }
+         WHEN("splitting at vertex") {
+             Point point(4821067, 9321068);
              if (! loop.split_at_vertex(point))
                  loop.split_at(point, false, 0);
              THEN("total length is preserved after splitting") {
@@ -390,7 +408,13 @@ index 0698f5e..00edc49 100644
              }
              THEN("order is correctly preserved after splitting") {
                  REQUIRE(loop.paths.front().role() == ExtrusionRole::ExternalPerimeter);
-@@ -243,7 +244,7 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+@@ -238,12 +239,12 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+                        { 33853231, 33825297 }, { 24842049, 37509013 }, { 15896798, 33757841 }, { 12211841, 24812544 }, { 15896783, 15868739 } },
+             ExtrusionRole::ExternalPerimeter, 1.));
+         THEN("area") {
+-            REQUIRE(loop.area() == Approx(loop.polygon().area()));
++            REQUIRE_THAT(loop.area(), WithinRel(loop.polygon().area()));
+         }
          double len = loop.length();
          THEN("split_at() preserves total length") {
              loop.split_at({ 15896783, 15868739 }, false, 0);
@@ -526,7 +550,7 @@ index a096087..7f385ac 100644
  #include "libslic3r/GCodeReader.hpp"
  #include "libslic3r/Geometry/ConvexHull.hpp"
 diff --git a/tests/fff_print/test_gcode.cpp b/tests/fff_print/test_gcode.cpp
-index 7cccfe5..e17eb47 100644
+index 7cccfe5..52271cf 100644
 --- a/tests/fff_print/test_gcode.cpp
 +++ b/tests/fff_print/test_gcode.cpp
 @@ -1,4 +1,4 @@
@@ -535,6 +559,55 @@ index 7cccfe5..e17eb47 100644
  
  #include <memory>
  
+@@ -7,6 +7,9 @@
+ using namespace Slic3r;
+ using namespace Slic3r::GCode::Impl;
+ 
++using Catch::Matchers::WithinAbs;
++using Catch::Matchers::WithinRel;
++
+ SCENARIO("Origin manipulation", "[GCode]") {
+ 	Slic3r::GCodeGenerator gcodegen;
+ 	WHEN("set_origin to (10,0)") {
+@@ -22,7 +25,7 @@ SCENARIO("Origin manipulation", "[GCode]") {
+     }
+ }
+ 
+-struct ApproxEqualsPoints : public Catch::MatcherBase<Points> {
++struct ApproxEqualsPoints : public Catch::Matchers::MatcherBase<Points> {
+     ApproxEqualsPoints(const Points& expected, unsigned tolerance): expected(expected), tolerance(tolerance) {}
+     bool match(const Points& points) const override {
+         if (points.size() != expected.size()) {
+@@ -180,12 +183,12 @@ TEST_CASE("Get first crossed line distance", "[GCode]") {
+ 
+     // Try different cases by skipping lines in the travel.
+     AABBTreeLines::LinesDistancer<Linef> distancer = get_expolygons_distancer({square_with_hole, square_above});
+-    CHECK(*get_first_crossed_line_distance(travel, distancer) == Approx(1));
+-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(1), distancer) == Approx(0.2));
+-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(2), distancer) == Approx(0.5));
+-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(3), distancer) == Approx(1.0)); //Edge case
+-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(4), distancer) == Approx(0.7));
+-    CHECK(*get_first_crossed_line_distance(tcb::span{travel}.subspan(5), distancer) == Approx(1.6));
++    CHECK_THAT(*get_first_crossed_line_distance(travel, distancer), WithinRel(1.0));
++    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(1), distancer), WithinRel(0.2));
++    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(2), distancer), WithinRel(0.5));
++    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(3), distancer), WithinRel(1.0)); //Edge case
++    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(4), distancer), WithinRel(0.7));
++    CHECK_THAT(*get_first_crossed_line_distance(tcb::span{travel}.subspan(5), distancer), WithinRel(1.6));
+     CHECK_FALSE(get_first_crossed_line_distance(tcb::span{travel}.subspan(6), distancer));
+ }
+ 
+@@ -196,8 +199,8 @@ TEST_CASE("Generate regular polygon", "[GCode]") {
+     const Point oposite_point{centroid * 2};
+ 
+     REQUIRE(result.size() == 32);
+-    CHECK(result[16].x() == Approx(oposite_point.x()));
+-    CHECK(result[16].y() == Approx(oposite_point.y()));
++    CHECK_THAT((double)result[16].x(), WithinRel((double)oposite_point.x(), EPSILON));
++    CHECK_THAT((double)result[16].y(), WithinRel((double)oposite_point.y(), EPSILON));
+ 
+     std::vector<double> angles;
+     angles.reserve(points_count);
 diff --git a/tests/fff_print/test_gcodefindreplace.cpp b/tests/fff_print/test_gcodefindreplace.cpp
 index 1d714d1..dd5eb6b 100644
 --- a/tests/fff_print/test_gcodefindreplace.cpp
@@ -970,6 +1043,97 @@ index c5b2f35..56b8df9 100644
  
  #include "libslic3r/Arachne/WallToolPaths.hpp"
  #include "libslic3r/ClipperUtils.hpp"
+diff --git a/tests/libslic3r/test_arc_welder.cpp b/tests/libslic3r/test_arc_welder.cpp
+index 44b8865..76dde98 100644
+--- a/tests/libslic3r/test_arc_welder.cpp
++++ b/tests/libslic3r/test_arc_welder.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <random>
+@@ -9,6 +9,7 @@
+ #include <libslic3r/libslic3r.h>
+ 
+ using namespace Slic3r;
++using Catch::Matchers::WithinRel;
+ 
+ TEST_CASE("arc basics", "[ArcWelder]") {
+     using namespace Slic3r::Geometry;
+@@ -22,8 +23,8 @@ TEST_CASE("arc basics", "[ArcWelder]") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, r, true);
+             Vec2f m = ArcWelder::arc_middle_point(p1, p2, r, true);
+             REQUIRE(is_approx(c, Vec2f{ 1000.f, 1000.f }));
+-            REQUIRE(ArcWelder::arc_angle(p1, p2, r) == Approx(0.5 * M_PI));
+-            REQUIRE(ArcWelder::arc_length(p1, p2, r) == Approx(r * 0.5 * M_PI).epsilon(0.001));
++            REQUIRE_THAT(ArcWelder::arc_angle(p1, p2, r), WithinRel(0.5 * M_PI, EPSILON));
++            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, r), WithinRel(r * 0.5 * M_PI, 0.001));
+             REQUIRE(is_approx(m, Vec2f{ 1000.f + s, 1000.f + s }, 0.001f));
+         }
+         THEN("90 degrees arc, CW") {
+@@ -36,8 +37,8 @@ TEST_CASE("arc basics", "[ArcWelder]") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, - r, true);
+             Vec2f m = ArcWelder::arc_middle_point(p1, p2, - r, true);
+             REQUIRE(is_approx(c, Vec2f{ 2000.f, 2000.f }));
+-            REQUIRE(ArcWelder::arc_angle(p1, p2, - r) == Approx(1.5 * M_PI));
+-            REQUIRE(ArcWelder::arc_length(p1, p2, - r) == Approx(r * 1.5 * M_PI).epsilon(0.001));
++            REQUIRE_THAT(ArcWelder::arc_angle(p1, p2, - r), WithinRel(1.5 * M_PI, EPSILON));
++            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, - r), WithinRel(r * 1.5 * M_PI, 0.001));
+             REQUIRE(is_approx(m, Vec2f{ 2000.f + s, 2000.f + s }, 0.001f));
+         }
+         THEN("270 degrees arc, CW") {
+@@ -57,8 +58,8 @@ TEST_CASE("arc basics", "[ArcWelder]") {
+         THEN("45 degrees arc, CCW") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, r, true);
+             REQUIRE(is_approx(c, center1, 1.f));
+-            REQUIRE(ArcWelder::arc_angle(p1, p2, r) == Approx(0.25 * M_PI));
+-            REQUIRE(ArcWelder::arc_length(p1, p2, r) == Approx(r * 0.25 * M_PI).epsilon(0.001));
++            REQUIRE_THAT(ArcWelder::arc_angle(p1, p2, r), WithinRel(0.25 * M_PI, EPSILON));
++            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, r), WithinRel(r * 0.25 * M_PI, 0.001));
+         }
+         THEN("45 degrees arc, CW") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, r, false);
+@@ -67,8 +68,8 @@ TEST_CASE("arc basics", "[ArcWelder]") {
+         THEN("315 degrees arc, CCW") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, - r, true);
+             REQUIRE(is_approx(c, center2, 1.f));
+-            REQUIRE(ArcWelder::arc_angle(p1, p2, - r) == Approx((2. - 0.25) * M_PI));
+-            REQUIRE(ArcWelder::arc_length(p1, p2, - r) == Approx(r * (2. - 0.25) * M_PI).epsilon(0.001));
++            REQUIRE_THAT(ArcWelder::arc_angle(p1, p2, - r), WithinRel((2. - 0.25) * M_PI, EPSILON));
++            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, - r), WithinRel(r * (2. - 0.25) * M_PI, 0.001));
+         }
+         THEN("315 degrees arc, CW") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, - r, false);
+@@ -86,7 +87,7 @@ TEST_CASE("arc basics", "[ArcWelder]") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, r, true);
+             REQUIRE(is_approx(c, center1, 1.f));
+             REQUIRE(is_approx(ArcWelder::arc_angle(p1, p2, r), float(M_PI / 3.), 0.001f));
+-            REQUIRE(ArcWelder::arc_length(p1, p2, r) == Approx(r * M_PI / 3.).epsilon(0.001));
++            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, r), WithinRel(r * M_PI / 3., 0.001));
+         }
+         THEN("60 degrees arc, CW") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, r, false);
+@@ -96,7 +97,7 @@ TEST_CASE("arc basics", "[ArcWelder]") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, - r, true);
+             REQUIRE(is_approx(c, center2, 1.f));
+             REQUIRE(is_approx(ArcWelder::arc_angle(p1, p2, - r), float((2. - 1./3.) * M_PI), 0.001f));
+-            REQUIRE(ArcWelder::arc_length(p1, p2, - r) == Approx(r * (2. - 1. / 3.) * M_PI).epsilon(0.001));
++            REQUIRE_THAT(ArcWelder::arc_length(p1, p2, - r), WithinRel(r * (2. - 1. / 3.) * M_PI, 0.001));
+         }
+         THEN("300 degrees arc, CW") {
+             Vec2f c = ArcWelder::arc_center(p1, p2, - r, false);
+@@ -115,8 +116,8 @@ TEST_CASE("arc discretization", "[ArcWelder]") {
+         const float resolution = scaled<float>(0.002);
+         auto test = [center, resolution, radius](const Point &p1, const Point &p2, const float r, const bool ccw) {
+             Vec2f  c = ArcWelder::arc_center(p1.cast<float>(), p2.cast<float>(), r, ccw);
+-            REQUIRE((p1.cast<float>() - c).norm() == Approx(radius));
+-            REQUIRE((c - center.cast<float>()).norm() == Approx(0.));
++            REQUIRE_THAT((p1.cast<float>() - c).norm(), WithinRel(radius));
++            REQUIRE_THAT((c - center.cast<float>()).norm(), WithinRel(0.));
+             Points pts = ArcWelder::arc_discretize(p1, p2, r, ccw, resolution);
+             REQUIRE(pts.size() >= 2);
+             REQUIRE(pts.front() == p1);
 diff --git a/tests/libslic3r/test_astar.cpp b/tests/libslic3r/test_astar.cpp
 index 4e540c3..7f8d413 100644
 --- a/tests/libslic3r/test_astar.cpp
@@ -1699,6 +1863,16 @@ index 9f8a6fd..e144778 100644
              }
          }
      }
+diff --git a/tests/libslic3r/test_static_map.cpp b/tests/libslic3r/test_static_map.cpp
+index 6722a30..e987cf2 100644
+--- a/tests/libslic3r/test_static_map.cpp
++++ b/tests/libslic3r/test_static_map.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <string_view>
+ 
+ #include "libslic3r/StaticMap.hpp"
 diff --git a/tests/libslic3r/test_stl.cpp b/tests/libslic3r/test_stl.cpp
 index 4c9c1bc..a8addec 100644
 --- a/tests/libslic3r/test_stl.cpp
@@ -1709,6 +1883,89 @@ index 4c9c1bc..a8addec 100644
  
  #include "libslic3r/Model.hpp"
  #include "libslic3r/Format/STL.hpp"
+diff --git a/tests/libslic3r/test_support_spots_generator.cpp b/tests/libslic3r/test_support_spots_generator.cpp
+index 0cd8c51..28c22bb 100644
+--- a/tests/libslic3r/test_support_spots_generator.cpp
++++ b/tests/libslic3r/test_support_spots_generator.cpp
+@@ -1,9 +1,11 @@
+ #include "libslic3r/Point.hpp"
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <libslic3r/SupportSpotsGenerator.hpp>
+ 
+ using namespace Slic3r;
+ using namespace SupportSpotsGenerator;
++using Catch::Matchers::WithinAbs;
++using Catch::Matchers::WithinRel;
+ 
+ 
+ TEST_CASE("Numerical integral calculation compared with exact solution.", "[SupportSpotsGenerator]") {
+@@ -17,11 +19,11 @@ TEST_CASE("Numerical integral calculation compared with exact solution.", "[Supp
+     };
+ 
+     const Integrals integrals{{polygon}};
+-    CHECK(integrals.area == Approx(width * height));
+-    CHECK(integrals.x_i.x() == Approx(0));
+-    CHECK(integrals.x_i.y() == Approx(0));
+-    CHECK(integrals.x_i_squared.x() == Approx(std::pow(width, 3) * height / 12));
+-    CHECK(integrals.x_i_squared.y() == Approx(width * std::pow(height, 3) / 12));
++    CHECK_THAT(integrals.area, WithinRel(width * height));
++    CHECK_THAT(integrals.x_i.x(), WithinRel(0.));
++    CHECK_THAT(integrals.x_i.y(), WithinRel(0.));
++    CHECK_THAT(integrals.x_i_squared.x(), WithinRel(std::pow(width, 3) * height / 12, EPSILON));
++    CHECK_THAT(integrals.x_i_squared.y(), WithinRel(width * std::pow(height, 3) / 12, EPSILON));
+ }
+ 
+ TEST_CASE("Moment values and ratio check.", "[SupportSpotsGenerator]") {
+@@ -48,10 +50,10 @@ TEST_CASE("Moment values and ratio check.", "[SupportSpotsGenerator]") {
+     const float moment_ratio = std::pow(width / height, 2);
+ 
+     // Ensure the object transaltion has no effect.
+-    CHECK(x_axis_moment == Approx(width * std::pow(height, 3) / 12));
+-    CHECK(y_axis_moment == Approx(std::pow(width, 3) * height / 12));
++    CHECK_THAT(x_axis_moment, WithinRel(width * std::pow(height, 3) / 12, EPSILON));
++    CHECK_THAT(y_axis_moment, WithinRel(std::pow(width, 3) * height / 12, EPSILON));
+     // If the object is "wide" the y axis moments should be large compared to x axis moment.
+-    CHECK(y_axis_moment / x_axis_moment == Approx(moment_ratio));
++    CHECK_THAT(y_axis_moment / x_axis_moment, WithinRel(moment_ratio));
+ }
+ 
+ TEST_CASE("Moments calculation for rotated axis.", "[SupportSpotsGenerator]") {
+@@ -134,16 +136,16 @@ TEST_CASE_METHOD(ObjectPartFixture, "Constructing ObjectPart using extrusion col
+ 
+     CHECK(part.connected_to_bed == true);
+     Vec3f volume_centroid{part.volume_centroid_accumulator / part.volume};
+-    CHECK(volume_centroid.x() == Approx(0.5));
+-    CHECK(volume_centroid.y() == Approx(0));
+-    CHECK(volume_centroid.z() == Approx(layer_height / 2));
+-    CHECK(part.sticking_area == Approx(expected.area));
+-    CHECK(part.sticking_centroid_accumulator.x() == Approx(expected.x_i.x()));
+-    CHECK(part.sticking_centroid_accumulator.y() == Approx(expected.x_i.y()));
+-    CHECK(part.sticking_second_moment_of_area_accumulator.x() == Approx(expected.x_i_squared.x()));
+-    CHECK(part.sticking_second_moment_of_area_accumulator.y() == Approx(expected.x_i_squared.y()));
+-    CHECK(part.sticking_second_moment_of_area_covariance_accumulator == Approx(expected.xy).margin(1e-6));
+-    CHECK(part.volume == Approx(layer_height * width));
++    CHECK_THAT(volume_centroid.x(), WithinAbs(0.5, EPSILON));
++    CHECK_THAT(volume_centroid.y(), WithinAbs(0., EPSILON));
++    CHECK_THAT(volume_centroid.z(), WithinAbs(layer_height / 2, EPSILON));
++    CHECK_THAT(part.sticking_area, WithinRel(expected.area));
++    CHECK_THAT(part.sticking_centroid_accumulator.x(), WithinRel(expected.x_i.x()));
++    CHECK_THAT(part.sticking_centroid_accumulator.y(), WithinRel(expected.x_i.y()));
++    CHECK_THAT(part.sticking_second_moment_of_area_accumulator.x(), WithinRel(expected.x_i_squared.x()));
++    CHECK_THAT(part.sticking_second_moment_of_area_accumulator.y(), WithinRel(expected.x_i_squared.y()));
++    CHECK_THAT(part.sticking_second_moment_of_area_covariance_accumulator, WithinAbs(expected.xy, 1e-6));
++    CHECK_THAT(part.volume, WithinRel(layer_height * width, EPSILON));
+ }
+ 
+ TEST_CASE_METHOD(ObjectPartFixture, "Constructing ObjectPart with brim", "[SupportSpotsGenerator]") {
+@@ -158,6 +160,6 @@ TEST_CASE_METHOD(ObjectPartFixture, "Constructing ObjectPart with brim", "[Suppo
+         brim
+     };
+ 
+-    CHECK(part.sticking_area == Approx((1 + 2*brim_width) * (width + 2*brim_width)));
++    CHECK_THAT(part.sticking_area, WithinRel((1 + 2*brim_width) * (width + 2*brim_width)));
+ }
+ 
 diff --git a/tests/libslic3r/test_surface_mesh.cpp b/tests/libslic3r/test_surface_mesh.cpp
 index 34ff356..bdb12d8 100644
 --- a/tests/libslic3r/test_surface_mesh.cpp
@@ -2096,3 +2353,30 @@ index 14f4f5d..c9529b4 100644
  
  #include "slic3r/Config/Version.hpp"
  
+diff --git a/tests/thumbnails/test_thumbnails_ini_string.cpp b/tests/thumbnails/test_thumbnails_ini_string.cpp
+index 32ec5cb..0cc8e17 100644
+--- a/tests/thumbnails/test_thumbnails_ini_string.cpp
++++ b/tests/thumbnails/test_thumbnails_ini_string.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ 
+ #include "libslic3r/Config.hpp"
+ #include "libslic3r/PrintConfig.hpp"
+diff --git a/tests/thumbnails/test_thumbnails_input_string.cpp b/tests/thumbnails/test_thumbnails_input_string.cpp
+index 4c623b2..89beb99 100644
+--- a/tests/thumbnails/test_thumbnails_input_string.cpp
++++ b/tests/thumbnails/test_thumbnails_input_string.cpp
+@@ -1,4 +1,4 @@
+-#include <catch2/catch.hpp>
++#include <catch2/catch_all.hpp>
+ #include <test_utils.hpp>
+ 
+ #include <libslic3r/GCode/Thumbnails.hpp>
+@@ -149,4 +149,4 @@ TEST_CASE("Invalid value Thumbnails", "[Thumbnails]") {
+         REQUIRE(errors.has(ThumbnailError::InvalidVal));
+         REQUIRE(thumbnails.size() == 2);
+     }
+-}
+\ No newline at end of file
++}
