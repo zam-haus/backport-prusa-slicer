@@ -6,7 +6,7 @@ Bug-Debian: https://bugs.debian.org/1054697
 Bug: https://github.com/prusa3d/PrusaSlicer/pull/11576
 Forwarded: yes
 ---
- tests/CMakeLists.txt                               |  2 +-
+ tests/CMakeLists.txt                               |  4 +-
  tests/arrange/test_arrange.cpp                     |  9 ++--
  tests/arrange/test_arrange_integration.cpp         | 12 +++---
  tests/catch_main.hpp                               | 48 +---------------------
@@ -80,12 +80,21 @@ Forwarded: yes
  tests/slic3rutils/slic3r_arrangejob_tests.cpp      | 12 +++---
  tests/slic3rutils/slic3r_jobs_tests.cpp            |  2 +-
  tests/slic3rutils/slic3r_version_tests.cpp         |  2 +-
- 74 files changed, 258 insertions(+), 273 deletions(-)
+ 74 files changed, 259 insertions(+), 274 deletions(-)
 
 diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
-index f00a2eb..1ab45b7 100644
+index f00a2eb..ccb1e03 100644
 --- a/tests/CMakeLists.txt
 +++ b/tests/CMakeLists.txt
+@@ -1,7 +1,7 @@
+ # TODO Add individual tests as executables in separate directories
+ # add_subirectory(<testcase>)
+ 
+-find_package(Catch2 2.9 REQUIRED)
++find_package(Catch2 3.0 REQUIRED)
+ 
+ include(Catch)
+ 
 @@ -13,7 +13,7 @@ set(CATCH_EXTRA_ARGS "" CACHE STRING "Extra arguments for catch2 test suites.")
  add_library(test_common INTERFACE)
  target_include_directories(test_common INTERFACE ${CMAKE_CURRENT_LIST_DIR})
