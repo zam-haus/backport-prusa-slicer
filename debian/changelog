@@ -1,3 +1,10 @@
+slic3r-prusa (2.6.1+dfsg-5) UNRELEASED; urgency=medium
+
+  [ Gregor Riepl ]
+  * Add upstream patch for unitialized GravityKernel. Closes: #1057630
+
+ -- Gregor Riepl <onitake@gmail.com>  Wed, 13 Dec 2023 20:44:09 +0100
+
 slic3r-prusa (2.6.1+dfsg-4.1) unstable; urgency=medium
 
   [ Aaron Rainbolt ]

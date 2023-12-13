@@ -12,3 +12,4 @@ Disable-preset-update-and-version-check-by-default.patch
 Use-system-catch2.patch
 Patch-tests-for-Catch2-v3-compatibility.patch
 Explicit-wxWidgets-initializers.patch
+Fix-failing-arrange-test.patch
