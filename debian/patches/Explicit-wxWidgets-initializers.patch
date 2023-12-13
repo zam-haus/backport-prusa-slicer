@@ -1,0 +1,35 @@
+Description: Use explicit initializers for two wxWidgets function calls
+ wxWidgets added support for initializer lists to some of their functions, in
+ a way that clashes with some overloads in the PrusaSlicer source code. These
+ issues can be worked around with an explicit instantiation of the
+ std::vector, which is what this patch does.
+Author: Gregor Riepl <onitake@gmail.com>
+Origin: Debian
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1056897
+Forwarded: no
+Reviewed-by: Aaron Rainbolt <arraybolt3@ubuntu.com>
+Last-Update: 2023-11-29
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/src/slic3r/GUI/PhysicalPrinterDialog.cpp
++++ b/src/slic3r/GUI/PhysicalPrinterDialog.cpp
+@@ -462,7 +462,7 @@ void PhysicalPrinterDialog::build_printh
+     // Always fill in the "printhost_port" combo box from the config and select it.
+     {
+         Choice* choice = dynamic_cast<Choice*>(m_optgroup->get_field("printhost_port"));
+-        choice->set_values({ m_config->opt_string("printhost_port") });
++        choice->set_values(std::vector<std::string>({ m_config->opt_string("printhost_port") }));
+         choice->set_selection();
+     }
+ 
+--- a/src/slic3r/GUI/Plater.cpp
++++ b/src/slic3r/GUI/Plater.cpp
+@@ -5310,7 +5310,7 @@ void Plater::load_project(const wxString
+ 
+     p->reset();
+ 
+-    if (! load_files({ into_path(filename) }).empty()) {
++    if (! load_files(std::vector<boost::filesystem::path>({ into_path(filename) })).empty()) {
+         // At least one file was loaded.
+         p->set_project_filename(filename);
+         // Save the names of active presets and project specific config into ProjectDirtyStateManager.

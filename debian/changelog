@@ -1,3 +1,14 @@
+slic3r-prusa (2.6.1+dfsg-4.1) unstable; urgency=medium
+
+  [ Aaron Rainbolt ]
+  * Non-maintainer upload.
+
+  [ Gregor Riepl ]
+  * Use explicit initializers for two wxWidgets function calls.
+    (Closes: #1056897)
+
+ -- Aaron Rainbolt <arraybolt3@ubuntu.com>  Wed, 29 Nov 2023 13:34:45 -0600
+
 slic3r-prusa (2.6.1+dfsg-4) unstable; urgency=medium
 
   * [9c87477] Update catch2 patch for v3 changes.

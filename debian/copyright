@@ -454,6 +454,8 @@ License: Expat
 Files: debian/*
 Copyright: 2013, Nicolas Dandrimont <olasd@debian.org>
            2014-2019, Chow Loong Jin <hyperair@debian.org>
+           2023, Gregor Riepl <onitake@gmail.com>
+           2023, Aaron Rainbolt <arraybolt3@ubuntu.com>
 License: AGPL-3
 
 License: AGPL-3
