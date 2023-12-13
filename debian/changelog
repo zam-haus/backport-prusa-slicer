@@ -1,7 +1,8 @@
 slic3r-prusa (2.6.1+dfsg-5) UNRELEASED; urgency=medium
 
   [ Gregor Riepl ]
-  * Add upstream patch for unitialized GravityKernel. Closes: #1057630
+  * Add upstream patch for uninitialized GravityKernel. Closes: #1057630
+  * Replace WithinRel(0.0) comparisons in unit tests with WithinAbs(0.0)
 
  -- Gregor Riepl <onitake@gmail.com>  Wed, 13 Dec 2023 20:44:09 +0100
 
