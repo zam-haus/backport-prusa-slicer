@@ -1,4 +1,12 @@
-slic3r-prusa (2.7.0+dfsg-1) unstable; urgency=medium
+slic3r-prusa (2.7.1+dfsg-1) unstable; urgency=medium
+
+  * [e8c34bb] Fix up dangling Approx usage in tests
+  * [a8c65a4] New upstream version 2.7.1+dfsg
+  * [1ed6790] Refresh patches
+
+ -- Chow Loong Jin <hyperair@debian.org>  Fri, 15 Dec 2023 00:39:28 +0800
+
+slic3r-prusa (2.7.0+dfsg-1) UNRELEASED; urgency=medium
 
   [ Gregor Riepl ]
   * Add upstream patch for uninitialized GravityKernel. Closes: #1057630
