@@ -16,7 +16,7 @@ Forwarded: yes
  tests/fff_print/test_cooling.cpp                   |  2 +-
  tests/fff_print/test_custom_gcode.cpp              |  2 +-
  tests/fff_print/test_data.cpp                      |  2 +-
- tests/fff_print/test_extrusion_entity.cpp          | 27 ++++++------
+ tests/fff_print/test_extrusion_entity.cpp          | 29 ++++++-------
  tests/fff_print/test_fill.cpp                      |  5 ++-
  tests/fff_print/test_flow.cpp                      | 23 ++++++-----
  tests/fff_print/test_gaps.cpp                      |  2 +-
@@ -85,7 +85,7 @@ Forwarded: yes
  tests/slic3rutils/slic3r_version_tests.cpp         |  2 +-
  tests/thumbnails/test_thumbnails_ini_string.cpp    |  2 +-
  tests/thumbnails/test_thumbnails_input_string.cpp  |  4 +-
- 79 files changed, 314 insertions(+), 323 deletions(-)
+ 79 files changed, 315 insertions(+), 324 deletions(-)
 
 diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
 index f00a2eb..ccb1e03 100644
@@ -312,7 +312,7 @@ index 79064e2..84c0908 100644
  SCENARIO("init_print functionality", "[test_data]") {
  	GIVEN("A default config") {
 diff --git a/tests/fff_print/test_extrusion_entity.cpp b/tests/fff_print/test_extrusion_entity.cpp
-index 0698f5e..045f33f 100644
+index 0698f5e..395e3fa 100644
 --- a/tests/fff_print/test_extrusion_entity.cpp
 +++ b/tests/fff_print/test_extrusion_entity.cpp
 @@ -1,4 +1,4 @@
@@ -329,11 +329,13 @@ index 0698f5e..045f33f 100644
  
  static inline Slic3r::Point random_point(float LO=-50, float HI=50) 
  {
-@@ -63,10 +64,10 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+@@ -62,11 +63,11 @@ SCENARIO("ExtrusionLoop", "[ExtrusionEntity]")
+         ExtrusionLoop loop;
          loop.paths.emplace_back(new_extrusion_path(square.split_at_first_point(), ExtrusionRole::ExternalPerimeter, 1.));
          THEN("polygon area") {
-             REQUIRE(loop.polygon().area() == Approx(square.area()));
+-            REQUIRE(loop.polygon().area() == Approx(square.area()));
 -            REQUIRE(loop.area() == Approx(square.area()));
++            REQUIRE_THAT(loop.polygon().area(), WithinRel(square.area()));
 +            REQUIRE_THAT(loop.area(), WithinRel(square.area()));
          }
          THEN("loop length") {
