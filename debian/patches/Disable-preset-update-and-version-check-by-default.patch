@@ -14,7 +14,7 @@ Origin: vendor
  2 files changed, 1 insertion(+), 3 deletions(-)
 
 diff --git a/src/libslic3r/AppConfig.cpp b/src/libslic3r/AppConfig.cpp
-index 12796b4..e9139e0 100644
+index 2ab5510..623fb70 100644
 --- a/src/libslic3r/AppConfig.cpp
 +++ b/src/libslic3r/AppConfig.cpp
 @@ -91,7 +91,7 @@ void AppConfig::set_defaults()

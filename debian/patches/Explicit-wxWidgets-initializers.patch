@@ -32,10 +32,10 @@ index 2364c56..bc2c918 100644
      }
  
 diff --git a/src/slic3r/GUI/Plater.cpp b/src/slic3r/GUI/Plater.cpp
-index c2b8e86..2f540bf 100644
+index 2642bcc..94c9111 100644
 --- a/src/slic3r/GUI/Plater.cpp
 +++ b/src/slic3r/GUI/Plater.cpp
-@@ -5390,7 +5390,7 @@ void Plater::load_project(const wxString& filename)
+@@ -5395,7 +5395,7 @@ void Plater::load_project(const wxString& filename)
  
      p->reset();
  
