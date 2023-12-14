@@ -1,26 +1,21 @@
 slic3r-prusa (2.7.0+dfsg-1) unstable; urgency=medium
 
-  * [57bf402] Update year in debian/copyright
-  * [f132051] New upstream version 2.7.0+dfsg
-  * [bb9fce3] Refresh patches
-  * [9541f7e] Add libbgcode-dev as build-dep
-
- -- Chow Loong Jin <hyperair@debian.org>  Mon, 11 Dec 2023 11:55:04 +0800
-
-slic3r-prusa (2.7.0~rc1+dfsg-1) unstable; urgency=medium
-
-  * [2f0ba5b] New upstream version 2.7.0~rc1+dfsg
-  * [b1aa36c] Refresh patches
-
- -- Chow Loong Jin <hyperair@debian.org>  Sat, 18 Nov 2023 17:40:37 +0800
-
-slic3r-prusa (2.6.1+dfsg-5) UNRELEASED; urgency=medium
-
   [ Gregor Riepl ]
   * Add upstream patch for uninitialized GravityKernel. Closes: #1057630
   * Replace WithinRel(0.0) comparisons in unit tests with WithinAbs(0.0)
 
- -- Gregor Riepl <onitake@gmail.com>  Wed, 13 Dec 2023 20:44:09 +0100
+  [ Chow Loong Jin ]
+  * [2f0ba5b] New upstream version 2.7.0~rc1+dfsg
+  * [f132051] New upstream version 2.7.0+dfsg
+  * [d0ac0c0] Refresh patches
+  * [51ce4b2] Update year in debian/copyright
+  * [25d884e] Add libbgcode-dev as build-dep
+  * [526fd96] Add libheatshrink-dev to build-deps
+  * [d2f5b05] Sort build-deps
+  * [88df6ae] Bump catch2 version requirement in test/CMakeLists.txt
+  * [42b3e1e] Update catch2 v3 patch for new files
+
+ -- Chow Loong Jin <hyperair@debian.org>  Thu, 14 Dec 2023 20:32:09 +0800
 
 slic3r-prusa (2.6.1+dfsg-4.1) unstable; urgency=medium
 
