@@ -27,12 +27,6 @@ index dcfe0ca..43d7378 100644
 -
 -add_dependencies(gettext_make_pot hintsToPot)
 -
--# Perl bindings, currently only used for the unit / integration tests of libslic3r.
--# Also runs the unit / integration tests.
--#FIXME Port the tests into C++ to finally get rid of the Perl!
--if (SLIC3R_PERL_XS)
--    add_subdirectory(xs)
--endif ()
 -
 -if(SLIC3R_BUILD_SANDBOXES)
 -    add_subdirectory(sandboxes)
@@ -64,12 +58,6 @@ index dcfe0ca..43d7378 100644
 +
 +add_dependencies(gettext_make_pot hintsToPot)
 +
-+# Perl bindings, currently only used for the unit / integration tests of libslic3r.
-+# Also runs the unit / integration tests.
-+#FIXME Port the tests into C++ to finally get rid of the Perl!
-+if (SLIC3R_PERL_XS)
-+    add_subdirectory(xs)
-+endif ()
 +
 +if(SLIC3R_BUILD_SANDBOXES)
 +    add_subdirectory(sandboxes)
