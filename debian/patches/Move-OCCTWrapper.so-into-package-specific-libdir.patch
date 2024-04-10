@@ -6,17 +6,17 @@ Author: Chow Loong Jin <hyperair@debian.org>
 Forwarded: no
 Applied-Upstream: no
 ---
- CMakeLists.txt                  | 45 ++++++++++++++++++++---------------------
+ CMakeLists.txt                  | 31 +++++++++++++++----------------
  src/libslic3r/Format/STEP.cpp   |  9 ++++++++-
  src/occt_wrapper/CMakeLists.txt |  7 +++++--
  src/platform/unix/fhs.hpp.in    |  1 +
- 4 files changed, 36 insertions(+), 26 deletions(-)
+ 4 files changed, 29 insertions(+), 19 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index dcfe0ca..43d7378 100644
+index 3b37dba..db7c306 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -612,35 +612,13 @@ function(prusaslicer_copy_dlls target)
+@@ -606,28 +606,13 @@ function(prusaslicer_copy_dlls target)
  
  endfunction()
  
@@ -26,7 +26,6 @@ index dcfe0ca..43d7378 100644
 -set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT PrusaSlicer_app_console)
 -
 -add_dependencies(gettext_make_pot hintsToPot)
--
 -
 -if(SLIC3R_BUILD_SANDBOXES)
 -    add_subdirectory(sandboxes)
@@ -47,7 +46,7 @@ index dcfe0ca..43d7378 100644
      install(DIRECTORY ${SLIC3R_RESOURCES_DIR}/ DESTINATION ${SLIC3R_FHS_RESOURCES}
          PATTERN "*/udev" EXCLUDE
      )
-@@ -662,3 +640,24 @@ else ()
+@@ -649,3 +634,17 @@ else ()
  endif ()
  
  configure_file(${LIBDIR}/platform/unix/fhs.hpp.in ${LIBDIR_BIN}/platform/unix/fhs.hpp)
@@ -57,7 +56,6 @@ index dcfe0ca..43d7378 100644
 +set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT PrusaSlicer_app_console)
 +
 +add_dependencies(gettext_make_pot hintsToPot)
-+
 +
 +if(SLIC3R_BUILD_SANDBOXES)
 +    add_subdirectory(sandboxes)

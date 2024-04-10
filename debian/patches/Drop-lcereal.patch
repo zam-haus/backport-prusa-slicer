@@ -23,10 +23,10 @@ index 2ea3c31..24534e7 100644
  if (APPLE)
  #    add_compile_options(-stdlib=libc++)
 diff --git a/src/libslic3r/CMakeLists.txt b/src/libslic3r/CMakeLists.txt
-index 87849b6..2f6cf77 100644
+index a8268e2..c1cc5f5 100644
 --- a/src/libslic3r/CMakeLists.txt
 +++ b/src/libslic3r/CMakeLists.txt
-@@ -572,7 +572,6 @@ find_package(JPEG REQUIRED)
+@@ -576,7 +576,6 @@ find_package(JPEG REQUIRED)
  target_link_libraries(libslic3r
      libnest2d
      admesh

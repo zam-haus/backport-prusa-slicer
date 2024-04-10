@@ -6,5 +6,4 @@ Add-missing-include-TDocStd_Document.hxx-in-OCCTWrapper.c.patch
 Fix-segfault-due-to-uninitialized-imgui-in-wxwidgets3.2.patch
 Remove-redundant-add_library-libexpat-INTERFACE.patch
 Disable-preset-update-and-version-check-by-default.patch
-Patch-tests-for-Catch2-v3-compatibility.patch
 Explicit-wxWidgets-initializers.patch

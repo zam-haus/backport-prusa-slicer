@@ -27,7 +27,7 @@ index 2ab5510..623fb70 100644
          if (get("export_sources_full_pathnames").empty())
              set("export_sources_full_pathnames", "0");
 diff --git a/src/slic3r/GUI/GUI_App.cpp b/src/slic3r/GUI/GUI_App.cpp
-index 0c441bf..afa4298 100644
+index 0a911b2..9e2803d 100644
 --- a/src/slic3r/GUI/GUI_App.cpp
 +++ b/src/slic3r/GUI/GUI_App.cpp
 @@ -841,8 +841,6 @@ void GUI_App::post_init()
